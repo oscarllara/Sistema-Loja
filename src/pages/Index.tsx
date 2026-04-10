@@ -11,6 +11,8 @@ import {
   ArrowDownRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) => (
   <Card className="border-none shadow-sm hover:shadow-md transition-shadow duration-200">
