@@ -10,24 +10,55 @@ import {
   BarChart3, 
   Settings,
   Menu,
-  X
+  X,
+  Wallet,
+  ClipboardList,
+  Truck,
+  UserSquare2,
+  ArrowLeftRight,
+  Receipt,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(!isMobile);
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: ShoppingCart, label: 'Frente de Caixa', path: '/pos' },
-    { icon: Package, label: 'Estoque', path: '/inventory' },
-    { icon: Users, label: 'Clientes', path: '/customers' },
-    { icon: BarChart3, label: 'Relatórios', path: '/reports' },
-    { icon: Settings, label: 'Configurações', path: '/settings' },
+  const menuGroups = [
+    {
+      title: "Principal",
+      items: [
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+        { icon: ShoppingCart, label: 'Frente de Caixa', path: '/pos' },
+      ]
+    },
+    {
+      title: "Cadastros",
+      items: [
+        { icon: UserSquare2, label: 'Geral', path: '/registrations' },
+        { icon: Package, label: 'Estoque / Produtos', path: '/inventory' },
+      ]
+    },
+    {
+      title: "Operacional",
+      items: [
+        { icon: ClipboardList, label: 'Compras / XML', path: '/purchases' },
+        { icon: Wallet, label: 'Financeiro', path: '/financial' },
+      ]
+    },
+    {
+      title: "Análise",
+      items: [
+        { icon: BarChart3, label: 'Relatórios', path: '/reports' },
+        { icon: Settings, label: 'Configurações', path: '/settings' },
+      ]
+    }
   ];
 
   return (
@@ -47,28 +78,49 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <span className="text-xl font-bold text-slate-800 tracking-tight">DyadERP</span>
           </div>
 
-          <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-            {menuItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
-                  location.pathname === item.path
-                    ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                )}
-              >
-                <item.icon size={20} />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <ScrollArea className="flex-1 px-4">
+            <div className="space-y-6 pb-6">
+              {menuGroups.map((group, idx) => (
+                <div key={idx} className="space-y-2">
+                  <h3 className="px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    {group.title}
+                  </h3>
+                  <div className="space-y-1">
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                          location.pathname === item.path
+                            ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        )}
+                      >
+                        <item.icon size={18} />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
 
           <div className="p-4 border-t border-slate-100">
             <div className="bg-slate-900 rounded-2xl p-4 text-white">
-              <p className="text-xs text-slate-400 mb-1">Usuário Logado</p>
-              <p className="text-sm font-semibold">Administrador</p>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold">
+                  AD
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Administrador</p>
+                  <p className="text-sm font-semibold truncate">Loja Matriz</p>
+                </div>
+              </div>
+              <Button variant="ghost" className="w-full justify-start text-slate-400 hover:text-white hover:bg-white/10 h-8 px-2 text-xs">
+                Sair do Sistema
+              </Button>
             </div>
           </div>
         </div>
@@ -87,9 +139,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           </Button>
           
           <div className="flex items-center gap-4 ml-auto">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-slate-900">Loja Principal</p>
-              <p className="text-xs text-slate-500">Status: Online</p>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Sincronizado
             </div>
             <div className="w-8 h-8 rounded-full bg-slate-200 border border-slate-300" />
           </div>
