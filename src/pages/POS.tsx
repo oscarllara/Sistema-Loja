@@ -2,7 +2,17 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, QrCode } from 'lucide-react';
+import { 
+  Search, 
+  Plus, 
+  Minus, 
+  Trash2, 
+  CreditCard, 
+  Banknote, 
+  QrCode, 
+  Package, 
+  ShoppingCart 
+} from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

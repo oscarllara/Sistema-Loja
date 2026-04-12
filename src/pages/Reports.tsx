@@ -5,6 +5,7 @@ import Layout from '@/components/Layout';
 import { BarChart3, PieChart, TrendingUp, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const Reports = () => {
   const reportTypes = [
