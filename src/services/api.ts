@@ -48,6 +48,9 @@ export const db = {
       saveDB(database);
     }
   },
+  fornecedores: {
+    getAll: () => getDB().compras.map((c: any) => c.cd_fornecedores) // Simplificado para o exemplo
+  },
   funcionarios: {
     getAll: (): Funcionario[] => getDB().funcionarios,
     add: (func: Funcionario) => {
@@ -67,6 +70,37 @@ export const db = {
       const database = getDB();
       const prod = database.produtos.find((p: Produto) => p.cd_produto === id);
       if (prod) prod.estoque += qtde;
+      saveDB(database);
+    }
+  },
+  compras: {
+    getAll: (): Compra[] => getDB().compras,
+    create: (compra: Compra, itens: any[]) => {
+      const database = getDB();
+      
+      // 1. Registrar a Compra
+      database.compras.push(compra);
+      
+      // 2. Atualizar Estoque de cada produto
+      itens.forEach(item => {
+        const prod = database.produtos.find((p: Produto) => p.cd_produto === item.cd_produto);
+        if (prod) {
+          prod.estoque += item.qtde;
+          prod.compra = item.valor_unit; // Atualiza preço de custo
+        }
+      });
+      
+      // 3. Gerar Conta a Pagar (se não for confirmada/paga na hora)
+      const novaConta: ContaPagar = {
+        cd_conta_pagar: Date.now(),
+        cd_fornecedores: compra.cd_fornecedores,
+        valor: compra.total,
+        vencimento: new Date().toISOString(),
+        descricao: `Compra NF: ${compra.nota_fiscal || 'S/N'}`,
+        pago: false
+      };
+      database.contasPagar.push(novaConta);
+      
       saveDB(database);
     }
   },
