@@ -1,3 +1,5 @@
+"use client";
+
 export interface Cliente {
   cd_clientes: number;
   data: string;
@@ -15,6 +17,19 @@ export interface Cliente {
   limite?: number;
   obs1?: string;
   fantasia?: string;
+  cd_func?: number;
+}
+
+export interface Funcionario {
+  cd_func: number;
+  nome: string;
+  cpf?: string;
+  tel?: string;
+  cargo?: string;
+  fixo?: number;
+  comissao?: number;
+  admissao?: string;
+  demitido: boolean;
 }
 
 export interface Produto {
@@ -30,6 +45,7 @@ export interface Produto {
   cd_grupo?: number;
   cd_fabricantes?: number;
   ncm?: string;
+  pesavel?: boolean;
 }
 
 export interface Venda {
@@ -41,6 +57,9 @@ export interface Venda {
   cd_func: number;
   hora?: number;
   descontos?: number;
+  pago_dinheiro?: number;
+  pago_cartao?: number;
+  pago_cheque?: number;
 }
 
 export interface ItemVenda {
@@ -53,6 +72,30 @@ export interface ItemVenda {
   sub: number;
 }
 
+export interface OS {
+  cd_os: number;
+  cd_clientes: number;
+  cd_func: number;
+  data_chegada: string;
+  defeito_aparente?: string;
+  situacao_atual: string;
+  valor: number;
+  fechado: boolean;
+  aparelho?: string;
+  marca?: string;
+  modelo?: string;
+}
+
+export interface Compra {
+  cd_compra: number;
+  data: string;
+  nota_fiscal?: string;
+  total: number;
+  cd_fornecedores: number;
+  cd_func: number;
+  confirmada: boolean;
+}
+
 export interface ContaPagar {
   cd_conta_pagar: number;
   cd_fornecedores: number;
@@ -61,6 +104,7 @@ export interface ContaPagar {
   descricao: string;
   pago: boolean;
   data_pagamento?: string;
+  cd_centro_custos?: number;
 }
 
 export interface Receber {
@@ -70,6 +114,8 @@ export interface Receber {
   vencimento: string;
   pago: boolean;
   data?: string;
+  cd_venda?: number;
+  cd_os?: number;
 }
 
 export interface Caixa {
@@ -79,4 +125,22 @@ export interface Caixa {
   entrada: number;
   saida: number;
   atual: number;
+  cd_func?: number;
+  hora?: string;
+}
+
+export interface CentroCusto {
+  cd_centro_custos: number;
+  descricao: string;
+}
+
+export interface Cheque {
+  cd_cheque: number;
+  cd_clientes?: number;
+  cd_fornecedores?: number;
+  banco?: string;
+  n_cheque?: string;
+  valor: number;
+  vencimento: string;
+  pago: boolean;
 }

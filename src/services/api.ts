@@ -1,18 +1,37 @@
-import { Cliente, Produto, Venda, ItemVenda, ContaPagar, Receber, Caixa } from '../types/database';
+"use client";
 
-// Simulação de Banco de Dados usando LocalStorage
+import { 
+  Cliente, 
+  Produto, 
+  Venda, 
+  ItemVenda, 
+  ContaPagar, 
+  Receber, 
+  Caixa, 
+  Funcionario, 
+  OS, 
+  Compra,
+  CentroCusto,
+  Cheque
+} from '../types/database';
+
 const STORAGE_KEY = 'dyaderp_db';
 
 const getDB = () => {
   const data = localStorage.getItem(STORAGE_KEY);
   return data ? JSON.parse(data) : {
     clientes: [],
+    funcionarios: [],
     produtos: [],
     vendas: [],
     itensVenda: [],
     contasPagar: [],
     receber: [],
-    caixa: []
+    caixa: [],
+    os: [],
+    compras: [],
+    centroCustos: [],
+    cheques: []
   };
 };
 
@@ -26,6 +45,14 @@ export const db = {
     add: (cliente: Cliente) => {
       const database = getDB();
       database.clientes.push(cliente);
+      saveDB(database);
+    }
+  },
+  funcionarios: {
+    getAll: (): Funcionario[] => getDB().funcionarios,
+    add: (func: Funcionario) => {
+      const database = getDB();
+      database.funcionarios.push(func);
       saveDB(database);
     }
   },
@@ -49,6 +76,26 @@ export const db = {
       const database = getDB();
       database.vendas.push(venda);
       database.itensVenda.push(...itens);
+      saveDB(database);
+    }
+  },
+  os: {
+    getAll: (): OS[] => getDB().os,
+    add: (os: OS) => {
+      const database = getDB();
+      database.os.push(os);
+      saveDB(database);
+    }
+  },
+  financeiro: {
+    getCaixa: (): Caixa[] => getDB().caixa,
+    getReceber: (): Receber[] => getDB().receber,
+    getPagar: (): ContaPagar[] => getDB().contasPagar,
+    getCentroCustos: (): CentroCusto[] => getDB().centroCustos,
+    getCheques: (): Cheque[] => getDB().cheques,
+    addLancamentoCaixa: (lancamento: Caixa) => {
+      const database = getDB();
+      database.caixa.push(lancamento);
       saveDB(database);
     }
   }
