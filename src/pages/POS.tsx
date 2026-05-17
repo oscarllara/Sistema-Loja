@@ -13,25 +13,64 @@ import {
   Package, 
   ShoppingCart,
   User,
-  Wallet
+  Wallet,
+  FileText,
+  Printer,
+  Save,
+  History,
+  FileCode
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
 import { showSuccess, showError } from '@/utils/toast';
 import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
+import ProductSearchModal from '@/components/ProductSearchModal';
+import PrintPreview from '@/components/PrintPreview';
+import ClientDetails from '@/components/ClientDetails';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
 
 const POS = () => {
   const [cart, setCart] = React.useState<any[]>([]);
-  const [search, setSearch] = React.useState("");
   const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Dinheiro');
   const [selectedClientId, setSelectedClientId] = React.useState<number>(1);
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [isPrintOpen, setIsPrintOpen] = React.useState(false);
+  const [isClientDetailsOpen, setIsClientDetailsOpen] = React.useState(false);
+  const [lastActionData, setLastActionData] = React.useState<any>(null);
+  const [activeTab, setActiveTab] = React.useState("venda");
 
   const products = db.produtos.getAll() || [];
-  const contas = db.contas.getAll() || [];
   const clientes = db.clientes.getAll() || [];
+  const orcamentos = db.orcamentos.getAll().filter(o => o.status === 'Aberto');
+
+  // Atalho F1
+  React.useEffect(() => {
+    const handleF1 = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleF1);
+    return () => window.removeEventListener('keydown', handleF1);
+  }, []);
 
   const addToCart = (product: any) => {
     const existing = cart.find(item => item.cd_produto === product.cd_produto);
@@ -58,39 +97,48 @@ const POS = () => {
     }));
   };
 
-  const total = cart.reduce((acc, item) => acc + (item.venda * item.quantity), 0);
+  const total = cart.reduce((acc, item) => {
+    const preco = paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' 
+      ? (item.venda_vista || item.venda) 
+      : item.venda;
+    return acc + (preco * item.quantity);
+  }, 0);
 
-  const handleCheckout = () => {
+  const handleCheckout = (isOrcamento = false) => {
     if (cart.length === 0) return;
 
     const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
-    const vendaId = Date.now();
+    const id = Date.now();
 
-    try {
-      // 1. Registra a venda detalhada
-      db.vendas.add({
-        cd_venda: vendaId,
-        data: new Date().toISOString(),
-        total: total,
-        custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * item.quantity), 0),
-        cd_clientes: selectedClientId,
-        nome_cliente: cliente?.nome,
-        cd_func: 1,
-        tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista',
-        meio_pagamento: paymentMethod,
-        itens: cart.map(item => ({
-          cd_produto: item.cd_produto,
-          nome_produto: item.nome,
-          valor: item.venda,
-          qtde: item.quantity,
-          subtotal: item.venda * item.quantity
-        }))
-      });
+    const payload = {
+      data: new Date().toISOString(),
+      total: total,
+      custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * item.quantity), 0),
+      cd_clientes: selectedClientId,
+      nome_cliente: cliente?.nome,
+      cd_func: 1,
+      tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
+      meio_pagamento: paymentMethod,
+      itens: cart.map(item => ({
+        cd_produto: item.cd_produto,
+        nome_produto: item.nome,
+        valor: paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' ? (item.venda_vista || item.venda) : item.venda,
+        qtde: item.quantity,
+        subtotal: (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' ? (item.venda_vista || item.venda) : item.venda) * item.quantity
+      }))
+    };
 
-      // 2. Registra no financeiro
+    if (isOrcamento) {
+      const orc = db.orcamentos.add(payload);
+      setLastActionData({ ...orc, type: 'Orcamento' });
+      showSuccess("Orçamento salvo com sucesso!");
+    } else {
+      db.vendas.add({ ...payload, cd_venda: id });
+      
+      // Financeiro
       db.financeiro.add({
         tipo: 'R',
-        descricao: `Venda PDV #${vendaId}`,
+        descricao: `Venda PDV #${id}`,
         valor: total,
         data_vencimento: new Date().toISOString(),
         data_pagamento: paymentMethod === 'Crediário' ? undefined : new Date().toISOString(),
@@ -99,133 +147,250 @@ const POS = () => {
         meio_pagamento: paymentMethod,
         cd_entidade: selectedClientId,
         nome_entidade: cliente?.nome,
-        cd_conta: paymentMethod === 'Crediário' ? undefined : (paymentMethod === 'Dinheiro' ? 1 : 2),
-        cd_venda: vendaId
+        cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
+        cd_venda: id
       });
 
-      // 3. Baixa o estoque
+      // Estoque
       cart.forEach(item => {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
-        if (prod) {
-          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
-        }
+        if (prod) db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
       });
 
-      showSuccess(`Venda finalizada com sucesso!`);
-      setCart([]);
-      setSelectedClientId(1);
-    } catch (err) {
-      showError("Erro ao finalizar venda.");
+      setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
+      showSuccess("Venda finalizada!");
     }
+
+    setCart([]);
+    setIsPrintOpen(true);
+  };
+
+  const loadOrcamento = (orc: any) => {
+    setCart(orc.itens.map((item: any) => {
+      const prod = products.find(p => p.cd_produto === item.cd_produto);
+      return { ...prod, quantity: item.qtde };
+    }));
+    setSelectedClientId(orc.cd_clientes);
+    setPaymentMethod(orc.meio_pagamento);
+    setActiveTab("venda");
+    showSuccess("Orçamento carregado!");
   };
 
   return (
     <Layout>
-      <div className="h-full flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 flex flex-col gap-6 min-w-0">
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-              <Input 
-                placeholder="Buscar produto..." 
-                className="pl-10 h-12 rounded-xl border-slate-200 shadow-sm"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="w-64 relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <select 
-                className="w-full h-12 pl-10 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-indigo-500"
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(Number(e.target.value))}
+      <div className="h-full flex flex-col gap-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <TabsList className="bg-slate-100 p-1 rounded-xl">
+              <TabsTrigger value="venda" className="gap-2"><ShoppingCart size={16} /> Venda Ativa</TabsTrigger>
+              <TabsTrigger value="orcamentos" className="gap-2"><FileCode size={16} /> Orçamentos Salvos</TabsTrigger>
+            </TabsList>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 text-xs font-bold">
+                <span className="bg-amber-200 px-1.5 rounded">F1</span> Pesquisar Produtos
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                onClick={() => setIsClientDetailsOpen(true)}
               >
-                {clientes.map(c => (
-                  <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
-                ))}
-              </select>
+                <FileText size={16} /> Ficha do Cliente
+              </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pr-2">
-            {products.filter(p => p.nome.toLowerCase().includes(search.toLowerCase())).map((product) => (
-              <Card 
-                key={product.cd_produto} 
-                className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden"
-                onClick={() => addToCart(product)}
-              >
-                <div className="h-24 bg-slate-100 flex items-center justify-center group-hover:bg-indigo-50 transition-colors">
-                  <Package className="text-slate-300 group-hover:text-indigo-300" size={32} />
-                </div>
-                <CardContent className="p-3">
-                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{product.un}</p>
-                  <p className="text-sm font-bold text-slate-900 truncate">{product.nome}</p>
-                  <p className="text-indigo-600 font-bold mt-1">R$ {product.venda.toFixed(2)}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        <div className="w-full lg:w-96 flex flex-col gap-4">
-          <Card className="flex-1 border-none shadow-lg flex flex-col overflow-hidden rounded-2xl">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2">
-                <ShoppingCart size={20} /> Carrinho
-              </h2>
-              <span className="bg-indigo-500 px-2 py-0.5 rounded text-xs font-bold">
-                {cart.length} itens
-              </span>
-            </div>
-
-            <ScrollArea className="flex-1 p-4">
-              {cart.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
-                  <ShoppingCart size={48} className="mb-4 opacity-20" />
-                  <p>Carrinho vazio</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {cart.map((item) => (
-                    <div key={item.cd_produto} className="flex flex-col gap-2 pb-4 border-b border-slate-100 last:border-0">
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-bold text-slate-800">{item.nome}</span>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-rose-500" onClick={() => removeFromCart(item.cd_produto)}><Trash2 size={14} /></Button>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.cd_produto, -1)}><Minus size={12} /></Button>
-                          <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.cd_produto, 1)}><Plus size={12} /></Button>
-                        </div>
-                        <span className="text-sm font-bold text-indigo-600">R$ {(item.venda * item.quantity).toFixed(2)}</span>
-                      </div>
+          <TabsContent value="venda" className="flex-1 flex flex-col lg:flex-row gap-6 mt-0">
+            <div className="flex-1 flex flex-col gap-4 min-w-0">
+              <Card className="border-none shadow-sm overflow-hidden flex-1 flex flex-col">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="relative w-64">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <select 
+                        className="w-full h-10 pl-10 rounded-lg border-none bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500"
+                        value={selectedClientId}
+                        onChange={(e) => setSelectedClientId(Number(e.target.value))}
+                      >
+                        {clientes.map(c => (
+                          <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Total do Carrinho</p>
+                    <p className="text-2xl font-black text-indigo-400">R$ {total.toFixed(2)}</p>
+                  </div>
                 </div>
-              )}
-            </ScrollArea>
 
-            <div className="p-6 bg-slate-50 border-t border-slate-200 space-y-4">
-              <div className="flex justify-between items-center text-slate-900 font-bold text-xl">
-                <span>Total</span>
-                <span className="text-indigo-600">R$ {total.toFixed(2)}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button variant={paymentMethod === 'Dinheiro' ? 'default' : 'outline'} className={cn("h-12 gap-2", paymentMethod === 'Dinheiro' && "bg-indigo-600")} onClick={() => setPaymentMethod('Dinheiro')}><Banknote size={16} /> Dinheiro</Button>
-                <Button variant={paymentMethod === 'PIX' ? 'default' : 'outline'} className={cn("h-12 gap-2", paymentMethod === 'PIX' && "bg-indigo-600")} onClick={() => setPaymentMethod('PIX')}><QrCode size={16} /> PIX</Button>
-                <Button variant={paymentMethod.includes('Cartão') ? 'default' : 'outline'} className={cn("h-12 gap-2", paymentMethod.includes('Cartão') && "bg-indigo-600")} onClick={() => setPaymentMethod('Cartão Crédito')}><CreditCard size={16} /> Cartão</Button>
-                <Button variant={paymentMethod === 'Crediário' ? 'default' : 'outline'} className={cn("h-12 gap-2", paymentMethod === 'Crediário' && "bg-indigo-600")} onClick={() => setPaymentMethod('Crediário')}><Wallet size={16} /> Crediário</Button>
-              </div>
-
-              <Button className="w-full h-14 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-lg font-bold shadow-lg" disabled={cart.length === 0} onClick={handleCheckout}>Finalizar Venda</Button>
+                <ScrollArea className="flex-1">
+                  <Table>
+                    <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                      <TableRow>
+                        <TableHead className="w-20">Cód.</TableHead>
+                        <TableHead>Produto</TableHead>
+                        <TableHead className="text-right">Unitário</TableHead>
+                        <TableHead className="text-center w-32">Quantidade</TableHead>
+                        <TableHead className="text-right">Subtotal</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cart.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-20 text-slate-400">
+                            <ShoppingCart size={48} className="mx-auto mb-4 opacity-10" />
+                            <p>Pressione <span className="font-bold text-slate-600">F1</span> para buscar produtos</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        cart.map((item) => {
+                          const preco = paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' ? (item.venda_vista || item.venda) : item.venda;
+                          return (
+                            <TableRow key={item.cd_produto} className="hover:bg-slate-50">
+                              <TableCell className="font-mono text-xs">{item.id_manual}</TableCell>
+                              <TableCell>
+                                <p className="font-bold text-slate-900 uppercase text-xs">{item.nome}</p>
+                                <p className="text-[10px] text-slate-500">{item.un}</p>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">R$ {preco.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.cd_produto, -1)}><Minus size={12} /></Button>
+                                  <span className="text-sm font-bold w-8 text-center">{item.quantity}</span>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.cd_produto, 1)}><Plus size={12} /></Button>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-bold text-indigo-600">R$ {(preco * item.quantity).toFixed(2)}</TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeFromCart(item.cd_produto)}><Trash2 size={16} /></Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </Card>
             </div>
-          </Card>
-        </div>
+
+            <div className="w-full lg:w-80 flex flex-col gap-4">
+              <Card className="border-none shadow-sm p-6 space-y-6">
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold uppercase text-slate-500">Forma de Pagamento</Label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <PaymentButton active={paymentMethod === 'Dinheiro'} onClick={() => setPaymentMethod('Dinheiro')} icon={Banknote} label="Dinheiro (Vista)" />
+                    <PaymentButton active={paymentMethod === 'PIX'} onClick={() => setPaymentMethod('PIX')} icon={QrCode} label="PIX (Vista)" />
+                    <PaymentButton active={paymentMethod === 'Cartão Crédito'} onClick={() => setPaymentMethod('Cartão Crédito')} icon={CreditCard} label="Cartão Crédito" />
+                    <PaymentButton active={paymentMethod === 'Cartão Débito'} onClick={() => setPaymentMethod('Cartão Débito')} icon={CreditCard} label="Cartão Débito" />
+                    <PaymentButton active={paymentMethod === 'Crediário'} onClick={() => setPaymentMethod('Crediário')} icon={Wallet} label="Crediário (Prazo)" />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t space-y-3">
+                  <Button 
+                    className="w-full h-12 bg-slate-100 text-slate-900 hover:bg-slate-200 gap-2 font-bold"
+                    onClick={() => handleCheckout(true)}
+                    disabled={cart.length === 0}
+                  >
+                    <Save size={18} /> Salvar Orçamento
+                  </Button>
+                  <Button 
+                    className="w-full h-16 bg-indigo-600 hover:bg-indigo-700 text-lg font-black shadow-lg shadow-indigo-100"
+                    onClick={() => handleCheckout(false)}
+                    disabled={cart.length === 0}
+                  >
+                    FINALIZAR VENDA
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="orcamentos" className="flex-1 mt-0">
+            <Card className="border-none shadow-sm overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Itens</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orcamentos.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhum orçamento aberto.</TableCell></TableRow>
+                  ) : (
+                    orcamentos.map((orc) => (
+                      <TableRow key={orc.cd_orcamento}>
+                        <TableCell className="text-xs">{new Date(orc.data).toLocaleDateString()}</TableCell>
+                        <TableCell className="font-bold text-slate-900">{orc.nome_cliente}</TableCell>
+                        <TableCell className="text-xs text-slate-500">{orc.itens.length} itens</TableCell>
+                        <TableCell className="text-right font-bold">R$ {orc.total.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => loadOrcamento(orc)}>
+                              <ShoppingCart size={14} /> Abrir Venda
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setLastActionData({ ...orc, type: 'Orcamento' }); setIsPrintOpen(true); }}>
+                              <Printer size={16} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Modais */}
+        <ProductSearchModal 
+          isOpen={isSearchOpen} 
+          onClose={() => setIsSearchOpen(false)} 
+          onSelect={addToCart} 
+        />
+
+        <PrintPreview 
+          isOpen={isPrintOpen} 
+          onClose={() => setIsPrintOpen(false)} 
+          data={lastActionData}
+          type={lastActionData?.type}
+        />
+
+        <Dialog open={isClientDetailsOpen} onOpenChange={setIsClientDetailsOpen}>
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Ficha do Cliente</DialogTitle>
+            </DialogHeader>
+            <ClientDetails client={clientes.find(c => c.cd_clientes === selectedClientId)!} />
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
 };
+
+const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
+  <button 
+    onClick={onClick}
+    className={cn(
+      "flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
+      active 
+        ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm" 
+        : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
+    )}
+  >
+    <Icon size={20} className={active ? "text-indigo-600" : "text-slate-400"} />
+    <span className="text-sm font-bold">{label}</span>
+  </button>
+);
 
 export default POS;

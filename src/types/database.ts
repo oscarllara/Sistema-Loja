@@ -110,7 +110,7 @@ export interface LancamentoFinanceiro {
   bandeira_cartao?: string;
   cd_conta?: number; 
   is_fixa?: boolean;
-  cd_venda?: number; // Link com a venda
+  cd_venda?: number;
 }
 
 export interface ContaBancaria {
@@ -143,6 +143,20 @@ export interface Venda {
   tipo_venda: 'Vista' | 'Prazo';
   meio_pagamento: MeioPagamento;
   itens: VendaItem[];
+}
+
+export interface Orcamento extends Omit<Venda, 'cd_venda'> {
+  cd_orcamento: number;
+  status: 'Aberto' | 'Convertido' | 'Cancelado';
+}
+
+export interface Configuracoes {
+  tipo_impressao: 'A4' | 'Bobina';
+  largura_bobina: '79mm' | '89mm';
+  margem_esquerda: number;
+  margem_direita: number;
+  margem_topo: number;
+  margem_rodape: number;
 }
 
 export interface Patrimonio {

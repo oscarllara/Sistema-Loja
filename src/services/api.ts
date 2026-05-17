@@ -1,6 +1,6 @@
 "use client";
 
-import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio, Orcamento, Configuracoes } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
 const AUTH_KEY = 'dyaderp_auth';
@@ -34,10 +34,19 @@ const getDB = () => {
       clientes: [adminUser],
       produtos: [],
       vendas: [],
+      orcamentos: [],
       compras: [],
       financeiro: [],
       transferencias: [],
       patrimonio: [],
+      configuracoes: {
+        tipo_impressao: 'Bobina',
+        largura_bobina: '79mm',
+        margem_esquerda: 5,
+        margem_direita: 5,
+        margem_topo: 5,
+        margem_rodape: 5
+      },
       contas: [
         { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa' },
         { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco' },
@@ -48,6 +57,17 @@ const getDB = () => {
   } else {
     database = JSON.parse(data);
     if (!database.vendas) database.vendas = [];
+    if (!database.orcamentos) database.orcamentos = [];
+    if (!database.configuracoes) {
+      database.configuracoes = {
+        tipo_impressao: 'Bobina',
+        largura_bobina: '79mm',
+        margem_esquerda: 5,
+        margem_direita: 5,
+        margem_topo: 5,
+        margem_rodape: 5
+      };
+    }
     if (!database.transferencias) database.transferencias = [];
     if (!database.patrimonio) database.patrimonio = [];
     if (!database.contas) {
@@ -84,6 +104,32 @@ export const db = {
     getUser: (): Cliente | null => {
       const data = localStorage.getItem(AUTH_KEY);
       return data ? JSON.parse(data) : null;
+    }
+  },
+  config: {
+    get: (): Configuracoes => getDB().configuracoes,
+    update: (data: Partial<Configuracoes>) => {
+      const database = getDB();
+      database.configuracoes = { ...database.configuracoes, ...data };
+      saveDB(database);
+    }
+  },
+  orcamentos: {
+    getAll: (): Orcamento[] => getDB().orcamentos,
+    add: (o: Omit<Orcamento, 'cd_orcamento'>) => {
+      const database = getDB();
+      const novo = { ...o, cd_orcamento: Date.now(), status: 'Aberto' as const };
+      database.orcamentos.push(novo);
+      saveDB(database);
+      return novo;
+    },
+    updateStatus: (id: number, status: Orcamento['status']) => {
+      const database = getDB();
+      const idx = database.orcamentos.findIndex((o: any) => o.cd_orcamento === id);
+      if (idx !== -1) {
+        database.orcamentos[idx].status = status;
+        saveDB(database);
+      }
     }
   },
   financeiro: {
@@ -160,7 +206,7 @@ export const db = {
     getAll: (): Produto[] => getDB().produtos,
     add: (p: any) => {
       const db = getDB();
-      const id = (db.produtos.length + 1).toString();
+      const id = (db.produtos.length + 1).toString().padStart(5, '0');
       db.produtos.push({ ...p, id_manual: id, cd_produto: Date.now(), data_atualizacao: new Date().toISOString() });
       saveDB(db);
     },
