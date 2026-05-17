@@ -26,7 +26,8 @@ import {
   Lock,
   Edit3,
   Zap,
-  CreditCard
+  CreditCard,
+  CheckCircle
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -262,7 +263,7 @@ const POS = () => {
     });
     
     setIsEditItemOpen(false);
-    setEditingIndex(null);
+    setSelectedIndex(null);
     showSuccess("Item atualizado!");
   };
 
@@ -298,18 +299,34 @@ const POS = () => {
       if (mode === 'VENDA') {
         db.vendas.add({ ...payload, cd_venda: id });
         payments.forEach(p => {
-          db.financeiro.add({
-            tipo: 'R',
-            descricao: `Venda PDV #${id}`,
-            valor: p.amount,
-            data_vencimento: new Date().toISOString(),
-            status: p.method === 'Crediário' ? 'Pendente' : 'Pago',
-            categoria: 'Venda',
-            meio_pagamento: p.method,
-            cd_entidade: Number(selectedEntityId) || 1,
-            cd_conta: p.method === 'Crediário' ? undefined : 1,
-            cd_venda: id
-          });
+          if (p.method === 'Crediário' && p.installments) {
+            p.installments.forEach((inst, idx) => {
+              db.financeiro.add({
+                tipo: 'R',
+                descricao: `Venda PDV #${id} (${idx + 1}/${p.installments?.length})`,
+                valor: inst.amount,
+                data_vencimento: inst.date,
+                status: 'Pendente',
+                categoria: 'Venda',
+                meio_pagamento: 'Crediário',
+                cd_entidade: Number(selectedEntityId),
+                cd_venda: id
+              });
+            });
+          } else {
+            db.financeiro.add({
+              tipo: 'R',
+              descricao: `Venda PDV #${id}`,
+              valor: p.amount,
+              data_vencimento: new Date().toISOString(),
+              status: p.method === 'Crediário' ? 'Pendente' : 'Pago',
+              categoria: 'Venda',
+              meio_pagamento: p.method,
+              cd_entidade: Number(selectedEntityId) || 1,
+              cd_conta: p.method === 'Crediário' ? undefined : 1,
+              cd_venda: id
+            });
+          }
         });
         cart.forEach(item => {
           const prod = products.find(p => p.cd_produto === item.cd_produto);
@@ -370,13 +387,25 @@ const POS = () => {
         </div>
 
         <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Teclas de Atalho</h3>
+          <div className="space-y-6">
             <div className="space-y-2">
-              <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
-              <ShortcutItem key="F4" label="Novo Cliente" onClick={() => handleShortcut('F4')} />
-              <ShortcutItem key="Ctrl + L" label="Editar Item" onClick={() => handleShortcut('CtrlL')} />
-              <ShortcutItem key="F10" label="Concluir Operação" onClick={() => handleShortcut('F10')} />
+              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Ações Rápidas</h3>
+              <Button 
+                className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg gap-2 shadow-lg shadow-emerald-100 rounded-xl"
+                onClick={() => handleShortcut('F10')}
+              >
+                <CheckCircle size={24} /> FINALIZAR (F10)
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Teclas de Atalho</h3>
+              <div className="space-y-2">
+                <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
+                <ShortcutItem key="F4" label="Novo Cliente" onClick={() => handleShortcut('F4')} />
+                <ShortcutItem key="Ctrl + L" label="Editar Item" onClick={() => handleShortcut('CtrlL')} />
+                <ShortcutItem key="F10" label="Concluir Operação" onClick={() => handleShortcut('F10')} />
+              </div>
             </div>
           </div>
         </ScrollArea>
@@ -634,6 +663,7 @@ const POS = () => {
         onClose={() => setIsCheckoutOpen(false)}
         total={total}
         clientName={entities.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'}
+        clientId={selectedEntityId}
         onConfirm={confirmCheckout}
       />
 

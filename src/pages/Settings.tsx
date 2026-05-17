@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Printer, Save, Layout as LayoutIcon } from 'lucide-react';
+import { Printer, Save, Layout as LayoutIcon, Percent } from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess } from '@/utils/toast';
 
@@ -111,6 +111,27 @@ const Settings = () => {
                     />
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b bg-slate-50/50">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Percent size={18} className="text-indigo-600" /> Regras de Negócio
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <div className="space-y-2">
+                <Label>Juros de Parcelamento (%)</Label>
+                <Input 
+                  type="number" 
+                  step="0.01"
+                  value={config.juros_parcelamento} 
+                  onChange={(e) => setConfig({ ...config, juros_parcelamento: Number(e.target.value) })}
+                  placeholder="Ex: 2.5"
+                />
+                <p className="text-[10px] text-slate-500">Taxa aplicada ao total da venda quando parcelada no crediário.</p>
               </div>
             </CardContent>
           </Card>

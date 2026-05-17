@@ -195,6 +195,7 @@ export interface Configuracoes {
   margem_direita: number;
   margem_topo: number;
   margem_rodape: number;
+  juros_parcelamento: number;
 }
 
 export interface Patrimonio {
