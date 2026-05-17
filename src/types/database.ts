@@ -54,20 +54,32 @@ export interface Cliente {
   obs1?: string;
 }
 
+export interface ItemComposicao {
+  cd_produto_filho: number;
+  qtde: number;
+}
+
 export interface Produto {
-  cd_produto: number;      // ID Interno (PK)
-  id_importado?: string;   // ID do sistema antigo
-  id_novo?: number;        // ID Sequencial por Nome
-  nome: string;            // Sempre MAIÚSCULO
-  un?: string;
+  cd_produto: number;         // PK Interna
+  id_manual: string;          // O ID que você edita (ex: 300.1)
+  id_importado?: string;      // ID do sistema antigo
+  nome: string;               // Sempre MAIÚSCULO
+  un: string;                 // Unidade principal (ex: SACO)
+  un_fracionada?: string;     // Unidade de venda (ex: KG)
+  fator_conversao?: number;   // Ex: 0.02 (1kg de um saco de 50kg)
   cod_barras?: string;
   compra?: number;
-  venda: number;
+  venda: number;              // Preço Padrão (A Prazo)
+  venda_vista?: number;       // Preço à Vista
+  desconto_vista_tipo?: 'P' | 'V'; // Percentual ou Valor
+  desconto_vista_valor?: number;
   estoque: number;
   minimo?: number;
   cd_fornecedores?: number;
   ncm?: string;
-  fracionado?: boolean;    // Se pode vender 0.5kg, etc.
+  fracionado?: boolean;
+  is_kit?: boolean;           // Se é um conjunto/composição
+  itens_kit?: ItemComposicao[];
   data_atualizacao: string;
 }
 

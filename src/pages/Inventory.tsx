@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, AlertTriangle, Package, Barcode, Hash, Calendar } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, AlertTriangle, Package, Hash, Calendar, Boxes, Scale } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -43,9 +43,8 @@ const Inventory = () => {
 
   const filteredProducts = products.filter(p => 
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.cod_barras && p.cod_barras.includes(searchTerm)) ||
-    (p.id_importado && p.id_importado.includes(searchTerm)) ||
-    (p.id_novo && p.id_novo.toString().includes(searchTerm))
+    p.id_manual.includes(searchTerm) ||
+    (p.cod_barras && p.cod_barras.includes(searchTerm))
   );
 
   const handleEdit = (product: Produto) => {
@@ -71,7 +70,7 @@ const Inventory = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
-            <p className="text-slate-500">Controle total de produtos, preços e níveis de estoque.</p>
+            <p className="text-slate-500">Controle de produtos, preços à vista/prazo e composições.</p>
           </div>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -80,7 +79,7 @@ const Inventory = () => {
                 <Plus size={20} /> Novo Produto
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle>
               </DialogHeader>
@@ -100,7 +99,7 @@ const Inventory = () => {
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <Input 
-                placeholder="Buscar por nome, ID ou barras..." 
+                placeholder="Buscar por nome, código ou barras..." 
                 className="pl-10 border-slate-200 h-11 rounded-lg" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -111,11 +110,11 @@ const Inventory = () => {
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
-                <TableHead className="font-bold w-24">IDs</TableHead>
+                <TableHead className="font-bold w-24">Código</TableHead>
                 <TableHead className="font-bold">Produto</TableHead>
                 <TableHead className="font-bold">Estoque</TableHead>
-                <TableHead className="font-bold">Preço Venda</TableHead>
-                <TableHead className="font-bold">Atualização</TableHead>
+                <TableHead className="font-bold">Preço À Vista</TableHead>
+                <TableHead className="font-bold">Preço A Prazo</TableHead>
                 <TableHead className="text-right font-bold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -125,7 +124,7 @@ const Inventory = () => {
                   <TableCell colSpan={6} className="text-center py-12 text-slate-400">
                     <div className="flex flex-col items-center gap-2">
                       <Package size={32} className="opacity-20" />
-                      <p>Nenhum produto cadastrado ou encontrado.</p>
+                      <p>Nenhum produto encontrado.</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -133,24 +132,23 @@ const Inventory = () => {
                 filteredProducts.map((product) => (
                   <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors">
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1 text-indigo-600 font-bold text-xs">
-                          <Hash size={10} /> {product.id_novo}
-                        </div>
-                        {product.id_importado && (
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            IMP: {product.id_importado}
-                          </div>
-                        )}
-                      </div>
+                      <div className="font-bold text-indigo-600">{product.id_manual}</div>
+                      {product.id_importado && <div className="text-[9px] text-slate-400">ANT: {product.id_importado}</div>}
                     </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-bold text-slate-900 text-sm">{product.nome}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">{product.un || 'UN'}</span>
+                          <span className="text-[10px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">{product.un}</span>
                           {product.fracionado && (
-                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-indigo-200 text-indigo-600 bg-indigo-50">FRACIONADO</Badge>
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-indigo-200 text-indigo-600 bg-indigo-50 gap-1">
+                              <Scale size={8} /> FRACIONADO
+                            </Badge>
+                          )}
+                          {product.is_kit && (
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-amber-200 text-amber-600 bg-amber-50 gap-1">
+                              <Boxes size={8} /> KIT
+                            </Badge>
                           )}
                         </div>
                       </div>
@@ -166,13 +164,8 @@ const Inventory = () => {
                         {product.estoque <= (product.minimo || 0) && <AlertTriangle size={14} className="text-amber-500" />}
                       </div>
                     </TableCell>
-                    <TableCell className="font-bold text-indigo-600">R$ {product.venda.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 text-slate-500 text-xs">
-                        <Calendar size={12} />
-                        {new Date(product.data_atualizacao).toLocaleDateString()}
-                      </div>
-                    </TableCell>
+                    <TableCell className="font-bold text-emerald-600">R$ {product.venda_vista?.toFixed(2)}</TableCell>
+                    <TableCell className="font-bold text-slate-400">R$ {product.venda.toFixed(2)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button 

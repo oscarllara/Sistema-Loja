@@ -3,7 +3,6 @@
 import { Cliente, Produto, Compra, Venda, ItemVenda } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
-const START_ID_NOVO = 5000;
 
 const getDB = () => {
   const data = localStorage.getItem(STORAGE_KEY);
@@ -21,13 +20,9 @@ const getDB = () => {
 };
 
 const saveDB = (db: any) => {
-  // Antes de salvar, sempre re-sequenciamos os produtos por nome
-  if (db.produtos && db.produtos.length > 0) {
+  // Ordena por nome antes de salvar para manter a coerência visual
+  if (db.produtos) {
     db.produtos.sort((a: Produto, b: Produto) => a.nome.localeCompare(b.nome));
-    db.produtos = db.produtos.map((p: Produto, index: number) => ({
-      ...p,
-      id_novo: START_ID_NOVO + index
-    }));
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 };
@@ -56,8 +51,13 @@ export const db = {
   },
   produtos: {
     getAll: (): Produto[] => getDB().produtos,
-    add: (produto: Omit<Produto, 'id_novo' | 'data_atualizacao'>) => {
+    add: (produto: Omit<Produto, 'data_atualizacao'>) => {
       const database = getDB();
+      
+      // Verifica se o ID manual já existe
+      const exists = database.produtos.some((p: Produto) => p.id_manual === produto.id_manual);
+      if (exists) throw new Error("Este Código de Produto já está em uso.");
+
       const novoProduto = {
         ...produto,
         nome: produto.nome.toUpperCase(),
@@ -70,6 +70,12 @@ export const db = {
       const database = getDB();
       const index = database.produtos.findIndex((p: Produto) => p.cd_produto === id);
       if (index !== -1) {
+        // Se mudou o ID manual, verifica se o novo já existe em outro produto
+        if (data.id_manual && data.id_manual !== database.produtos[index].id_manual) {
+          const exists = database.produtos.some((p: Produto) => p.id_manual === data.id_manual);
+          if (exists) throw new Error("Este Código de Produto já está em uso.");
+        }
+
         database.produtos[index] = { 
           ...database.produtos[index], 
           ...data, 
@@ -91,7 +97,6 @@ export const db = {
       const database = getDB();
       database.compras.push(compra);
       
-      // Atualiza estoque e data de atualização dos produtos comprados
       itens.forEach(item => {
         const pIdx = database.produtos.findIndex((p: Produto) => p.cd_produto === item.cd_produto);
         if (pIdx !== -1) {
