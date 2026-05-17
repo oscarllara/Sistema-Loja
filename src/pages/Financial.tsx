@@ -41,6 +41,7 @@ import { db } from '@/services/api';
 import { LancamentoFinanceiro, ContaBancaria, Patrimonio } from '@/types/database';
 import { Badge } from "@/components/ui/badge";
 import { showSuccess, showError } from '@/utils/toast';
+import FinancialForm from '@/components/FinancialForm';
 
 const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
@@ -48,6 +49,7 @@ const Financial = () => {
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [editValue, setEditValue] = React.useState("");
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
   const user = db.auth.getUser();
 
   const loadData = () => {
@@ -138,9 +140,20 @@ const Financial = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
-              <Plus size={20} /> Novo Lançamento
-            </Button>
+
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
+                  <Plus size={20} /> Novo Lançamento
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Novo Lançamento Financeiro</DialogTitle>
+                </DialogHeader>
+                <FinancialForm onSuccess={() => { setIsModalOpen(false); loadData(); }} />
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
