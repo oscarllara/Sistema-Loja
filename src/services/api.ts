@@ -47,8 +47,17 @@ const getDB = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
   } else {
     database = JSON.parse(data);
+    // Garantir que todas as tabelas existam para evitar erros de 'undefined'
     if (!database.transferencias) database.transferencias = [];
     if (!database.patrimonio) database.patrimonio = [];
+    if (!database.contas) {
+      database.contas = [
+        { cd_conta: 1, nome: 'Caixa Loja', saldo: 0, tipo: 'Caixa' },
+        { cd_conta: 2, nome: 'Banco do Brasil', saldo: 0, tipo: 'Banco' },
+        { cd_conta: 3, nome: 'Retaguarda (Cofre)', saldo: 0, tipo: 'Retaguarda' }
+      ];
+    }
+    if (!database.financeiro) database.financeiro = [];
     if (!database.clientes?.find((c: any) => c.usuario === 'admin')) {
       database.clientes.push(adminUser);
     }
@@ -97,7 +106,6 @@ export const db = {
       const index = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
       if (index !== -1) {
         const lanc = database.financeiro[index];
-        // Se já estava pago, precisamos ajustar o saldo da conta
         if (lanc.status === 'Pago' && lanc.cd_conta) {
           const cIdx = database.contas.findIndex((c: any) => c.cd_conta === lanc.cd_conta);
           if (cIdx !== -1) {
@@ -142,6 +150,7 @@ export const db = {
     getAll: (): ContaBancaria[] => getDB().contas,
     add: (conta: Omit<ContaBancaria, 'cd_conta'>) => {
       const database = getDB();
+      if (!database.contas) database.contas = [];
       database.contas.push({ ...conta, cd_conta: Date.now() });
       saveDB(database);
     }
@@ -150,6 +159,7 @@ export const db = {
     getAll: (): Patrimonio[] => getDB().patrimonio,
     add: (item: Omit<Patrimonio, 'cd_patrimonio'>) => {
       const database = getDB();
+      if (!database.patrimonio) database.patrimonio = [];
       database.patrimonio.push({ ...item, cd_patrimonio: Date.now() });
       saveDB(database);
     }
