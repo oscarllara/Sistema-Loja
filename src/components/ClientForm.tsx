@@ -129,6 +129,17 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
 
+  // Função para formatar a primeira letra de cada palavra em maiúscula
+  const formatTitleCase = (value: string) => {
+    if (!value) return value;
+    return value.replace(/(^\w|\s\w)/g, m => m.toUpperCase());
+  };
+
+  const handleTitleCaseChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues | string) => {
+    const formatted = formatTitleCase(e.target.value);
+    setValue(fieldName as any, formatted);
+  };
+
   const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const cep = e.target.value.replace(/\D/g, '');
     if (cep.length !== 8) return;
@@ -138,9 +149,9 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const data = await response.json();
       if (!data.erro) {
-        setValue("endereco", data.logradouro);
-        setValue("bairro", data.bairro);
-        setValue("cidade", data.localidade);
+        setValue("endereco", formatTitleCase(data.logradouro));
+        setValue("bairro", formatTitleCase(data.bairro));
+        setValue("cidade", formatTitleCase(data.localidade));
         setValue("uf", data.uf);
       }
     } catch (err) {
@@ -231,12 +242,19 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'Nome Completo *' : 'Razão Social *'}</Label>
-              <Input {...register("nome")} placeholder={tipoPessoa === 'F' ? "Nome do cliente" : "Razão social da empresa"} />
+              <Input 
+                {...register("nome")} 
+                onChange={(e) => handleTitleCaseChange(e, "nome")}
+                placeholder={tipoPessoa === 'F' ? "Nome do cliente" : "Razão social da empresa"} 
+              />
               {errors.nome && <p className="text-xs text-red-500">{errors.nome.message}</p>}
             </div>
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'Apelido' : 'Nome Fantasia'}</Label>
-              <Input {...register("apelido_fantasia")} />
+              <Input 
+                {...register("apelido_fantasia")} 
+                onChange={(e) => handleTitleCaseChange(e, "apelido_fantasia")}
+              />
             </div>
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label>
@@ -288,7 +306,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label>Endereço</Label>
-              <Input {...register("endereco")} />
+              <Input 
+                {...register("endereco")} 
+                onChange={(e) => handleTitleCaseChange(e, "endereco")}
+              />
             </div>
             <div className="space-y-2">
               <Label>Número</Label>
@@ -296,15 +317,24 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </div>
             <div className="space-y-2">
               <Label>Bairro</Label>
-              <Input {...register("bairro")} />
+              <Input 
+                {...register("bairro")} 
+                onChange={(e) => handleTitleCaseChange(e, "bairro")}
+              />
             </div>
             <div className="space-y-2">
               <Label>Complemento</Label>
-              <Input {...register("complemento")} />
+              <Input 
+                {...register("complemento")} 
+                onChange={(e) => handleTitleCaseChange(e, "complemento")}
+              />
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label>Cidade</Label>
-              <Input {...register("cidade")} />
+              <Input 
+                {...register("cidade")} 
+                onChange={(e) => handleTitleCaseChange(e, "cidade")}
+              />
             </div>
             <div className="space-y-2">
               <Label>UF</Label>
@@ -312,7 +342,11 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </div>
             <div className="md:col-span-3 space-y-2">
               <Label>Referência de Proximidade</Label>
-              <Input {...register("referencia")} placeholder="Ex: Próximo ao mercado..." />
+              <Input 
+                {...register("referencia")} 
+                onChange={(e) => handleTitleCaseChange(e, "referencia")}
+                placeholder="Ex: Próximo ao mercado..." 
+              />
             </div>
           </div>
         </TabsContent>
@@ -336,19 +370,31 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 </div>
                 <div className="space-y-2">
                   <Label>Estado Civil</Label>
-                  <Input {...register("estado_civil")} />
+                  <Input 
+                    {...register("estado_civil")} 
+                    onChange={(e) => handleTitleCaseChange(e, "estado_civil")}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Naturalidade</Label>
-                  <Input {...register("naturalidade")} />
+                  <Input 
+                    {...register("naturalidade")} 
+                    onChange={(e) => handleTitleCaseChange(e, "naturalidade")}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Filiação (Pai)</Label>
-                  <Input {...register("filiacao_pai")} />
+                  <Input 
+                    {...register("filiacao_pai")} 
+                    onChange={(e) => handleTitleCaseChange(e, "filiacao_pai")}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Filiação (Mãe)</Label>
-                  <Input {...register("filiacao_mae")} />
+                  <Input 
+                    {...register("filiacao_mae")} 
+                    onChange={(e) => handleTitleCaseChange(e, "filiacao_mae")}
+                  />
                 </div>
               </div>
 
@@ -359,7 +405,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Nome do Cônjuge</Label>
-                    <Input {...register("conjuge_nome")} />
+                    <Input 
+                      {...register("conjuge_nome")} 
+                      onChange={(e) => handleTitleCaseChange(e, "conjuge_nome")}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
@@ -390,7 +439,13 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                     <div key={field.id} className="flex gap-3 items-end bg-white p-3 rounded-lg border border-slate-100">
                       <div className="flex-1 space-y-1">
                         <Label className="text-[10px]">Nome do Sócio</Label>
-                        <Input {...register(`quadro_societario.${index}.nome` as const)} />
+                        <Input 
+                          {...register(`quadro_societario.${index}.nome` as const)} 
+                          onChange={(e) => {
+                            const formatted = formatTitleCase(e.target.value);
+                            setValue(`quadro_societario.${index}.nome` as any, formatted);
+                          }}
+                        />
                       </div>
                       <div className="w-48 space-y-1">
                         <Label className="text-[10px]">CPF</Label>
@@ -418,11 +473,23 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                     <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-indigo-50">
                       <div className="space-y-1">
                         <Label className="text-[10px]">Nome</Label>
-                        <Input {...register(`contatos_responsaveis.${index}.nome` as const)} />
+                        <Input 
+                          {...register(`contatos_responsaveis.${index}.nome` as const)} 
+                          onChange={(e) => {
+                            const formatted = formatTitleCase(e.target.value);
+                            setValue(`contatos_responsaveis.${index}.nome` as any, formatted);
+                          }}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px]">Cargo/Setor</Label>
-                        <Input {...register(`contatos_responsaveis.${index}.cargo` as const)} />
+                        <Input 
+                          {...register(`contatos_responsaveis.${index}.cargo` as const)} 
+                          onChange={(e) => {
+                            const formatted = formatTitleCase(e.target.value);
+                            setValue(`contatos_responsaveis.${index}.cargo` as any, formatted);
+                          }}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px]">Telefone</Label>
@@ -453,15 +520,24 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 <>
                   <div className="space-y-2">
                     <Label>Profissão</Label>
-                    <Input {...register("profissao")} />
+                    <Input 
+                      {...register("profissao")} 
+                      onChange={(e) => handleTitleCaseChange(e, "profissao")}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Local de Trabalho</Label>
-                    <Input {...register("local_trabalho")} />
+                    <Input 
+                      {...register("local_trabalho")} 
+                      onChange={(e) => handleTitleCaseChange(e, "local_trabalho")}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Cargo</Label>
-                    <Input {...register("cargo")} />
+                    <Input 
+                      {...register("cargo")} 
+                      onChange={(e) => handleTitleCaseChange(e, "cargo")}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Data Admissão</Label>
