@@ -13,6 +13,7 @@ import DailyCash from "./pages/DailyCash";
 import Purchases from "./pages/Purchases";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Rentals from "./pages/Rentals";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -40,6 +41,7 @@ const App = () => (
           
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/pos" element={<ProtectedRoute permission="pos"><POS /></ProtectedRoute>} />
+          <Route path="/rentals" element={<ProtectedRoute permission="rentals"><Rentals /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute permission="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/registrations" element={<ProtectedRoute permission="registrations"><Registrations /></ProtectedRoute>} />
           <Route path="/financial" element={<ProtectedRoute permission="financial"><Financial /></ProtectedRoute>} />

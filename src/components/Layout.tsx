@@ -20,7 +20,8 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
-  History
+  History,
+  CalendarClock
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       items: [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/', perm: 'dashboard' },
         { icon: ShoppingCart, label: 'Frente de Caixa', path: '/pos', perm: 'pos' },
+        { icon: CalendarClock, label: 'Locação / Aluguel', path: '/rentals', perm: 'rentals' },
       ]
     },
     {

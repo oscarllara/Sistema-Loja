@@ -12,6 +12,7 @@ export interface Permissoes {
   financial: boolean;
   reports: boolean;
   settings: boolean;
+  rentals: boolean; // Nova permissão
 }
 
 export interface Cliente {
@@ -91,6 +92,20 @@ export interface Produto {
   is_kit?: boolean;
   itens_kit?: any[];
   data_atualizacao: string;
+  
+  // Campos de Locação
+  is_locacao?: boolean;
+  valor_diaria?: number;
+  valor_semana?: number;
+  valor_quinzena?: number;
+  valor_mes?: number;
+  
+  // Campos do Site
+  disponivel_site?: boolean;
+  preco_site?: number;
+  imagem_url?: string;
+  link_externo?: string;
+  descricao_site?: string;
 }
 
 export type TipoFinanceiro = 'R' | 'P';
@@ -113,6 +128,29 @@ export interface LancamentoFinanceiro {
   is_fixa?: boolean;
   cd_venda?: number;
   cd_compra?: number;
+  cd_aluguel?: number;
+}
+
+export interface AluguelItem {
+  cd_produto: number;
+  nome_produto: string;
+  tipo_periodo: 'Diária' | 'Semana' | 'Quinzena' | 'Mês';
+  valor_unit: number;
+  qtde: number;
+  subtotal: number;
+}
+
+export interface Aluguel {
+  cd_aluguel: number;
+  data_inicio: string;
+  data_fim_prevista: string;
+  data_devolucao?: string;
+  cd_clientes: number;
+  nome_cliente?: string;
+  total: number;
+  status: 'Ativo' | 'Finalizado' | 'Atrasado' | 'Cancelado';
+  itens: AluguelItem[];
+  meio_pagamento: MeioPagamento;
 }
 
 export interface ContaBancaria {
@@ -206,6 +244,7 @@ export interface Patrimonio {
   valor: number;
   tipo: 'Imóvel' | 'Veículo' | 'Equipamento' | 'Outros';
   proprietário: 'Empresa' | 'Sócio A' | 'Sócio B';
+  cd_produto_vinculado?: number; // Vínculo com o estoque
 }
 
 export interface Transferencia {
