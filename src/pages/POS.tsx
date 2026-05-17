@@ -90,10 +90,6 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
-    
-    if (key === 'ESC') {
-      setIsAdminAuthOpen(true);
-    }
   };
 
   React.useEffect(() => {
@@ -103,13 +99,8 @@ const POS = () => {
       if (e.key === 'F10') { e.preventDefault(); handleShortcut('F10'); }
       if (e.key === 'F4') { e.preventDefault(); handleShortcut('F4'); }
       
-      if (e.key === 'Escape') { 
-        const anyModalOpen = isSearchOpen || isPrintOpen || isCheckoutOpen || isAddEntityOpen || isAdminAuthOpen;
-        if (!anyModalOpen) {
-          e.preventDefault();
-          handleShortcut('ESC');
-        }
-      }
+      // O ESC agora é tratado apenas pelos componentes de Dialog para fechar janelas.
+      // Removida a lógica global de abrir a autenticação admin via ESC.
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -292,7 +283,7 @@ const POS = () => {
               <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
               <ShortcutItem key="F4" label={mode === 'VENDA' ? "Novo Cliente" : "Novo Fornecedor"} onClick={() => handleShortcut('F4')} />
               <ShortcutItem key="F10" label="Concluir Operação" onClick={() => handleShortcut('F10')} />
-              <ShortcutItem key="ESC" label="Sair para o ERP" onClick={() => handleShortcut('ESC')} />
+              <ShortcutItem key="ESC" label="Fechar Janelas" onClick={() => {}} />
             </div>
           </div>
         </ScrollArea>
@@ -317,9 +308,9 @@ const POS = () => {
           <Button 
             variant="ghost" 
             className="w-full h-10 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs"
-            onClick={() => handleShortcut('ESC')}
+            onClick={() => setIsAdminAuthOpen(true)}
           >
-            <LogOut size={14} /> SAIR DO PDV (ESC)
+            <LogOut size={14} /> SAIR DO PDV
           </Button>
         </div>
       </aside>
