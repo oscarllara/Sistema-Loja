@@ -12,7 +12,8 @@ import {
   Filter, 
   Edit, 
   Trash2,
-  UserCheck
+  UserCheck,
+  Contact2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -37,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { db } from '@/services/api';
 import { Cliente } from '@/types/database';
 import ClientForm from '@/components/ClientForm';
+import { cn } from '@/lib/utils';
 
 const Registrations = () => {
   const [entities, setEntities] = React.useState<Cliente[]>([]);
@@ -152,15 +154,22 @@ const Registrations = () => {
                   filteredEntities.map((entity) => (
                     <TableRow key={entity.cd_clientes}>
                       <TableCell>
-                        <Badge variant="outline" className={cn(
-                          "text-[10px] font-bold",
-                          entity.tipo_entidade === 'C' ? "text-blue-600 border-blue-100 bg-blue-50" :
-                          entity.tipo_entidade === 'F' ? "text-amber-600 border-amber-100 bg-amber-50" :
-                          "text-indigo-600 border-indigo-100 bg-indigo-50"
-                        )}>
-                          {entity.tipo_entidade === 'C' ? 'CLIENTE' : 
-                           entity.tipo_entidade === 'F' ? 'FORNECEDOR' : 'AMBOS'}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant="outline" className={cn(
+                            "text-[10px] font-bold",
+                            entity.tipo_entidade === 'C' ? "text-blue-600 border-blue-100 bg-blue-50" :
+                            entity.tipo_entidade === 'F' ? "text-amber-600 border-amber-100 bg-amber-50" :
+                            "text-indigo-600 border-indigo-100 bg-indigo-50"
+                          )}>
+                            {entity.tipo_entidade === 'C' ? 'CLIENTE' : 
+                             entity.tipo_entidade === 'F' ? 'FORNECEDOR' : 'AMBOS'}
+                          </Badge>
+                          {entity.is_funcionario && (
+                            <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 border-emerald-100 bg-emerald-50">
+                              FUNCIONÁRIO
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">
                         <div>

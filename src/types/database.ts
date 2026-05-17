@@ -1,7 +1,7 @@
 "use client";
 
 export type TipoPessoa = 'F' | 'J';
-export type TipoEntidade = 'C' | 'F' | 'A' | 'FU'; // C: Cliente, F: Fornecedor, A: Ambos, FU: Funcionário
+export type TipoEntidade = 'C' | 'F' | 'A'; // C: Cliente, F: Fornecedor, A: Ambos
 
 export interface EnderecoAdicional {
   tipo: 'Entrega' | 'Cobrança' | 'Trabalho';
@@ -29,16 +29,15 @@ export interface Socio {
 export interface Cliente {
   cd_clientes: number;
   tipo_entidade: TipoEntidade;
-  tipo_pessoa: TipoPessoa;
+  is_funcionario: boolean;
   data: string;
-  nome: string; // Razão Social para PJ
+  nome: string;
   apelido_fantasia?: string;
   
   // Documentos
   cpf_cnpj?: string;
   rg_ie?: string;
   inscricao_municipal?: string;
-  tipo_documento?: string;
   
   // Pessoal (PF)
   sexo?: string;
@@ -57,21 +56,18 @@ export interface Cliente {
   conjuge_telefone?: string;
   conjuge_salario?: number;
   
-  // Profissional / Empresa
+  // Profissional / Funcionário
   local_trabalho?: string;
   cargo?: string;
   data_admissao?: string;
   salario?: number;
+  dia_pagamento?: number;
   site?: string;
   
   // Redes Sociais
   facebook?: string;
   instagram?: string;
   linkedin?: string;
-  
-  // Listas Dinâmicas (PJ)
-  contatos_responsaveis?: ContatoResponsavel[];
-  quadro_societario?: Socio[];
   
   // Endereço Principal
   cep?: string;
@@ -95,10 +91,6 @@ export interface Cliente {
   despesa_alimentacao?: number;
   despesa_aluguel?: number;
   obs1?: string;
-  
-  // Autorizações
-  pessoas_autorizadas?: string[];
-  enderecos_adicionais?: EnderecoAdicional[];
 }
 
 export interface Produto {

@@ -17,7 +17,11 @@ import {
   Users2,
   Facebook,
   Instagram,
-  Linkedin
+  Linkedin,
+  UserCheck,
+  Building2,
+  Users,
+  Contact2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +35,8 @@ import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const clientSchema = z.object({
-  tipo_entidade: z.enum(['C', 'F', 'A', 'FU']),
+  tipo_entidade: z.enum(['C', 'F', 'A']),
+  is_funcionario: z.boolean(),
   tipo_pessoa: z.enum(['F', 'J']),
   nome: z.string().min(3, "Nome/Razão Social obrigatório"),
   apelido_fantasia: z.string().optional(),
@@ -62,11 +67,12 @@ const clientSchema = z.object({
   conjuge_telefone: z.string().optional(),
   conjuge_salario: z.string().optional(),
   
-  // Profissional
+  // Profissional / Funcionário
   local_trabalho: z.string().optional(),
   cargo: z.string().optional(),
   data_admissao: z.string().optional(),
   salario: z.string().optional(),
+  dia_pagamento: z.string().optional(),
   
   // Endereço
   cep: z.string().optional(),
@@ -123,8 +129,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       despesa_fixa: client.despesa_fixa ? formatCurrency(client.despesa_fixa.toString()) : "",
       despesa_alimentacao: client.despesa_alimentacao ? formatCurrency(client.despesa_alimentacao.toString()) : "",
       despesa_aluguel: client.despesa_aluguel ? formatCurrency(client.despesa_aluguel.toString()) : "",
+      dia_pagamento: client.dia_pagamento?.toString() || "",
     } : {
       tipo_entidade: 'C',
+      is_funcionario: false,
       tipo_pessoa: 'F',
       nome: "",
       contatos_responsaveis: [],
@@ -144,7 +152,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
-  const salarioValue = watch("salario");
+  const isFuncionario = watch("is_funcionario");
 
   // Formatação de Moeda (R$ 0,00)
   function formatCurrency(value: string) {
@@ -254,6 +262,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       despesa_fixa: parseCurrencyToNumber(data.despesa_fixa || ""),
       despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao || ""),
       despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel || ""),
+      dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : undefined,
     } as any;
 
     if (client) {
@@ -269,41 +278,61 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div className="flex items-center gap-6">
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Cadastro</Label>
-            <RadioGroup 
-              defaultValue={tipoEntidade} 
-              onValueChange={(v) => setValue("tipo_entidade", v as TipoEntidade)}
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="C" id="ent-c" />
-                <Label htmlFor="ent-c" className="text-sm">Cliente</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="F" id="ent-f" />
-                <Label htmlFor="ent-f" className="text-sm">Fornecedor</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="A" id="ent-a" />
-                <Label htmlFor="ent-a" className="text-sm">Ambos</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="FU" id="ent-fu" />
-                <Label htmlFor="ent-fu" className="text-sm">Funcionário</Label>
-              </div>
-            </RadioGroup>
+        <div className="flex items-center gap-8">
+          {/* Grupo Base: Cliente / Fornecedor / Ambos */}
+          <div className="space-y-2">
+            <Label className="text-[10px] uppercase font-bold text-slate-500">Função Base</Label>
+            <div className="flex gap-2">
+              <Button 
+                type="button"
+                variant={tipoEntidade === 'C' ? 'default' : 'outline'}
+                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'C' && "bg-indigo-600")}
+                onClick={() => setValue("tipo_entidade", 'C')}
+              >
+                <UserCheck size={16} /> Cliente
+              </Button>
+              <Button 
+                type="button"
+                variant={tipoEntidade === 'F' ? 'default' : 'outline'}
+                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'F' && "bg-indigo-600")}
+                onClick={() => setValue("tipo_entidade", 'F')}
+              >
+                <Building2 size={16} /> Fornecedor
+              </Button>
+              <Button 
+                type="button"
+                variant={tipoEntidade === 'A' ? 'default' : 'outline'}
+                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'A' && "bg-indigo-600")}
+                onClick={() => setValue("tipo_entidade", 'A')}
+              >
+                <Users size={16} /> Ambos
+              </Button>
+            </div>
           </div>
 
-          <div className="w-px h-10 bg-slate-200" />
+          <div className="w-px h-12 bg-slate-200" />
 
-          <div className="space-y-1">
+          {/* Toggle Funcionário */}
+          <div className="space-y-2">
+            <Label className="text-[10px] uppercase font-bold text-slate-500">Vínculo Interno</Label>
+            <Button 
+              type="button"
+              variant={isFuncionario ? 'default' : 'outline'}
+              className={cn("gap-2 rounded-lg h-10", isFuncionario && "bg-emerald-600 hover:bg-emerald-700")}
+              onClick={() => setValue("is_funcionario", !isFuncionario)}
+            >
+              <Contact2 size={16} /> Funcionário
+            </Button>
+          </div>
+
+          <div className="w-px h-12 bg-slate-200" />
+
+          <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Pessoa</Label>
             <RadioGroup 
               defaultValue={tipoPessoa} 
               onValueChange={(v) => setValue("tipo_pessoa", v as TipoPessoa)}
-              className="flex gap-4"
+              className="flex gap-4 h-10 items-center"
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="F" id="p-f" />
@@ -317,7 +346,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           </div>
         </div>
         
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8">
+        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl shadow-lg shadow-indigo-100">
           Salvar Cadastro
         </Button>
       </div>
@@ -494,6 +523,39 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         </TabsContent>
 
         <TabsContent value="pessoal" className="mt-6 space-y-6">
+          {/* Seção de Funcionário (Sempre visível se isFuncionario for true) */}
+          {isFuncionario && (
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
+              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
+                <Contact2 size={16} /> Dados de Funcionário
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Data de Admissão</Label>
+                  <Input type="date" {...register("data_admissao")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Salário Mensal</Label>
+                  <Input 
+                    {...register("salario")} 
+                    onChange={(e) => handleCurrencyChange(e, "salario")}
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dia de Pagamento</Label>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    max="31" 
+                    {...register("dia_pagamento")} 
+                    placeholder="Ex: 5"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {tipoPessoa === 'F' ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -707,18 +769,22 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                       onChange={(e) => handleTitleCaseChange(e, "cargo")}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Data Admissão</Label>
-                    <Input type="date" {...register("data_admissao")} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Salário Mensal</Label>
-                    <Input 
-                      {...register("salario")} 
-                      onChange={(e) => handleCurrencyChange(e, "salario")}
-                      placeholder="R$ 0,00"
-                    />
-                  </div>
+                  {!isFuncionario && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Data Admissão</Label>
+                        <Input type="date" {...register("data_admissao")} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Salário Mensal</Label>
+                        <Input 
+                          {...register("salario")} 
+                          onChange={(e) => handleCurrencyChange(e, "salario")}
+                          placeholder="R$ 0,00"
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
