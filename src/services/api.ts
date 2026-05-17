@@ -29,6 +29,20 @@ const getDB = () => {
     }
   };
 
+  const defaultConfig: Configuracoes = {
+    nome_empresa: 'Key Of Inov Dev',
+    slogan: 'A chave da Inovação!',
+    telefone: '+55 (35) 99842-1050',
+    cnpj: '00.000.000/0001-00',
+    endereco: 'Rua Exemplo, 123 - Centro',
+    tipo_impressao: 'Bobina',
+    largura_bobina: '79mm',
+    margem_esquerda: 5,
+    margem_direita: 5,
+    margem_topo: 5,
+    margem_rodape: 5
+  };
+
   if (!data) {
     database = {
       clientes: [adminUser],
@@ -40,14 +54,7 @@ const getDB = () => {
       transferencias: [],
       patrimonio: [],
       mappings: [],
-      configuracoes: {
-        tipo_impressao: 'Bobina',
-        largura_bobina: '79mm',
-        margem_esquerda: 5,
-        margem_direita: 5,
-        margem_topo: 5,
-        margem_rodape: 5
-      },
+      configuracoes: defaultConfig,
       contas: [
         { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa', saldo_inicial: 0 },
         { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco', saldo_inicial: 0 },
@@ -73,14 +80,9 @@ const getDB = () => {
     if (!Array.isArray(database.mappings)) database.mappings = [];
     
     if (!database.configuracoes) {
-      database.configuracoes = {
-        tipo_impressao: 'Bobina',
-        largura_bobina: '79mm',
-        margem_esquerda: 5,
-        margem_direita: 5,
-        margem_topo: 5,
-        margem_rodape: 5
-      };
+      database.configuracoes = defaultConfig;
+    } else {
+      database.configuracoes = { ...defaultConfig, ...database.configuracoes };
     }
     
     if (!Array.isArray(database.contas) || database.contas.length === 0) {
@@ -155,7 +157,6 @@ export const db = {
       const idx = database.compras.findIndex((c: any) => c.cd_compra === compra.cd_compra);
       
       if (compra.status === 'Confirmada') {
-        // 1. Atualizar Estoque e Preços
         compra.itens.forEach(item => {
           if (item.cd_produto) {
             const pIdx = database.produtos.findIndex((p: any) => p.cd_produto === item.cd_produto);
@@ -165,7 +166,6 @@ export const db = {
               database.produtos[pIdx].venda = item.valor_venda;
               database.produtos[pIdx].data_atualizacao = new Date().toISOString();
             }
-            // Salvar mapeamento se for XML
             if (item.codigo_fornecedor) {
               const mIdx = database.mappings.findIndex((m: any) => 
                 m.cd_fornecedor === compra.cd_fornecedores && m.codigo_externo === item.codigo_fornecedor
@@ -181,7 +181,6 @@ export const db = {
           }
         });
 
-        // 2. Gerar Financeiro (Contas a Pagar)
         database.financeiro.push({
           cd_lancamento: Date.now(),
           tipo: 'P',

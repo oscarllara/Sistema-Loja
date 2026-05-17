@@ -182,6 +182,11 @@ export interface Orcamento extends Omit<Venda, 'cd_venda'> {
 }
 
 export interface Configuracoes {
+  nome_empresa: string;
+  slogan: string;
+  telefone: string;
+  cnpj: string;
+  endereco: string;
   tipo_impressao: 'A4' | 'Bobina';
   largura_bobina: '79mm' | '89mm';
   margem_esquerda: number;
