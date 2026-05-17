@@ -56,8 +56,15 @@ const getDB = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
   } else {
     database = JSON.parse(data);
+    // Garantir que todas as tabelas existam para evitar erros de "undefined"
+    if (!database.clientes) database.clientes = [adminUser];
+    if (!database.produtos) database.produtos = [];
     if (!database.vendas) database.vendas = [];
     if (!database.orcamentos) database.orcamentos = [];
+    if (!database.compras) database.compras = [];
+    if (!database.financeiro) database.financeiro = [];
+    if (!database.transferencias) database.transferencias = [];
+    if (!database.patrimonio) database.patrimonio = [];
     if (!database.configuracoes) {
       database.configuracoes = {
         tipo_impressao: 'Bobina',
@@ -68,18 +75,12 @@ const getDB = () => {
         margem_rodape: 5
       };
     }
-    if (!database.transferencias) database.transferencias = [];
-    if (!database.patrimonio) database.patrimonio = [];
     if (!database.contas) {
       database.contas = [
         { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa' },
         { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco' },
         { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda' }
       ];
-    }
-    if (!database.financeiro) database.financeiro = [];
-    if (!database.clientes?.find((c: any) => c.usuario === 'admin')) {
-      database.clientes.push(adminUser);
     }
   }
   return database;
@@ -115,7 +116,7 @@ export const db = {
     }
   },
   orcamentos: {
-    getAll: (): Orcamento[] => getDB().orcamentos,
+    getAll: (): Orcamento[] => getDB().orcamentos || [],
     add: (o: Omit<Orcamento, 'cd_orcamento'>) => {
       const database = getDB();
       const novo = { ...o, cd_orcamento: Date.now(), status: 'Aberto' as const };
@@ -133,9 +134,9 @@ export const db = {
     }
   },
   financeiro: {
-    getAll: (): LancamentoFinanceiro[] => getDB().financeiro,
+    getAll: (): LancamentoFinanceiro[] => getDB().financeiro || [],
     getByEntidade: (cd_entidade: number): LancamentoFinanceiro[] => {
-      return getDB().financeiro.filter((l: any) => l.cd_entidade === cd_entidade);
+      return (getDB().financeiro || []).filter((l: any) => l.cd_entidade === cd_entidade);
     },
     add: (lancamento: Omit<LancamentoFinanceiro, 'cd_lancamento'>) => {
       const database = getDB();
@@ -178,9 +179,9 @@ export const db = {
     }
   },
   vendas: {
-    getAll: (): Venda[] => getDB().vendas,
+    getAll: (): Venda[] => getDB().vendas || [],
     getByCliente: (cd_clientes: number): Venda[] => {
-      return getDB().vendas.filter((v: any) => v.cd_clientes === cd_clientes);
+      return (getDB().vendas || []).filter((v: any) => v.cd_clientes === cd_clientes);
     },
     add: (v: Venda) => {
       const database = getDB();
@@ -189,7 +190,7 @@ export const db = {
     }
   },
   clientes: {
-    getAll: (): Cliente[] => getDB().clientes,
+    getAll: (): Cliente[] => getDB().clientes || [],
     add: (c: Cliente) => { const db = getDB(); db.clientes.push(c); saveDB(db); },
     update: (id: number, data: any) => {
       const db = getDB();
@@ -203,7 +204,7 @@ export const db = {
     }
   },
   produtos: {
-    getAll: (): Produto[] => getDB().produtos,
+    getAll: (): Produto[] => getDB().produtos || [],
     add: (p: any) => {
       const db = getDB();
       const id = (db.produtos.length + 1).toString().padStart(5, '0');
@@ -222,7 +223,7 @@ export const db = {
     }
   },
   contas: {
-    getAll: (): ContaBancaria[] => getDB().contas,
+    getAll: (): ContaBancaria[] => getDB().contas || [],
     update: (id: number, data: Partial<ContaBancaria>) => {
       const database = getDB();
       const idx = database.contas.findIndex((c: any) => c.cd_conta === id);
@@ -233,7 +234,7 @@ export const db = {
     }
   },
   patrimonio: {
-    getAll: (): Patrimonio[] => getDB().patrimonio,
+    getAll: (): Patrimonio[] => getDB().patrimonio || [],
     add: (item: Omit<Patrimonio, 'cd_patrimonio'>) => {
       const database = getDB();
       if (!database.patrimonio) database.patrimonio = [];

@@ -58,7 +58,7 @@ const POS = () => {
 
   const products = db.produtos.getAll() || [];
   const clientes = db.clientes.getAll() || [];
-  const orcamentos = db.orcamentos.getAll().filter(o => o.status === 'Aberto');
+  const orcamentos = (db.orcamentos.getAll() || []).filter(o => o.status === 'Aberto');
 
   // Atalho F1
   React.useEffect(() => {
@@ -73,6 +73,7 @@ const POS = () => {
   }, []);
 
   const addToCart = (product: any) => {
+    if (!product) return;
     const existing = cart.find(item => item.cd_produto === product.cd_produto);
     if (existing) {
       setCart(cart.map(item => 
@@ -115,7 +116,7 @@ const POS = () => {
       total: total,
       custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * item.quantity), 0),
       cd_clientes: selectedClientId,
-      nome_cliente: cliente?.nome,
+      nome_cliente: cliente?.nome || 'CONSUMIDOR FINAL',
       cd_func: 1,
       tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
       meio_pagamento: paymentMethod,
@@ -146,7 +147,7 @@ const POS = () => {
         categoria: 'Venda',
         meio_pagamento: paymentMethod,
         cd_entidade: selectedClientId,
-        nome_entidade: cliente?.nome,
+        nome_entidade: cliente?.nome || 'CONSUMIDOR FINAL',
         cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
         cd_venda: id
       });
@@ -166,6 +167,7 @@ const POS = () => {
   };
 
   const loadOrcamento = (orc: any) => {
+    if (!orc || !orc.itens) return;
     setCart(orc.itens.map((item: any) => {
       const prod = products.find(p => p.cd_produto === item.cd_produto);
       return { ...prod, quantity: item.qtde };
@@ -175,6 +177,8 @@ const POS = () => {
     setActiveTab("venda");
     showSuccess("Orçamento carregado!");
   };
+
+  const selectedClient = clientes.find(c => c.cd_clientes === selectedClientId);
 
   return (
     <Layout>
@@ -195,6 +199,7 @@ const POS = () => {
                 size="sm" 
                 className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                 onClick={() => setIsClientDetailsOpen(true)}
+                disabled={!selectedClient}
               >
                 <FileText size={16} /> Ficha do Cliente
               </Button>
@@ -370,7 +375,7 @@ const POS = () => {
             <DialogHeader>
               <DialogTitle>Ficha do Cliente</DialogTitle>
             </DialogHeader>
-            <ClientDetails client={clientes.find(c => c.cd_clientes === selectedClientId)!} />
+            {selectedClient && <ClientDetails client={selectedClient} />}
           </DialogContent>
         </Dialog>
       </div>
