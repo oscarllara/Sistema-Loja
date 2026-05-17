@@ -96,6 +96,13 @@ const POS = () => {
 
   const entities = mode === 'VENDA' ? clientes : fornecedores;
 
+  // Foco automático no bipe após selecionar o usuário
+  React.useEffect(() => {
+    if (selectedSellerId) {
+      codeRef.current?.focus();
+    }
+  }, [selectedSellerId]);
+
   const handleShortcut = (key: string) => {
     if (key === 'F1') {
       setSearchInitialTerm("");
@@ -201,6 +208,18 @@ const POS = () => {
     }));
     
     showSuccess(`Modo de preço alterado para: ${newMode}`);
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputCode(val);
+
+    // Se começar a digitar letras (nome), abre a pesquisa automaticamente
+    if (val.length >= 2 && /[a-zA-Z]/.test(val)) {
+      setSearchInitialTerm(val);
+      setIsSearchOpen(true);
+      setInputCode(""); // Limpa o campo para não atrapalhar a volta
+    }
   };
 
   const handleCodeSubmit = (e: React.FormEvent) => {
@@ -354,7 +373,6 @@ const POS = () => {
           <div className="space-y-4">
             <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Teclas de Atalho</h3>
             <div className="space-y-2">
-              <ShortcutItem key="F1" label="Pesquisar Produto" onClick={() => handleShortcut('F1')} />
               <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
               <ShortcutItem key="F4" label="Novo Cliente" onClick={() => handleShortcut('F4')} />
               <ShortcutItem key="Ctrl + L" label="Editar Item" onClick={() => handleShortcut('CtrlL')} />
@@ -458,14 +476,24 @@ const POS = () => {
         <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800">
           <form onSubmit={pendingProduct ? commitToCart : handleCodeSubmit} className="flex items-end gap-4 h-full">
             <div className="flex-1 space-y-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Código (F1 - Pesquisar)</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[9px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
+                <Button 
+                  type="button"
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsSearchOpen(true)}
+                  className="h-4 text-[8px] text-indigo-400 hover:text-indigo-300 p-0"
+                >
+                  <Search size={10} className="mr-1" /> PESQUISAR (F1)
+                </Button>
+              </div>
               <Input 
                 ref={codeRef}
-                autoFocus
                 value={inputCode}
-                onChange={(e) => setInputCode(e.target.value)}
+                onChange={handleCodeChange}
                 className="h-10 bg-[#E1FFFF] border-none text-lg font-black text-slate-900 focus-visible:ring-2 focus-visible:ring-amber-400"
-                placeholder={pendingProduct ? pendingProduct.nome : "Bipe o produto..."}
+                placeholder={pendingProduct ? pendingProduct.nome : "Bipe o produto ou digite o nome..."}
               />
             </div>
             <div className="w-24 space-y-1">
