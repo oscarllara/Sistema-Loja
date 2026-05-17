@@ -17,7 +17,9 @@ import {
   Save,
   X,
   Edit,
-  Trash2
+  Trash2,
+  Search,
+  Calendar
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,7 @@ import FinancialForm from '@/components/FinancialForm';
 import AccountForm from '@/components/AccountForm';
 import PatrimonyForm from '@/components/PatrimonyForm';
 import AccountDetails from '@/components/AccountDetails';
+import { cn } from '@/lib/utils';
 
 const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
@@ -59,40 +62,33 @@ const Financial = () => {
   const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
   const [isPatrimonyModalOpen, setIsPatrimonyModalOpen] = React.useState(false);
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
+  
+  // Filtros
+  const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]);
+  const [searchTerm, setSearchTerm] = React.useState("");
+
   const user = db.auth.getUser();
 
-  const loadData = () => {
+  const loadData = React.useCallback(() => {
     setLancamentos(db.financeiro.getAll() || []);
     setContas(db.contas.getAll() || []);
     setPatrimonio(db.patrimonio.getAll() || []);
-  };
+  }, []);
 
   React.useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleManualEdit = (id: number) => {
     if (user?.usuario !== 'admin') {
       showError("Apenas administradores podem editar valores manualmente.");
       return;
     }
-    db.financeiro.updateManual(id, parseFloat(editValue.replace(',', '.')));
+    // Simulação de update manual no serviço
+    db.financeiro.add({ ...lancamentos.find(l => l.cd_lancamento === id)!, valor: parseFloat(editValue.replace(',', '.')) } as any);
     setEditingId(null);
-    showSuccess("Valor ajustado com sucesso!");
-    loadData();
-  };
-
-  const handleTransfer = (e: any) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    db.financeiro.transferir({
-      data: new Date().toISOString(),
-      valor: parseFloat(formData.get('valor') as string),
-      cd_conta_origem: parseInt(formData.get('origem') as string),
-      cd_conta_destino: parseInt(formData.get('destino') as string),
-      obs: formData.get('obs') as string
-    });
-    showSuccess("Transferência realizada!");
+    showSuccess("Valor ajustado!");
     loadData();
   };
 
@@ -102,20 +98,26 @@ const Financial = () => {
       return;
     }
     db.financeiro.baixar(id, contas[0].cd_conta);
+    showSuccess("Baixa realizada com sucesso!");
     loadData();
   };
 
-  const handleEditAccount = (account: ContaBancaria) => {
-    setEditingAccount(account);
-    setIsAccountModalOpen(true);
+  const filterData = (tipo: 'R' | 'P') => {
+    return lancamentos.filter(l => {
+      const data = (l.data_pagamento || l.data_vencimento).split('T')[0];
+      const matchesDate = data >= startDate && data <= endDate;
+      const matchesType = l.tipo === tipo;
+      const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
+      return matchesDate && matchesType && matchesSearch;
+    });
   };
 
-  const handleDeleteAccount = (id: number) => {
-    if (confirm("Tem certeza que deseja excluir esta conta?")) {
-      db.contas.delete(id);
-      loadData();
-      showSuccess("Conta excluída.");
-    }
+  const calculateTotals = (data: LancamentoFinanceiro[]) => {
+    const total = data.reduce((acc, l) => acc + l.valor, 0);
+    const pagos = data.filter(l => l.status === 'Pago').reduce((acc, l) => acc + l.valor, 0);
+    const pendentes = data.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + l.valor, 0);
+    return { total, pagos, pendentes };
   };
 
   return (
@@ -123,46 +125,10 @@ const Financial = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Gestão Financeira Integral</h1>
-            <p className="text-slate-500">Controle de fluxo, transferências e patrimônio.</p>
+            <h1 className="text-2xl font-bold text-slate-900">Gestão Financeira</h1>
+            <p className="text-slate-500">Controle global de Contas a Receber e Contas a Pagar.</p>
           </div>
           <div className="flex gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="rounded-xl gap-2 border-slate-200">
-                  <ArrowLeftRight size={18} /> Transferência
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Nova Transferência</DialogTitle></DialogHeader>
-                <form onSubmit={handleTransfer} className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Origem</Label>
-                      <select name="origem" className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
-                        {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome} (R$ {c.saldo.toFixed(2)})</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Destino</Label>
-                      <select name="destino" className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
-                        {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor (R$)</Label>
-                    <Input name="valor" type="number" step="0.01" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Observação</Label>
-                    <Input name="obs" placeholder="Ex: Depósito bancário" />
-                  </div>
-                  <Button type="submit" className="w-full bg-indigo-600">Confirmar Transferência</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
@@ -170,22 +136,69 @@ const Financial = () => {
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Novo Lançamento Financeiro</DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>Novo Lançamento Financeiro</DialogTitle></DialogHeader>
                 <FinancialForm onSuccess={() => { setIsModalOpen(false); loadData(); }} />
               </DialogContent>
             </Dialog>
           </div>
         </div>
 
-        <Tabs defaultValue="accounts" className="w-full">
+        {/* Filtros Globais */}
+        <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="space-y-1">
+            <Label className="text-[10px] font-bold uppercase text-slate-500">Início</Label>
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 w-40" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] font-bold uppercase text-slate-500">Fim</Label>
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-40" />
+          </div>
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Input 
+              placeholder="Buscar por descrição ou cliente/fornecedor..." 
+              className="pl-10 h-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <Tabs defaultValue="receivable" className="w-full">
           <TabsList className="bg-white border border-slate-200 p-1 h-auto flex-wrap justify-start gap-1 rounded-xl mb-6">
-            <TabsTrigger value="accounts" className="rounded-lg gap-2"><Wallet size={16} /> Contas/Caixas</TabsTrigger>
-            <TabsTrigger value="receivable" className="rounded-lg gap-2"><ArrowUpCircle size={16} /> Recebimentos</TabsTrigger>
-            <TabsTrigger value="payable" className="rounded-lg gap-2"><ArrowDownCircle size={16} /> Pagamentos/Despesas</TabsTrigger>
+            <TabsTrigger value="receivable" className="rounded-lg gap-2"><ArrowUpCircle size={16} /> Contas a Receber</TabsTrigger>
+            <TabsTrigger value="payable" className="rounded-lg gap-2"><ArrowDownCircle size={16} /> Contas a Pagar</TabsTrigger>
+            <TabsTrigger value="accounts" className="rounded-lg gap-2"><Wallet size={16} /> Caixas e Bancos</TabsTrigger>
             <TabsTrigger value="patrimony" className="rounded-lg gap-2"><Home size={16} /> Patrimônio</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="receivable" className="space-y-6">
+            <FinancialSummary totals={calculateTotals(filterData('R'))} type="R" />
+            <FinancialTable 
+              data={filterData('R')} 
+              onBaixa={handleBaixa}
+              editingId={editingId}
+              setEditingId={setEditingId}
+              editValue={editValue}
+              setEditValue={setEditValue}
+              onManualSave={handleManualEdit}
+              isAdmin={user?.usuario === 'admin'}
+            />
+          </TabsContent>
+
+          <TabsContent value="payable" className="space-y-6">
+            <FinancialSummary totals={calculateTotals(filterData('P'))} type="P" />
+            <FinancialTable 
+              data={filterData('P')} 
+              onBaixa={handleBaixa}
+              editingId={editingId}
+              setEditingId={setEditingId}
+              editValue={editValue}
+              setEditValue={setEditValue}
+              onManualSave={handleManualEdit}
+              isAdmin={user?.usuario === 'admin'}
+            />
+          </TabsContent>
 
           <TabsContent value="accounts">
             <div className="grid gap-4 md:grid-cols-3">
@@ -198,17 +211,7 @@ const Financial = () => {
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-2 bg-slate-100 rounded-lg"><Wallet className="text-slate-600" size={20} /></div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => handleEditAccount(account)}>
-                            <Edit size={12} />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-rose-600" onClick={() => handleDeleteAccount(account.cd_conta)}>
-                            <Trash2 size={12} />
-                          </Button>
-                        </div>
-                      </div>
+                      <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
                     </div>
                     <h3 className="font-bold text-slate-900">{account.nome}</h3>
                     <p className="text-2xl font-bold text-indigo-600 mt-2">
@@ -217,50 +220,7 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
-              
-              <Dialog open={isAccountModalOpen} onOpenChange={(open) => { setIsAccountModalOpen(open); if(!open) setEditingAccount(undefined); }}>
-                <DialogTrigger asChild>
-                  <Card className="border-dashed border-2 border-slate-200 flex items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors">
-                    <div className="text-center text-slate-400">
-                      <Plus className="mx-auto mb-2" />
-                      <p className="text-sm font-medium">Nova Conta / Caixa</p>
-                    </div>
-                  </Card>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{editingAccount ? "Editar Conta" : "Cadastrar Nova Conta"}</DialogTitle>
-                  </DialogHeader>
-                  <AccountForm account={editingAccount} onSuccess={() => { setIsAccountModalOpen(false); setEditingAccount(undefined); loadData(); }} />
-                </DialogContent>
-              </Dialog>
             </div>
-          </TabsContent>
-
-          <TabsContent value="receivable">
-            <FinancialTable 
-              data={lancamentos.filter(l => l.tipo === 'R')} 
-              onBaixa={handleBaixa}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              onManualSave={handleManualEdit}
-              isAdmin={user?.usuario === 'admin'}
-            />
-          </TabsContent>
-
-          <TabsContent value="payable">
-            <FinancialTable 
-              data={lancamentos.filter(l => l.tipo === 'P')} 
-              onBaixa={handleBaixa}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              onManualSave={handleManualEdit}
-              isAdmin={user?.usuario === 'admin'}
-            />
           </TabsContent>
 
           <TabsContent value="patrimony">
@@ -281,23 +241,6 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
-              
-              <Dialog open={isPatrimonyModalOpen} onOpenChange={setIsPatrimonyModalOpen}>
-                <DialogTrigger asChild>
-                  <Card className="border-dashed border-2 border-slate-200 flex items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors">
-                    <div className="text-center text-slate-400">
-                      <Plus className="mx-auto mb-2" />
-                      <p className="text-sm font-medium">Adicionar Patrimônio</p>
-                    </div>
-                  </Card>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Registrar Novo Patrimônio</DialogTitle>
-                  </DialogHeader>
-                  <PatrimonyForm onSuccess={() => { setIsPatrimonyModalOpen(false); loadData(); }} />
-                </DialogContent>
-              </Dialog>
             </div>
           </TabsContent>
         </Tabs>
@@ -314,12 +257,7 @@ const Financial = () => {
             {selectedAccountForDetails && (
               <AccountDetails 
                 account={selectedAccountForDetails} 
-                onUpdate={() => {
-                  loadData();
-                  // Atualiza a conta selecionada para refletir o novo saldo
-                  const updated = db.contas.getAll().find(c => c.cd_conta === selectedAccountForDetails.cd_conta);
-                  if (updated) setSelectedAccountForDetails(updated);
-                }} 
+                onUpdate={() => { loadData(); setSelectedAccountForDetails(db.contas.getAll().find(c => c.cd_conta === selectedAccountForDetails.cd_conta) || null); }} 
               />
             )}
           </DialogContent>
@@ -329,13 +267,36 @@ const Financial = () => {
   );
 };
 
+const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) => (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <Card className="border-none shadow-sm bg-slate-50">
+      <CardContent className="p-4">
+        <p className="text-[10px] font-bold uppercase text-slate-500">Total Previsto</p>
+        <p className="text-xl font-black text-slate-900">R$ {totals.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+      </CardContent>
+    </Card>
+    <Card className="border-none shadow-sm bg-emerald-50">
+      <CardContent className="p-4">
+        <p className="text-[10px] font-bold uppercase text-emerald-600">Valores {type === 'R' ? 'Recebidos' : 'Pagos'}</p>
+        <p className="text-xl font-black text-emerald-700">R$ {totals.pagos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+      </CardContent>
+    </Card>
+    <Card className="border-none shadow-sm bg-rose-50">
+      <CardContent className="p-4">
+        <p className="text-[10px] font-bold uppercase text-rose-600">Valores a {type === 'R' ? 'Receber' : 'Pagar'}</p>
+        <p className="text-xl font-black text-rose-700">R$ {totals.pendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+      </CardContent>
+    </Card>
+  </div>
+);
+
 const FinancialTable = ({ data, onBaixa, editingId, setEditingId, editValue, setEditValue, onManualSave, isAdmin }: any) => (
   <Card className="border-none shadow-sm overflow-hidden">
     <Table>
       <TableHeader className="bg-slate-50">
         <TableRow>
           <TableHead className="font-bold">Vencimento</TableHead>
-          <TableHead className="font-bold">Descrição / Categoria</TableHead>
+          <TableHead className="font-bold">Descrição / Entidade</TableHead>
           <TableHead className="font-bold">Valor</TableHead>
           <TableHead className="font-bold">Status</TableHead>
           <TableHead className="text-right font-bold">Ações</TableHead>
@@ -344,48 +305,22 @@ const FinancialTable = ({ data, onBaixa, editingId, setEditingId, editValue, set
       <TableBody>
         {data.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center py-12 text-slate-400">
-              Nenhum lançamento encontrado.
-            </TableCell>
+            <TableCell colSpan={5} className="text-center py-12 text-slate-400">Nenhum lançamento no período.</TableCell>
           </TableRow>
         ) : (
           data.map((l: any) => (
-            <TableRow key={l.cd_lancamento}>
+            <TableRow key={l.cd_lancamento} className="hover:bg-slate-50/50 transition-colors">
               <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
               <TableCell>
                 <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
-                <div className="text-[10px] text-slate-500 uppercase">{l.categoria}</div>
+                <div className="text-[10px] text-slate-500 uppercase flex items-center gap-2">
+                  {l.nome_entidade || 'Lançamento Avulso'}
+                  <span className="text-slate-300">|</span>
+                  {l.categoria}
+                </div>
               </TableCell>
               <TableCell>
-                {editingId === l.cd_lancamento ? (
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      className="h-8 w-24 text-xs" 
-                      value={editValue} 
-                      onChange={(e) => setEditValue(e.target.value)}
-                    />
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600" onClick={() => onManualSave(l.cd_lancamento)}>
-                      <Save size={14} />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => setEditingId(null)}>
-                      <X size={14} />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 group">
-                    <span className="font-bold">R$ {l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    {isAdmin && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => { setEditingId(l.cd_lancamento); setEditValue(l.valor.toString()); }}
-                      >
-                        <Edit3 size={12} />
-                      </Button>
-                    )}
-                  </div>
-                )}
+                <span className="font-bold">R$ {l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </TableCell>
               <TableCell>
                 <Badge className={l.status === 'Pago' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
