@@ -366,11 +366,16 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       </div>
 
       <Tabs defaultValue="geral" className="w-full">
-        <TabsList className="grid grid-cols-4 w-full bg-slate-100 p-1 rounded-xl">
+        <TabsList className={cn(
+          "grid w-full bg-slate-100 p-1 rounded-xl",
+          tipoEntidade === 'F' ? "grid-cols-3" : "grid-cols-4"
+        )}>
           <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
           <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
           <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> {tipoPessoa === 'F' ? 'Pessoal/Prof.' : 'Empresa/Sócios'}</TabsTrigger>
-          <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>
+          {tipoEntidade !== 'F' && (
+            <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="geral" className="mt-6 space-y-4">
@@ -816,62 +821,64 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           </div>
         </TabsContent>
 
-        <TabsContent value="financeiro" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Limite de Crédito</Label>
-              <Input 
-                {...register("limite")} 
-                onChange={(e) => handleCurrencyChange(e, "limite")}
-                className="text-indigo-600 font-bold" 
-                placeholder="R$ 0,00"
-              />
+        {tipoEntidade !== 'F' && (
+          <TabsContent value="financeiro" className="mt-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label>Limite de Crédito</Label>
+                <Input 
+                  {...register("limite")} 
+                  onChange={(e) => handleCurrencyChange(e, "limite")}
+                  className="text-indigo-600 font-bold" 
+                  placeholder="R$ 0,00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Despesa Fixa (Água/Luz)</Label>
+                <Input 
+                  {...register("despesa_fixa")} 
+                  onChange={(e) => handleCurrencyChange(e, "despesa_fixa")}
+                  placeholder="R$ 0,00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Despesa Alimentação</Label>
+                <Input 
+                  {...register("despesa_alimentacao")} 
+                  onChange={(e) => handleCurrencyChange(e, "despesa_alimentacao")}
+                  placeholder="R$ 0,00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Despesa Aluguel</Label>
+                <Input 
+                  {...register("despesa_aluguel")} 
+                  onChange={(e) => handleCurrencyChange(e, "despesa_aluguel")}
+                  placeholder="R$ 0,00"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Despesa Fixa (Água/Luz)</Label>
-              <Input 
-                {...register("despesa_fixa")} 
-                onChange={(e) => handleCurrencyChange(e, "despesa_fixa")}
-                placeholder="R$ 0,00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Despesa Alimentação</Label>
-              <Input 
-                {...register("despesa_alimentacao")} 
-                onChange={(e) => handleCurrencyChange(e, "despesa_alimentacao")}
-                placeholder="R$ 0,00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Despesa Aluguel</Label>
-              <Input 
-                {...register("despesa_aluguel")} 
-                onChange={(e) => handleCurrencyChange(e, "despesa_aluguel")}
-                placeholder="R$ 0,00"
-              />
-            </div>
-          </div>
 
-          <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-4">
-            <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
-              <ShieldCheck size={16} /> Pessoas Autorizadas a Comprar
-            </h4>
-            <div className="space-y-2">
-              <Textarea 
-                placeholder="Digite os nomes das pessoas autorizadas, um por linha..." 
-                className="min-h-[100px]"
-                {...register("obs1")} 
-              />
-              <p className="text-[10px] text-emerald-600">Estas pessoas serão consultadas no momento da venda.</p>
+            <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-4">
+              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
+                <ShieldCheck size={16} /> Pessoas Autorizadas a Comprar
+              </h4>
+              <div className="space-y-2">
+                <Textarea 
+                  placeholder="Digite os nomes das pessoas autorizadas, um por linha..." 
+                  className="min-h-[100px]"
+                  {...register("obs1")} 
+                />
+                <p className="text-[10px] text-emerald-600">Estas pessoas serão consultadas no momento da venda.</p>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label>Observações Gerais</Label>
-            <Textarea {...register("obs1")} className="min-h-[100px]" />
-          </div>
-        </TabsContent>
+            <div className="space-y-2">
+              <Label>Observações Gerais</Label>
+              <Textarea {...register("obs1")} className="min-h-[100px]" />
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
     </form>
   );
