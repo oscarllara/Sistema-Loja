@@ -11,7 +11,8 @@ import {
   UserCheck,
   Building2,
   Contact2,
-  Users2
+  Users2,
+  Truck
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -54,18 +55,18 @@ const Registrations = () => {
   }, []);
 
   const filteredEntities = entities.filter(e => {
-    // Filtro de Busca (Nome ou CPF/CNPJ)
     const matchesSearch = e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (e.cpf_cnpj && e.cpf_cnpj.includes(searchTerm));
     
     if (!matchesSearch) return false;
 
-    // Filtro de Abas
     switch (activeTab) {
       case 'clients':
         return e.tipo_entidade === 'C' || e.tipo_entidade === 'A';
       case 'suppliers':
         return e.tipo_entidade === 'F' || e.tipo_entidade === 'A';
+      case 'carriers':
+        return e.tipo_entidade === 'T';
       case 'both':
         return e.tipo_entidade === 'A';
       case 'employees':
@@ -98,7 +99,7 @@ const Registrations = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Cadastros Gerais</h1>
-            <p className="text-slate-500">Gerencie Clientes, Fornecedores e Funcionários.</p>
+            <p className="text-slate-500">Gerencie Clientes, Fornecedores, Transportadoras e Funcionários.</p>
           </div>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -132,6 +133,9 @@ const Registrations = () => {
             </TabsTrigger>
             <TabsTrigger value="suppliers" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
               <Building2 size={16} /> Fornecedores
+            </TabsTrigger>
+            <TabsTrigger value="carriers" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
+              <Truck size={16} /> Transportadoras
             </TabsTrigger>
             <TabsTrigger value="both" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
               <Users2 size={16} /> Ambos
@@ -177,17 +181,19 @@ const Registrations = () => {
                   </TableRow>
                 ) : (
                   filteredEntities.map((entity) => (
-                    <TableRow key={entity.cd_clientes} className="hover:bg-slate-50/50 transition-colors">
+                    <TableRow key={entity.cd_clientes} className="hover:bg-slate-50/50 transition-colors group">
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           <Badge variant="outline" className={cn(
                             "text-[10px] font-bold px-2 py-0.5",
                             entity.tipo_entidade === 'C' ? "text-blue-600 border-blue-100 bg-blue-50" :
                             entity.tipo_entidade === 'F' ? "text-amber-600 border-amber-100 bg-amber-50" :
+                            entity.tipo_entidade === 'T' ? "text-emerald-600 border-emerald-100 bg-emerald-50" :
                             "text-indigo-600 border-indigo-100 bg-indigo-50"
                           )}>
                             {entity.tipo_entidade === 'C' ? 'CLIENTE' : 
-                             entity.tipo_entidade === 'F' ? 'FORNECEDOR' : 'AMBOS'}
+                             entity.tipo_entidade === 'F' ? 'FORNECEDOR' : 
+                             entity.tipo_entidade === 'T' ? 'TRANSPORTADORA' : 'AMBOS'}
                           </Badge>
                           {entity.is_funcionario && (
                             <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 border-emerald-100 bg-emerald-50 px-2 py-0.5">

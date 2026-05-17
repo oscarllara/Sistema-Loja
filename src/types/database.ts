@@ -1,7 +1,7 @@
 "use client";
 
 export type TipoPessoa = 'F' | 'J';
-export type TipoEntidade = 'C' | 'F' | 'A';
+export type TipoEntidade = 'C' | 'F' | 'A' | 'T'; // C: Cliente, F: Fornecedor, A: Ambos, T: Transportadora
 
 export interface Cliente {
   cd_clientes: number;
@@ -60,25 +60,25 @@ export interface ItemComposicao {
 }
 
 export interface Produto {
-  cd_produto: number;         // PK Interna
-  id_manual: string;          // O ID que você edita (ex: 300.1)
-  id_importado?: string;      // ID do sistema antigo
-  nome: string;               // Sempre MAIÚSCULO
-  un: string;                 // Unidade principal (ex: SACO)
-  un_fracionada?: string;     // Unidade de venda (ex: KG)
-  fator_conversao?: number;   // Ex: 0.02 (1kg de um saco de 50kg)
+  cd_produto: number;
+  id_manual: string;
+  id_importado?: string;
+  nome: string;
+  un: string;
+  un_fracionada?: string;
+  fator_conversao?: number;
   cod_barras?: string;
   compra?: number;
-  venda: number;              // Preço Padrão (A Prazo)
-  venda_vista?: number;       // Preço à Vista
-  desconto_vista_tipo?: 'P' | 'V'; // Percentual ou Valor
+  venda: number;
+  venda_vista?: number;
+  desconto_vista_tipo?: 'P' | 'V';
   desconto_vista_valor?: number;
   estoque: number;
   minimo?: number;
   cd_fornecedores?: number;
   ncm?: string;
   fracionado?: boolean;
-  is_kit?: boolean;           // Se é um conjunto/composição
+  is_kit?: boolean;
   itens_kit?: ItemComposicao[];
   data_atualizacao: string;
 }

@@ -21,7 +21,8 @@ import {
   UserCheck,
   Building2,
   Users,
-  Contact2
+  Contact2,
+  Truck
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const clientSchema = z.object({
-  tipo_entidade: z.enum(['C', 'F', 'A']),
+  tipo_entidade: z.enum(['C', 'F', 'A', 'T']),
   is_funcionario: z.boolean(),
   tipo_pessoa: z.enum(['F', 'J']),
   nome: z.string().min(3, "Nome/Razão Social obrigatório"),
@@ -44,13 +45,9 @@ const clientSchema = z.object({
   rg_ie: z.string().optional(),
   inscricao_municipal: z.string().optional(),
   site: z.string().optional(),
-  
-  // Redes Sociais
   facebook: z.string().optional(),
   instagram: z.string().optional(),
   linkedin: z.string().optional(),
-  
-  // Pessoal
   sexo: z.string().optional(),
   estado_civil: z.string().optional(),
   naturalidade: z.string().optional(),
@@ -58,23 +55,17 @@ const clientSchema = z.object({
   data_nascimento: z.string().optional(),
   filiacao_pai: z.string().optional(),
   filiacao_mae: z.string().optional(),
-  
-  // Cônjuge
   conjuge_nome: z.string().optional(),
   conjuge_cpf: z.string().optional(),
   conjuge_nascimento: z.string().optional(),
   conjuge_empresa: z.string().optional(),
   conjuge_telefone: z.string().optional(),
   conjuge_salario: z.string().optional(),
-  
-  // Profissional / Funcionário
   local_trabalho: z.string().optional(),
   cargo: z.string().optional(),
   data_admissao: z.string().optional(),
   salario: z.string().optional(),
   dia_pagamento: z.string().optional(),
-  
-  // Endereço
   cep: z.string().optional(),
   endereco: z.string().optional(),
   numero: z.string().optional(),
@@ -83,14 +74,10 @@ const clientSchema = z.object({
   cidade: z.string().optional(),
   uf: z.string().optional(),
   referencia: z.string().optional(),
-  
-  // Contato
   tel1: z.string().optional(),
   tel2: z.string().optional(),
   cel: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
-  
-  // Listas Dinâmicas
   contatos_responsaveis: z.array(z.object({
     nome: z.string(),
     cargo: z.string(),
@@ -101,8 +88,6 @@ const clientSchema = z.object({
     nome: z.string(),
     cpf: z.string(),
   })).optional(),
-  
-  // Financeiro
   limite: z.string().optional(),
   despesa_fixa: z.string().optional(),
   despesa_alimentacao: z.string().optional(),
@@ -154,7 +139,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoEntidade = watch("tipo_entidade");
   const isFuncionario = watch("is_funcionario");
 
-  // Formatação de Moeda (R$ 0,00)
   function formatCurrency(value: string) {
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
@@ -170,7 +154,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     return parseFloat(value.replace(/[^\d,]/g, "").replace(",", ".")) || 0;
   }
 
-  // Máscara de CPF (xxx.xxx.xxx-xx)
   const maskCPF = (value: string) => {
     return value
       .replace(/\D/g, "")
@@ -180,7 +163,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
-  // Máscara de CNPJ (xx.xxx.xxx/xxxx-xx)
   const maskCNPJ = (value: string) => {
     return value
       .replace(/\D/g, "")
@@ -191,20 +173,16 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
-  // Máscara de Telefone (+55 (xx) xxxxx-xxxx)
   const maskPhone = (value: string) => {
     let v = value.replace(/\D/g, "");
     if (v.startsWith("55")) v = v.slice(2);
     if (v.length > 11) v = v.slice(0, 11);
-    
     let r = "+55 ";
     if (v.length > 0) r += "(" + v.slice(0, 2);
     if (v.length > 2) {
       const isMobile = v[2] === '9';
       r += ") " + v.slice(2, isMobile ? 7 : 6);
-      if (v.length > (isMobile ? 7 : 6)) {
-        r += "-" + v.slice(isMobile ? 7 : 6);
-      }
+      if (v.length > (isMobile ? 7 : 6)) r += "-" + v.slice(isMobile ? 7 : 6);
     }
     return v.length === 0 ? "" : r;
   };
@@ -226,8 +204,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues) => {
     const formatted = formatCurrency(e.target.value);
     setValue(fieldName, formatted);
-
-    // Lógica de 30% do salário para o limite
     if (fieldName === "salario") {
       const salaryNum = parseCurrencyToNumber(formatted);
       const limitSuggestion = salaryNum * 0.3;
@@ -237,15 +213,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
   const handleSocialFocus = (field: keyof ClientFormValues, baseUrl: string) => {
     const current = watch(field);
-    if (!current || current === "") {
-      setValue(field, baseUrl as any);
-    }
+    if (!current || current === "") setValue(field, baseUrl as any);
   };
 
   const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const cep = e.target.value.replace(/\D/g, '');
     if (cep.length !== 8) return;
-
     setIsSearchingCep(true);
     try {
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
@@ -289,8 +262,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div className="flex items-center gap-8">
-          {/* Grupo Base: Cliente / Fornecedor / Ambos */}
+        <div className="flex items-center gap-6">
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Função Base</Label>
             <div className="flex gap-2">
@@ -312,6 +284,14 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               </Button>
               <Button 
                 type="button"
+                variant={tipoEntidade === 'T' ? 'default' : 'outline'}
+                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'T' && "bg-indigo-600")}
+                onClick={() => setValue("tipo_entidade", 'T')}
+              >
+                <Truck size={16} /> Transportadora
+              </Button>
+              <Button 
+                type="button"
                 variant={tipoEntidade === 'A' ? 'default' : 'outline'}
                 className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'A' && "bg-indigo-600")}
                 onClick={() => setValue("tipo_entidade", 'A')}
@@ -323,7 +303,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
           <div className="w-px h-12 bg-slate-200" />
 
-          {/* Toggle Funcionário */}
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Vínculo Interno</Label>
             <Button 
@@ -344,7 +323,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               defaultValue={tipoPessoa} 
               onValueChange={(v) => {
                 setValue("tipo_pessoa", v as TipoPessoa);
-                setValue("cpf_cnpj", ""); // Limpa o campo ao trocar o tipo
+                setValue("cpf_cnpj", "");
               }}
               className="flex gap-4 h-10 items-center"
             >
@@ -368,12 +347,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className={cn(
           "grid w-full bg-slate-100 p-1 rounded-xl",
-          tipoEntidade === 'F' ? "grid-cols-3" : "grid-cols-4"
+          (tipoEntidade === 'F' || tipoEntidade === 'T') ? "grid-cols-3" : "grid-cols-4"
         )}>
           <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
           <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
           <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> {tipoPessoa === 'F' ? 'Pessoal/Prof.' : 'Empresa/Sócios'}</TabsTrigger>
-          {tipoEntidade !== 'F' && (
+          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && (
             <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>
           )}
         </TabsList>
@@ -542,7 +521,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         </TabsContent>
 
         <TabsContent value="pessoal" className="mt-6 space-y-6">
-          {/* Seção de Funcionário (Sempre visível se isFuncionario for true) */}
           {isFuncionario && (
             <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
               <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
@@ -704,7 +682,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-                    <User size={16} /> Contatos Responsáveis (Financeiro, Compras, etc)
+                    <User size={16} /> Contatos Responsáveis
                   </h4>
                   <Button type="button" variant="outline" size="sm" onClick={() => appendContact({ nome: "", cargo: "" })} className="gap-2">
                     <Plus size={14} /> Adicionar Contato
@@ -762,48 +740,23 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Briefcase size={16} /> {tipoPessoa === 'F' ? 'Dados Profissionais' : 'Dados Adicionais da Empresa'}
+              <Briefcase size={16} /> {tipoPessoa === 'F' ? 'Dados Profissionais' : 'Dados Adicionais'}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {tipoPessoa === 'F' ? (
                 <>
                   <div className="space-y-2">
                     <Label>Profissão</Label>
-                    <Input 
-                      {...register("profissao")} 
-                      onChange={(e) => handleTitleCaseChange(e, "profissao")}
-                    />
+                    <Input {...register("profissao")} onChange={(e) => handleTitleCaseChange(e, "profissao")} />
                   </div>
                   <div className="space-y-2">
                     <Label>Local de Trabalho</Label>
-                    <Input 
-                      {...register("local_trabalho")} 
-                      onChange={(e) => handleTitleCaseChange(e, "local_trabalho")}
-                    />
+                    <Input {...register("local_trabalho")} onChange={(e) => handleTitleCaseChange(e, "local_trabalho")} />
                   </div>
                   <div className="space-y-2">
                     <Label>Cargo</Label>
-                    <Input 
-                      {...register("cargo")} 
-                      onChange={(e) => handleTitleCaseChange(e, "cargo")}
-                    />
+                    <Input {...register("cargo")} onChange={(e) => handleTitleCaseChange(e, "cargo")} />
                   </div>
-                  {!isFuncionario && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Data Admissão</Label>
-                        <Input type="date" {...register("data_admissao")} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Salário Mensal</Label>
-                        <Input 
-                          {...register("salario")} 
-                          onChange={(e) => handleCurrencyChange(e, "salario")}
-                          placeholder="R$ 0,00"
-                        />
-                      </div>
-                    </>
-                  )}
                 </>
               ) : (
                 <>
@@ -811,17 +764,13 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                     <Label>Data de Fundação</Label>
                     <Input type="date" {...register("data_nascimento")} />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Número de Funcionários</Label>
-                    <Input type="number" {...register("salario")} />
-                  </div>
                 </>
               )}
             </div>
           </div>
         </TabsContent>
 
-        {tipoEntidade !== 'F' && (
+        {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && (
           <TabsContent value="financeiro" className="mt-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -835,27 +784,15 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               </div>
               <div className="space-y-2">
                 <Label>Despesa Fixa (Água/Luz)</Label>
-                <Input 
-                  {...register("despesa_fixa")} 
-                  onChange={(e) => handleCurrencyChange(e, "despesa_fixa")}
-                  placeholder="R$ 0,00"
-                />
+                <Input {...register("despesa_fixa")} onChange={(e) => handleCurrencyChange(e, "despesa_fixa")} placeholder="R$ 0,00" />
               </div>
               <div className="space-y-2">
                 <Label>Despesa Alimentação</Label>
-                <Input 
-                  {...register("despesa_alimentacao")} 
-                  onChange={(e) => handleCurrencyChange(e, "despesa_alimentacao")}
-                  placeholder="R$ 0,00"
-                />
+                <Input {...register("despesa_alimentacao")} onChange={(e) => handleCurrencyChange(e, "despesa_alimentacao")} placeholder="R$ 0,00" />
               </div>
               <div className="space-y-2">
                 <Label>Despesa Aluguel</Label>
-                <Input 
-                  {...register("despesa_aluguel")} 
-                  onChange={(e) => handleCurrencyChange(e, "despesa_aluguel")}
-                  placeholder="R$ 0,00"
-                />
+                <Input {...register("despesa_aluguel")} onChange={(e) => handleCurrencyChange(e, "despesa_aluguel")} placeholder="R$ 0,00" />
               </div>
             </div>
 
@@ -871,11 +808,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 />
                 <p className="text-[10px] text-emerald-600">Estas pessoas serão consultadas no momento da venda.</p>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Observações Gerais</Label>
-              <Textarea {...register("obs1")} className="min-h-[100px]" />
             </div>
           </TabsContent>
         )}
