@@ -53,8 +53,23 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
 
   const suppliers = db.clientes.getAll().filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
 
+  const formatCurrency = (value: number | string) => {
+    const val = typeof value === 'number' ? value.toFixed(2) : value;
+    const digits = val.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "0,00";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
+
+  const parseCurrency = (value: string) => {
+    return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
+  };
+
   const addItem = () => {
-    setItems([...items, { qtde: 1, valor_unit: 0, margem: 30, valor_venda: 0, subtotal: 0, un: 'UN' }]);
+    setItems([...items, { qtde: 1, valor_unit: 0, margem: 0, valor_venda: 0, subtotal: 0, un: 'UN' }]);
   };
 
   const removeItem = (index: number) => {
@@ -63,15 +78,23 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
 
   const updateItem = (index: number, field: keyof CompraItem, value: any) => {
     const newItems = [...items];
-    const item = { ...newItems[index], [field]: value };
+    const item = { ...newItems[index] };
 
-    // Lógica de Margem e Preço de Venda
-    if (field === 'valor_unit' || field === 'margem') {
-      item.valor_venda = item.valor_unit * (1 + item.margem / 100);
-    } else if (field === 'valor_venda') {
+    if (field === 'valor_unit' || field === 'valor_venda') {
+      const numValue = typeof value === 'string' ? parseCurrency(value) : value;
+      (item as any)[field] = numValue;
+      
+      // Recalcular margem se mudar custo ou venda
       if (item.valor_unit > 0) {
         item.margem = ((item.valor_venda / item.valor_unit) - 1) * 100;
       }
+    } else if (field === 'margem') {
+      const numValue = parseFloat(value) || 0;
+      item.margem = numValue;
+      // Recalcular venda se mudar margem
+      item.valor_venda = item.valor_unit * (1 + item.margem / 100);
+    } else {
+      (item as any)[field] = value;
     }
 
     item.subtotal = item.qtde * item.valor_unit;
@@ -80,22 +103,23 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   };
 
   const handleProductSelect = (product: any) => {
+    const newItem = { 
+      cd_produto: product.cd_produto, 
+      qtde: 1, 
+      valor_unit: product.compra || 0, 
+      margem: product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0,
+      valor_venda: product.venda || 0,
+      subtotal: product.compra || 0,
+      un: product.un
+    };
+
     if (activeItemIndex !== null) {
-      const item = items[activeItemIndex];
-      updateItem(activeItemIndex, 'cd_produto', product.cd_produto);
-      updateItem(activeItemIndex, 'valor_venda', product.venda);
-      updateItem(activeItemIndex, 'un', product.un);
+      const newItems = [...items];
+      newItems[activeItemIndex] = newItem;
+      setItems(newItems);
       setActiveItemIndex(null);
     } else {
-      setItems([...items, { 
-        cd_produto: product.cd_produto, 
-        qtde: 1, 
-        valor_unit: product.compra || 0, 
-        margem: product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 30,
-        valor_venda: product.venda,
-        subtotal: product.compra || 0,
-        un: product.un
-      }]);
+      setItems([...items, newItem]);
     }
     setIsSearchOpen(false);
   };
@@ -228,7 +252,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                     </TableCell>
                     <TableCell>
                       <Input 
-                        type="number" 
+                        type="text" 
                         value={item.qtde} 
                         onChange={(e) => updateItem(index, 'qtde', Number(e.target.value))}
                         className="h-8 text-center text-xs font-bold"
@@ -236,26 +260,26 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                     </TableCell>
                     <TableCell>
                       <Input 
-                        type="number" 
-                        value={item.valor_unit} 
-                        onChange={(e) => updateItem(index, 'valor_unit', Number(e.target.value))}
+                        type="text" 
+                        value={formatCurrency(item.valor_unit)} 
+                        onChange={(e) => updateItem(index, 'valor_unit', e.target.value)}
                         className="h-8 text-right text-xs font-bold"
                       />
                     </TableCell>
                     <TableCell>
                       <Input 
-                        type="number" 
+                        type="text" 
                         value={item.margem.toFixed(1)} 
-                        onChange={(e) => updateItem(index, 'margem', Number(e.target.value))}
+                        onChange={(e) => updateItem(index, 'margem', e.target.value)}
                         className="h-8 text-center text-xs font-bold text-indigo-600"
                       />
                     </TableCell>
                     <TableCell>
                       <Input 
-                        type="number" 
-                        value={item.valor_venda.toFixed(2)} 
-                        onChange={(e) => updateItem(index, 'valor_venda', Number(e.target.value))}
-                        className="h-8 text-right text-xs font-bold text-emerald-600"
+                        type="text" 
+                        value={formatCurrency(item.valor_venda)} 
+                        onChange={(e) => updateItem(index, 'valor_venda', e.target.value)}
+                        className="h-8 text-right text-xs font-bold text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500"
                       />
                     </TableCell>
                     <TableCell className="text-right font-bold text-slate-900">
