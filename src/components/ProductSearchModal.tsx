@@ -60,6 +60,11 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
     }
   };
 
+  const formatStock = (value: number) => {
+    // Arredonda para 3 casas decimais para evitar dízimas periódicas na tela
+    return Number(Math.round(Number(value + 'e3')) + 'e-3');
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
@@ -125,7 +130,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
                       "py-0 text-[11px] text-right font-bold",
                       (p.estoque || 0) <= 0 ? "text-rose-500" : ""
                     )}>
-                      {p.estoque || 0} {p.un || "UN"}
+                      {formatStock(p.estoque || 0)} {p.un || "UN"}
                     </TableCell>
                   </TableRow>
                 ))

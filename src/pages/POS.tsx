@@ -81,44 +81,36 @@ const POS = () => {
 
   const entities = mode === 'VENDA' ? clientes : fornecedores;
 
-  const handleShortcut = (key: string) => {
-    if (key === 'F1') setIsSearchOpen(true);
-    if (key === 'F3') { if(confirm("Zerar operação atual?")) setCart([]); }
-    if (key === 'F10') {
-      if (cart.length === 0) return showError("Carrinho vazio!");
-      if (!selectedSellerId) return showError("Selecione o Usuário primeiro!");
-      setIsCheckoutOpen(true);
-    }
-    if (key === 'F4') setIsAddEntityOpen(true);
-    
-    if (key === 'ESC') {
-      // Se não houver nenhum modal operacional aberto, abrimos o de senha
-      setIsAdminAuthOpen(true);
-    }
-  };
-
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F1') { e.preventDefault(); handleShortcut('F1'); }
-      if (e.key === 'F3') { e.preventDefault(); handleShortcut('F3'); }
-      if (e.key === 'F10') { e.preventDefault(); handleShortcut('F10'); }
-      if (e.key === 'F4') { e.preventDefault(); handleShortcut('F4'); }
+      // Atalhos de Função
+      if (e.key === 'F1') { e.preventDefault(); setIsSearchOpen(true); }
+      if (e.key === 'F3') { e.preventDefault(); if(confirm("Zerar operação atual?")) setCart([]); }
+      if (e.key === 'F4') { e.preventDefault(); setIsAddEntityOpen(true); }
+      if (e.key === 'F10') { 
+        e.preventDefault(); 
+        if (cart.length === 0) return showError("Carrinho vazio!");
+        if (!selectedSellerId) return showError("Selecione o Usuário primeiro!");
+        setIsCheckoutOpen(true); 
+      }
       
-      if (e.key === 'Escape') { 
-        // Verificamos se algum modal está aberto. 
-        // Se estiver, o próprio componente Dialog do shadcn/Radix vai fechar o modal.
-        // Nós só interceptamos o ESC para abrir a senha se TUDO estiver fechado.
+      // Lógica do ESC em camadas
+      if (e.key === 'Escape') {
+        // Verificamos se existe algum modal operacional aberto
         const anyModalOpen = isSearchOpen || isPrintOpen || isCheckoutOpen || isAddEntityOpen || isAdminAuthOpen;
         
         if (!anyModalOpen) {
+          // Se nada estiver aberto, o ESC abre a autenticação para sair
           e.preventDefault();
-          handleShortcut('ESC');
+          setIsAdminAuthOpen(true);
         }
+        // Se houver modal aberto, não fazemos nada aqui e deixamos o Dialog fechar sozinho
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, selectedSellerId, isSearchOpen, isPrintOpen, isCheckoutOpen, isAddEntityOpen, isAdminAuthOpen]);
+  }, [isSearchOpen, isPrintOpen, isCheckoutOpen, isAddEntityOpen, isAdminAuthOpen, cart, selectedSellerId]);
 
   const handleAdminAuth = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -288,11 +280,15 @@ const POS = () => {
           <div className="space-y-4">
             <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Teclas de Atalho</h3>
             <div className="space-y-2">
-              <ShortcutItem key="F1" label="Pesquisar Produto" onClick={() => handleShortcut('F1')} />
-              <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
-              <ShortcutItem key="F4" label={mode === 'VENDA' ? "Novo Cliente" : "Novo Fornecedor"} onClick={() => handleShortcut('F4')} />
-              <ShortcutItem key="F10" label="Concluir Operação" onClick={() => handleShortcut('F10')} />
-              <ShortcutItem key="ESC" label="Sair para o ERP" onClick={() => handleShortcut('ESC')} />
+              <ShortcutItem key="F1" label="Pesquisar Produto" onClick={() => setIsSearchOpen(true)} />
+              <ShortcutItem key="F3" label="Zerar Operação" onClick={() => { if(confirm("Zerar operação atual?")) setCart([]); }} />
+              <ShortcutItem key="F4" label={mode === 'VENDA' ? "Novo Cliente" : "Novo Fornecedor"} onClick={() => setIsAddEntityOpen(true)} />
+              <ShortcutItem key="F10" label="Concluir Operação" onClick={() => {
+                if (cart.length === 0) return showError("Carrinho vazio!");
+                if (!selectedSellerId) return showError("Selecione o Usuário primeiro!");
+                setIsCheckoutOpen(true);
+              }} />
+              <ShortcutItem key="ESC" label="Sair para o ERP" onClick={() => setIsAdminAuthOpen(true)} />
             </div>
           </div>
         </ScrollArea>
@@ -317,7 +313,7 @@ const POS = () => {
           <Button 
             variant="ghost" 
             className="w-full h-10 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs"
-            onClick={() => handleShortcut('ESC')}
+            onClick={() => setIsAdminAuthOpen(true)}
           >
             <LogOut size={14} /> SAIR DO PDV (ESC)
           </Button>
