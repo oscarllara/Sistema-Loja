@@ -180,7 +180,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
     if (isNaN(number)) return "";
-    return new Intl.FormatNumber("pt-BR", {
+    return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(number);
@@ -342,7 +342,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         <TabsContent value="endereco" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} onBlur={handleCepBlur} /></div>
-            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} onChange={(e) => handleTitleCaseChange(e, "endereco")} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} onChange={(e) => handleTitleCaseCaseChange(e, "endereco")} /></div>
             <div className="space-y-2"><Label>Número</Label><Input {...register("numero")} /></div>
             <div className="space-y-2"><Label>Bairro</Label><Input {...register("bairro")} onChange={(e) => handleTitleCaseChange(e, "bairro")} /></div>
             <div className="md:col-span-2 space-y-2"><Label>Cidade</Label><Input {...register("cidade")} onChange={(e) => handleTitleCaseChange(e, "cidade")} /></div>

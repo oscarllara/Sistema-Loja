@@ -51,9 +51,9 @@ const Financial = () => {
   const user = db.auth.getUser();
 
   const loadData = () => {
-    setLancamentos(db.financeiro.getAll());
-    setContas(db.contas.getAll());
-    setPatrimonio(db.patrimonio.getAll());
+    setLancamentos(db.financeiro.getAll() || []);
+    setContas(db.contas.getAll() || []);
+    setPatrimonio(db.patrimonio.getAll() || []);
   };
 
   React.useEffect(() => {
@@ -82,6 +82,15 @@ const Financial = () => {
       obs: formData.get('obs') as string
     });
     showSuccess("Transferência realizada!");
+    loadData();
+  };
+
+  const handleBaixa = (id: number) => {
+    if (contas.length === 0) {
+      showError("Nenhuma conta cadastrada para realizar a baixa.");
+      return;
+    }
+    db.financeiro.baixar(id, contas[0].cd_conta);
     loadData();
   };
 
@@ -165,7 +174,7 @@ const Financial = () => {
           <TabsContent value="receivable">
             <FinancialTable 
               data={lancamentos.filter(l => l.tipo === 'R')} 
-              onBaixa={(id) => { db.financeiro.baixar(id, contas[0].cd_conta); loadData(); }}
+              onBaixa={handleBaixa}
               editingId={editingId}
               setEditingId={setEditingId}
               editValue={editValue}
@@ -178,7 +187,7 @@ const Financial = () => {
           <TabsContent value="payable">
             <FinancialTable 
               data={lancamentos.filter(l => l.tipo === 'P')} 
-              onBaixa={(id) => { db.financeiro.baixar(id, contas[0].cd_conta); loadData(); }}
+              onBaixa={handleBaixa}
               editingId={editingId}
               setEditingId={setEditingId}
               editValue={editValue}
@@ -233,59 +242,67 @@ const FinancialTable = ({ data, onBaixa, editingId, setEditingId, editValue, set
         </TableRow>
       </TableHeader>
       <TableBody>
-        {data.map((l: any) => (
-          <TableRow key={l.cd_lancamento}>
-            <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
-            <TableCell>
-              <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
-              <div className="text-[10px] text-slate-500 uppercase">{l.categoria}</div>
-            </TableCell>
-            <TableCell>
-              {editingId === l.cd_lancamento ? (
-                <div className="flex items-center gap-2">
-                  <Input 
-                    className="h-8 w-24 text-xs" 
-                    value={editValue} 
-                    onChange={(e) => setEditValue(e.target.value)}
-                  />
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600" onClick={() => onManualSave(l.cd_lancamento)}>
-                    <Save size={14} />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => setEditingId(null)}>
-                    <X size={14} />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 group">
-                  <span className="font-bold">R$ {l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  {isAdmin && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => { setEditingId(l.cd_lancamento); setEditValue(l.valor.toString()); }}
-                    >
-                      <Edit3 size={12} />
-                    </Button>
-                  )}
-                </div>
-              )}
-            </TableCell>
-            <TableCell>
-              <Badge className={l.status === 'Pago' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
-                {l.status === 'Pago' ? <CheckCircle2 size={10} className="mr-1" /> : <Clock size={10} className="mr-1" />}
-                {l.status.toUpperCase()}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-right">
-              {l.status === 'Pendente' && (
-                <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1" onClick={() => onBaixa(l.cd_lancamento)}>
-                  <CheckCircle2 size={14} /> Baixar
-                </Button>
-              )}
+        {data.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={5} className="text-center py-12 text-slate-400">
+              Nenhum lançamento encontrado.
             </TableCell>
           </TableRow>
-        ))}
+        ) : (
+          data.map((l: any) => (
+            <TableRow key={l.cd_lancamento}>
+              <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
+              <TableCell>
+                <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
+                <div className="text-[10px] text-slate-500 uppercase">{l.categoria}</div>
+              </TableCell>
+              <TableCell>
+                {editingId === l.cd_lancamento ? (
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      className="h-8 w-24 text-xs" 
+                      value={editValue} 
+                      onChange={(e) => setEditValue(e.target.value)}
+                    />
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600" onClick={() => onManualSave(l.cd_lancamento)}>
+                      <Save size={14} />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => setEditingId(null)}>
+                      <X size={14} />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 group">
+                    <span className="font-bold">R$ {l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    {isAdmin && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => { setEditingId(l.cd_lancamento); setEditValue(l.valor.toString()); }}
+                      >
+                        <Edit3 size={12} />
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </TableCell>
+              <TableCell>
+                <Badge className={l.status === 'Pago' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+                  {l.status === 'Pago' ? <CheckCircle2 size={10} className="mr-1" /> : <Clock size={10} className="mr-1" />}
+                  {l.status.toUpperCase()}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                {l.status === 'Pendente' && (
+                  <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1" onClick={() => onBaixa(l.cd_lancamento)}>
+                    <CheckCircle2 size={14} /> Baixar
+                  </Button>
+                )}
+              </TableCell>
+            </TableRow>
+          ))
+        )}
       </TableBody>
     </Table>
   </Card>
