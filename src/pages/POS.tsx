@@ -24,7 +24,9 @@ import {
   CheckCircle2,
   LogOut,
   Lock,
-  Edit3
+  Edit3,
+  Zap,
+  CreditCard
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -56,8 +58,8 @@ import ClientForm from '@/components/ClientForm';
 const POS = () => {
   const navigate = useNavigate();
   const [mode, setMode] = React.useState<'VENDA' | 'COMPRA'>('VENDA');
+  const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
   const [cart, setCart] = React.useState<any[]>([]);
-  const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Crediário');
   const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
   const [selectedEntityId, setSelectedEntityId] = React.useState<number | "">(""); 
   
@@ -151,7 +153,7 @@ const POS = () => {
     if (!pendingProduct) return;
 
     const qty = parseFloat(inputQty.replace(',', '.')) || 1;
-    const price = getProductPrice(pendingProduct, inputUnit);
+    const price = getProductPrice(pendingProduct, inputUnit, priceMode);
     
     setCart(prev => [...prev, { 
       ...pendingProduct, 
@@ -167,7 +169,7 @@ const POS = () => {
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
-  const getProductPrice = (product: any, unit: string) => {
+  const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
     
     // Se for a unidade fracionada, usa o preço fracionado
@@ -175,10 +177,26 @@ const POS = () => {
       return product.venda_fracionada || product.venda;
     }
 
-    const isVista = ['Dinheiro', 'PIX', 'Cartão Débito'].includes(paymentMethod);
     const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
     const precoPrazo = product.venda || 0;
-    return isVista ? precoVista : precoPrazo;
+    return currentPriceMode === 'VISTA' ? precoVista : precoPrazo;
+  };
+
+  // Atualiza os preços do carrinho quando o modo de preço muda
+  const togglePriceMode = () => {
+    const newMode = priceMode === 'PRAZO' ? 'VISTA' : 'PRAZO';
+    setPriceMode(newMode);
+    
+    setCart(prev => prev.map(item => {
+      const product = products.find(p => p.cd_produto === item.cd_produto);
+      if (!product) return item;
+      return {
+        ...item,
+        finalPrice: getProductPrice(product, item.selectedUnit, newMode)
+      };
+    }));
+    
+    showSuccess(`Modo de preço alterado para: ${newMode}`);
   };
 
   const handleCodeSubmit = (e: React.FormEvent) => {
@@ -267,7 +285,6 @@ const POS = () => {
         cart.forEach(item => {
           const prod = products.find(p => p.cd_produto === item.cd_produto);
           if (prod) {
-            // Se for fracionado, abate o estoque usando o fator de conversão
             let abate = item.quantity;
             if (prod.fracionado && item.selectedUnit === prod.un_fracionada && prod.fator_conversao) {
               abate = item.quantity * prod.fator_conversao;
@@ -286,6 +303,8 @@ const POS = () => {
       showError("Erro ao processar.");
     }
   };
+
+  const themeColor = mode === 'VENDA' ? 'indigo' : 'emerald';
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
@@ -364,6 +383,26 @@ const POS = () => {
                 <option value="" className="text-slate-900">CONSUMIDOR FINAL</option>
                 {entities.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
               </select>
+            </div>
+            <div className="h-10 w-px bg-white/10" />
+            
+            {/* Botão de Alternância de Preço */}
+            <div className="flex flex-col gap-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Modo de Preço</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={togglePriceMode}
+                className={cn(
+                  "h-9 gap-2 font-black text-[10px] border-none transition-all duration-300",
+                  priceMode === 'VISTA' 
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-900/20" 
+                    : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                )}
+              >
+                {priceMode === 'VISTA' ? <Zap size={14} fill="currentColor" /> : <CreditCard size={14} />}
+                {priceMode === 'VISTA' ? 'À VISTA' : 'A PRAZO'}
+              </Button>
             </div>
           </div>
           <div className="text-right">
@@ -459,13 +498,13 @@ const POS = () => {
             <div className="w-40 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Valor Unitário</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
-                {pendingProduct ? getProductPrice(pendingProduct, inputUnit).toFixed(2) : "0,00"}
+                {pendingProduct ? getProductPrice(pendingProduct, inputUnit, priceMode).toFixed(2) : "0,00"}
               </div>
             </div>
             <div className="w-48 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Sub Total</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
-                {pendingProduct ? (getProductPrice(pendingProduct, inputUnit) * (parseFloat(inputQty.replace(',', '.')) || 1)).toFixed(2) : "0,00"}
+                {pendingProduct ? (getProductPrice(pendingProduct, inputUnit, priceMode) * (parseFloat(inputQty.replace(',', '.')) || 1)).toFixed(2) : "0,00"}
               </div>
             </div>
           </form>
