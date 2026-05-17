@@ -4,16 +4,14 @@ import React from 'react';
 import Layout from '@/components/Layout';
 import { 
   Users, 
-  UserSquare2, 
-  Truck, 
-  Building2, 
   Plus, 
   Search, 
-  Filter, 
   Edit, 
   Trash2,
   UserCheck,
-  Contact2
+  Building2,
+  Contact2,
+  Users2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -43,6 +41,7 @@ import { cn } from '@/lib/utils';
 const Registrations = () => {
   const [entities, setEntities] = React.useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [activeTab, setActiveTab] = React.useState("all");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingEntity, setEditingEntity] = React.useState<Cliente | undefined>(undefined);
 
@@ -54,10 +53,27 @@ const Registrations = () => {
     loadData();
   }, []);
 
-  const filteredEntities = entities.filter(e => 
-    e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (e.cpf_cnpj && e.cpf_cnpj.includes(searchTerm))
-  );
+  const filteredEntities = entities.filter(e => {
+    // Filtro de Busca (Nome ou CPF/CNPJ)
+    const matchesSearch = e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (e.cpf_cnpj && e.cpf_cnpj.includes(searchTerm));
+    
+    if (!matchesSearch) return false;
+
+    // Filtro de Abas
+    switch (activeTab) {
+      case 'clients':
+        return e.tipo_entidade === 'C' || e.tipo_entidade === 'A';
+      case 'suppliers':
+        return e.tipo_entidade === 'F' || e.tipo_entidade === 'A';
+      case 'both':
+        return e.tipo_entidade === 'A';
+      case 'employees':
+        return e.is_funcionario === true;
+      default:
+        return true;
+    }
+  });
 
   const handleEdit = (entity: Cliente) => {
     setEditingEntity(entity);
@@ -87,7 +103,7 @@ const Registrations = () => {
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
-              <Button onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
+              <Button onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg shadow-indigo-100">
                 <Plus size={20} /> Novo Cadastro
               </Button>
             </DialogTrigger>
@@ -106,7 +122,7 @@ const Registrations = () => {
           </Dialog>
         </div>
 
-        <Tabs defaultValue="all" className="w-full">
+        <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-white border border-slate-200 p-1 h-auto flex-wrap justify-start gap-1 rounded-xl mb-6">
             <TabsTrigger value="all" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
               <Users size={16} /> Todos
@@ -117,6 +133,12 @@ const Registrations = () => {
             <TabsTrigger value="suppliers" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
               <Building2 size={16} /> Fornecedores
             </TabsTrigger>
+            <TabsTrigger value="both" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
+              <Users2 size={16} /> Ambos
+            </TabsTrigger>
+            <TabsTrigger value="employees" className="rounded-lg gap-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600">
+              <Contact2 size={16} /> Funcionários
+            </TabsTrigger>
           </TabsList>
 
           <Card className="border-none shadow-sm overflow-hidden">
@@ -125,7 +147,7 @@ const Registrations = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <Input 
                   placeholder="Pesquisar por nome, CPF ou CNPJ..." 
-                  className="pl-10 border-slate-200" 
+                  className="pl-10 border-slate-200 h-11 rounded-lg" 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -146,17 +168,20 @@ const Registrations = () => {
               <TableBody>
                 {filteredEntities.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-slate-400">
-                      Nenhum registro encontrado.
+                    <TableCell colSpan={6} className="text-center py-12 text-slate-400">
+                      <div className="flex flex-col items-center gap-2">
+                        <Search size={32} className="opacity-20" />
+                        <p>Nenhum registro encontrado para este filtro.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredEntities.map((entity) => (
-                    <TableRow key={entity.cd_clientes}>
+                    <TableRow key={entity.cd_clientes} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           <Badge variant="outline" className={cn(
-                            "text-[10px] font-bold",
+                            "text-[10px] font-bold px-2 py-0.5",
                             entity.tipo_entidade === 'C' ? "text-blue-600 border-blue-100 bg-blue-50" :
                             entity.tipo_entidade === 'F' ? "text-amber-600 border-amber-100 bg-amber-50" :
                             "text-indigo-600 border-indigo-100 bg-indigo-50"
@@ -165,7 +190,7 @@ const Registrations = () => {
                              entity.tipo_entidade === 'F' ? 'FORNECEDOR' : 'AMBOS'}
                           </Badge>
                           {entity.is_funcionario && (
-                            <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 border-emerald-100 bg-emerald-50">
+                            <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 border-emerald-100 bg-emerald-50 px-2 py-0.5">
                               FUNCIONÁRIO
                             </Badge>
                           )}
@@ -177,15 +202,15 @@ const Registrations = () => {
                           {entity.apelido_fantasia && <p className="text-xs text-slate-500">{entity.apelido_fantasia}</p>}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-500">{entity.cpf_cnpj || "-"}</TableCell>
-                      <TableCell className="text-slate-500">{entity.cel || entity.tel1 || "-"}</TableCell>
-                      <TableCell className="text-slate-500">{entity.cidade ? `${entity.cidade}/${entity.uf || ""}` : "-"}</TableCell>
+                      <TableCell className="text-slate-500 font-mono text-xs">{entity.cpf_cnpj || "-"}</TableCell>
+                      <TableCell className="text-slate-500 text-xs">{entity.cel || entity.tel1 || "-"}</TableCell>
+                      <TableCell className="text-slate-500 text-xs">{entity.cidade ? `${entity.cidade}/${entity.uf || ""}` : "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                            className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                             onClick={() => handleEdit(entity)}
                           >
                             <Edit size={16} />
@@ -193,7 +218,7 @@ const Registrations = () => {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                            className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                             onClick={() => handleDelete(entity.cd_clientes)}
                           >
                             <Trash2 size={16} />
