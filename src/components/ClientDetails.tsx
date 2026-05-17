@@ -15,10 +15,10 @@ import {
   ChevronRight,
   Filter
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/tabs";
-import { Card, CardContent } from "@/card";
-import { Button } from "@/button";
-import { Input } from "@/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { 
   Table, 
   TableBody, 
@@ -26,8 +26,8 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/table";
-import { Badge } from "@/badge";
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { db } from '@/services/api';
 import { Cliente, Venda, LancamentoFinanceiro } from '@/types/database';
 import { cn } from '@/lib/utils';
