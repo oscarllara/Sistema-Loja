@@ -56,6 +56,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [isInstallmentMode, setIsInstallmentMode] = React.useState(false);
   const [numInstallments, setNumInstallments] = React.useState(1);
   const [tempInstallments, setTempInstallments] = React.useState<Installment[]>([]);
+  const [isBlinking, setIsBlinking] = React.useState(false);
   
   const config = db.config.get();
   const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
@@ -70,12 +71,15 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       setInputValue(remaining.toFixed(2).replace('.', ','));
       setIsInstallmentMode(false);
       setNumInstallments(1);
+      setIsBlinking(false);
     }
   }, [isOpen, total]);
 
   const addPayment = (method: string) => {
     if (method === 'Crediário' && (!clientId || clientId === 1)) {
+      setIsBlinking(true);
       showError("Selecione um cliente cadastrado para vender no crediário!");
+      setTimeout(() => setIsBlinking(false), 3000);
       return;
     }
 
@@ -154,12 +158,26 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
         <div className="grid grid-cols-1 md:grid-cols-2">
           {/* Lado Esquerdo: Resumo e Identificação */}
           <div className="p-6 bg-slate-50 border-r border-slate-200">
-            <div className="mb-6 space-y-2">
-              <Label className="text-[10px] font-bold text-slate-400 uppercase">Identificar Cliente</Label>
+            <div className={cn(
+              "mb-6 space-y-2 p-2 rounded-xl transition-all duration-300",
+              isBlinking ? "bg-rose-100 ring-4 ring-rose-500 animate-pulse" : ""
+            )}>
+              <Label className={cn(
+                "text-[10px] font-bold uppercase",
+                isBlinking ? "text-rose-700" : "text-slate-400"
+              )}>
+                Identificar Cliente {isBlinking && " (OBRIGATÓRIO PARA CREDIÁRIO)"}
+              </Label>
               <select 
-                className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                className={cn(
+                  "w-full h-10 rounded-lg border bg-white px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500",
+                  isBlinking ? "border-rose-500 text-rose-700" : "border-slate-200"
+                )}
                 value={clientId}
-                onChange={(e) => onClientChange(e.target.value ? Number(e.target.value) : "")}
+                onChange={(e) => {
+                  onClientChange(e.target.value ? Number(e.target.value) : "");
+                  setIsBlinking(false);
+                }}
               >
                 <option value="">CONSUMIDOR FINAL</option>
                 {clientes.map(c => (
