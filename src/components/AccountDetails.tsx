@@ -6,7 +6,8 @@ import {
   ArrowDownCircle, 
   ArrowLeftRight,
   Calendar,
-  Search
+  Search,
+  Info
 } from 'lucide-react';
 import { 
   Table, 
@@ -15,9 +16,9 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+} from "@/ui/table";
+import { Input } from "@/ui/input";
+import { Badge } from "@/ui/badge";
 import { db } from '@/services/api';
 import { LancamentoFinanceiro, ContaBancaria } from '@/types/database';
 import { showSuccess } from '@/utils/toast';
@@ -48,7 +49,11 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+          <p className="text-[10px] font-bold text-slate-500 uppercase">Saldo Inicial</p>
+          <p className="text-lg font-bold text-slate-700">R$ {(account.saldo_inicial || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        </div>
         <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
           <p className="text-[10px] font-bold text-emerald-600 uppercase">Total Entradas</p>
           <p className="text-lg font-bold text-emerald-700">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -61,6 +66,11 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
           <p className="text-[10px] font-bold text-indigo-600 uppercase">Saldo Atual</p>
           <p className="text-lg font-bold text-indigo-700">R$ {account.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg text-xs border border-blue-100">
+        <Info size={16} />
+        <span>Cálculo: Saldo Inicial + Entradas - Saídas = Saldo Atual</span>
       </div>
 
       <div className="relative">

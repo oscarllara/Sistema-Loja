@@ -17,7 +17,7 @@ const accountSchema = z.object({
   agencia: z.string().optional(),
   conta_numero: z.string().optional(),
   tipo: z.enum(['Caixa', 'Banco', 'Retaguarda', 'Digital']),
-  saldo: z.string().default("0"),
+  saldo_inicial: z.string().default("0"),
 });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
@@ -46,16 +46,16 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
       agencia: account.agencia || "",
       conta_numero: account.conta_numero || "",
       tipo: account.tipo,
-      saldo: formatCurrency((account.saldo * 100).toString())
+      saldo_inicial: formatCurrency((account.saldo_inicial * 100).toString())
     } : {
       tipo: 'Banco',
-      saldo: "0,00"
+      saldo_inicial: "0,00"
     }
   });
 
   const onSubmit = (data: AccountFormValues) => {
     try {
-      const saldoNum = parseFloat(data.saldo.replace(/\./g, "").replace(",", "."));
+      const saldoInicialNum = parseFloat(data.saldo_inicial.replace(/\./g, "").replace(",", "."));
       
       const payload = {
         nome: data.nome.toUpperCase(),
@@ -63,14 +63,16 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
         agencia: data.agencia,
         conta_numero: data.conta_numero,
         tipo: data.tipo,
-        saldo: saldoNum
+        saldo_inicial: saldoInicialNum,
+        // Se for conta nova, o saldo atual começa igual ao inicial
+        ...(account ? {} : { saldo: saldoInicialNum })
       };
 
       if (account) {
         db.contas.update(account.cd_conta, payload);
         showSuccess("Conta atualizada com sucesso!");
       } else {
-        db.contas.add(payload);
+        db.contas.add(payload as any);
         showSuccess("Conta cadastrada com sucesso!");
       }
       onSuccess();
@@ -119,12 +121,13 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
           </select>
         </div>
         <div className="space-y-2">
-          <Label>Saldo (R$)</Label>
+          <Label>Saldo Inicial (R$)</Label>
           <Input 
-            {...register("saldo")} 
-            onChange={(e) => setValue("saldo", formatCurrency(e.target.value))}
+            {...register("saldo_inicial")} 
+            onChange={(e) => setValue("saldo_inicial", formatCurrency(e.target.value))}
             placeholder="0,00" 
           />
+          <p className="text-[10px] text-slate-500">Valor que já existia na conta antes do sistema.</p>
         </div>
       </div>
 

@@ -105,10 +105,10 @@ export interface LancamentoFinanceiro {
   status: 'Pendente' | 'Pago' | 'Cancelado';
   cd_entidade?: number;
   nome_entidade?: string;
-  categoria: string; // 'Venda', 'Compra', 'Salário', 'Aluguel', 'Imposto', 'Vale', 'Comissão', 'Pro-labore', etc.
+  categoria: string; 
   meio_pagamento?: MeioPagamento;
   bandeira_cartao?: string;
-  cd_conta?: number; // Conta onde o dinheiro entrou/saiu
+  cd_conta?: number; 
   is_fixa?: boolean;
 }
 
@@ -118,6 +118,7 @@ export interface ContaBancaria {
   banco_numero?: string;
   agencia?: string;
   conta_numero?: string;
+  saldo_inicial: number; // Novo campo
   saldo: number;
   tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
 }
@@ -143,7 +144,7 @@ export interface Venda {
   cd_venda: number;
   data: string;
   total: number;
-  custo_total: number; // Para cálculo de margem
+  custo_total: number; 
   cd_clientes: number;
   cd_func: number;
   tipo_venda: 'Vista' | 'Prazo';
