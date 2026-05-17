@@ -243,6 +243,34 @@ const POS = () => {
     showSuccess(`Modo de preço alterado para: ${newMode}`);
   };
 
+  const toggleItemUnit = (index: number) => {
+    setCart(prev => {
+      const newCart = [...prev];
+      const item = { ...newCart[index] };
+      const product = products.find(p => p.cd_produto === item.cd_produto);
+      
+      if (product && product.fracionado && product.un_fracionada) {
+        const isSwitchingToFractional = item.selectedUnit === product.un;
+        const newUnit = isSwitchingToFractional ? product.un_fracionada : product.un;
+        
+        // Atualiza Quantidade baseada no fator de conversão
+        if (product.fator_conversao) {
+          if (isSwitchingToFractional) {
+            item.quantity = item.quantity * product.fator_conversao;
+          } else {
+            item.quantity = item.quantity / product.fator_conversao;
+          }
+        }
+        
+        item.selectedUnit = newUnit;
+        item.finalPrice = getProductPrice(product, newUnit, priceMode);
+        newCart[index] = item;
+        showSuccess(`Unidade alterada para ${newUnit}`);
+      }
+      return newCart;
+    });
+  };
+
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputCode(val);
@@ -526,7 +554,15 @@ const POS = () => {
                   <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">{item.nome}</TableCell>
                   <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item.finalPrice.toFixed(2)}</TableCell>
                   <TableCell className="py-0 text-xs text-center border-r border-slate-200">{item.quantity}</TableCell>
-                  <TableCell className="py-0 text-xs text-center border-r border-slate-200 font-bold">{item.selectedUnit}</TableCell>
+                  <TableCell 
+                    className="py-0 text-xs text-center border-r border-slate-200 font-bold cursor-pointer hover:bg-indigo-100 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleItemUnit(idx);
+                    }}
+                  >
+                    {item.selectedUnit}
+                  </TableCell>
                   <TableCell className="py-0 text-xs text-right font-bold">{(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
                 </TableRow>
               ))}
