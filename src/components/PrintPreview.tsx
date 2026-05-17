@@ -8,19 +8,20 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Printer, Download, X } from 'lucide-react';
+import { Printer, Download, X, FileText } from 'lucide-react';
 import { db } from '@/services/api';
 
 interface PrintPreviewProps {
   isOpen: boolean;
   onClose: () => void;
   data: any;
-  type: 'Venda' | 'Orcamento';
+  type: 'Venda' | 'Orcamento' | 'Fechamento';
 }
 
 const PrintPreview = ({ isOpen, onClose, data, type }: PrintPreviewProps) => {
   const config = db.config.get();
   const [copies, setCopies] = React.useState(1);
+  const [viewMode, setViewMode] = React.useState<'Normal' | 'TXT'>('Normal');
 
   const handlePrint = () => {
     window.print();
@@ -28,13 +29,133 @@ const PrintPreview = ({ isOpen, onClose, data, type }: PrintPreviewProps) => {
 
   if (!data) return null;
 
+  const renderContent = () => {
+    if (type === 'Fechamento') {
+      return (
+        <div className="space-y-4 text-[10px] font-mono">
+          <div className="text-center border-b border-dashed pb-2">
+            <h2 className="text-sm font-bold">FECHAMENTO DE CAIXA</h2>
+            <p>DATA: {new Date(data.date).toLocaleDateString()}</p>
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between"><span>SALDO ANTERIOR:</span><span>R$ {data.saldoAnterior.toFixed(2)}</span></div>
+            <div className="flex justify-between font-bold text-emerald-600"><span>(+) ENTRADAS:</span><span>R$ {data.totalEntradas.toFixed(2)}</span></div>
+            <div className="flex justify-between font-bold text-rose-600"><span>(-) SAÍDAS:</span><span>R$ {data.totalSaidas.toFixed(2)}</span></div>
+            <div className="flex justify-between border-t border-dashed pt-1 font-black"><span>(=) SALDO FINAL:</span><span>R$ {data.saldoFinal.toFixed(2)}</span></div>
+          </div>
+          <div className="pt-2 border-t border-dashed">
+            <p className="font-bold mb-1">RESUMO POR MEIO:</p>
+            {Object.entries(data.resumoMeios).map(([meio, valor]: any) => (
+              <div key={meio} className="flex justify-between">
+                <span>{meio.toUpperCase()}:</span>
+                <span>R$ {valor.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="pt-4 text-center border-t border-dashed">
+            <p>__________________________</p>
+            <p>ASSINATURA DO RESPONSÁVEL</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (viewMode === 'TXT') {
+      return (
+        <pre className="font-mono text-[10px] whitespace-pre-wrap bg-slate-50 p-4 border">
+          {`==========================================
+          DYADERP - ORÇAMENTO #${data.cd_orcamento}
+==========================================
+DATA: ${new Date(data.data).toLocaleString()}
+CLIENTE: ${data.nome_cliente || 'CONSUMIDOR'}
+------------------------------------------
+ITEM        QTD    VLR UNIT    SUBTOTAL
+${data.itens.map((i: any) => 
+  `${i.nome_produto.padEnd(12).substring(0, 12)} ${i.qtde.toString().padStart(4)} ${i.valor.toFixed(2).padStart(10)} ${i.subtotal.toFixed(2).padStart(10)}`
+).join('\n')}
+------------------------------------------
+TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
+==========================================
+   ESTE DOCUMENTO NÃO É VALIDO COMO NF
+==========================================`}
+        </pre>
+      );
+    }
+
+    return (
+      <>
+        <div className="text-center border-b pb-4 mb-4">
+          <h1 className="text-xl font-black uppercase">DyadERP - Sistema de Loja</h1>
+          <p className="text-[10px]">Rua Exemplo, 123 - Centro - Cidade/UF</p>
+          <p className="text-[10px]">CNPJ: 00.000.000/0001-00 | Tel: (00) 0000-0000</p>
+        </div>
+
+        <div className="flex justify-between text-[10px] font-bold mb-4">
+          <span>{type.toUpperCase()}: {data.cd_venda || data.cd_orcamento}</span>
+          <span>DATA: {new Date(data.data).toLocaleString()}</span>
+        </div>
+
+        <div className="border-b border-dashed mb-4">
+          <p className="text-[10px] font-bold">CLIENTE: {data.nome_cliente || 'CONSUMIDOR FINAL'}</p>
+        </div>
+
+        <table className="w-full text-[10px] mb-4">
+          <thead>
+            <tr className="border-b border-dashed">
+              <th className="text-left py-1">ITEM</th>
+              <th className="text-right py-1">QTD</th>
+              <th className="text-right py-1">VLR</th>
+              <th className="text-right py-1">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.itens.map((item: any, idx: number) => (
+              <tr key={idx}>
+                <td className="py-1 uppercase">{item.nome_produto}</td>
+                <td className="text-right py-1">{item.qtde}</td>
+                <td className="text-right py-1">{item.valor.toFixed(2)}</td>
+                <td className="text-right py-1 font-bold">{item.subtotal.toFixed(2)}</td>
+              </tr>
+            </thead>
+          </tbody>
+        </table>
+
+        <div className="border-t border-dashed pt-2 space-y-1">
+          <div className="flex justify-between text-xs font-black">
+            <span>TOTAL GERAL</span>
+            <span>R$ {data.total.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-[10px]">
+            <span>FORMA PAGTO:</span>
+            <span className="font-bold">{data.meio_pagamento}</span>
+          </div>
+        </div>
+
+        <div className="mt-8 text-center border-t pt-4">
+          <p className="text-[9px] italic">Obrigado pela preferência!</p>
+          <p className="text-[8px] text-slate-400 mt-2">Sistema DyadERP - www.dyad.sh</p>
+        </div>
+      </>
+    );
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-4 border-b bg-slate-50">
           <div className="flex items-center justify-between">
-            <DialogTitle>{type} #{data.cd_venda || data.cd_orcamento}</DialogTitle>
+            <DialogTitle>{type} {data.cd_venda || data.cd_orcamento || ''}</DialogTitle>
             <div className="flex items-center gap-4">
+              {type === 'Orcamento' && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setViewMode(viewMode === 'Normal' ? 'TXT' : 'Normal')}
+                  className="gap-2"
+                >
+                  <FileText size={16} /> {viewMode === 'Normal' ? 'Ver TXT' : 'Ver Normal'}
+                </Button>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold">Vias:</span>
                 <input 
@@ -53,70 +174,19 @@ const PrintPreview = ({ isOpen, onClose, data, type }: PrintPreviewProps) => {
         </DialogHeader>
 
         <div className="flex-1 overflow-auto p-8 bg-slate-200 flex justify-center">
-          {/* Área de Impressão */}
           <div 
             id="printable-area"
             className="bg-white shadow-lg p-8"
             style={{
               width: config.tipo_impressao === 'Bobina' ? (config.largura_bobina === '79mm' ? '300px' : '340px') : '210mm',
-              minHeight: '297mm',
+              minHeight: 'auto',
               paddingLeft: `${config.margem_esquerda}mm`,
               paddingRight: `${config.margem_direita}mm`,
               paddingTop: `${config.margem_topo}mm`,
               paddingBottom: `${config.margem_rodape}mm`,
             }}
           >
-            <div className="text-center border-b pb-4 mb-4">
-              <h1 className="text-xl font-black uppercase">DyadERP - Sistema de Loja</h1>
-              <p className="text-[10px]">Rua Exemplo, 123 - Centro - Cidade/UF</p>
-              <p className="text-[10px]">CNPJ: 00.000.000/0001-00 | Tel: (00) 0000-0000</p>
-            </div>
-
-            <div className="flex justify-between text-[10px] font-bold mb-4">
-              <span>{type.toUpperCase()}: {data.cd_venda || data.cd_orcamento}</span>
-              <span>DATA: {new Date(data.data).toLocaleString()}</span>
-            </div>
-
-            <div className="border-b border-dashed mb-4">
-              <p className="text-[10px] font-bold">CLIENTE: {data.nome_cliente || 'CONSUMIDOR FINAL'}</p>
-            </div>
-
-            <table className="w-full text-[10px] mb-4">
-              <thead>
-                <tr className="border-b border-dashed">
-                  <th className="text-left py-1">ITEM</th>
-                  <th className="text-right py-1">QTD</th>
-                  <th className="text-right py-1">VLR</th>
-                  <th className="text-right py-1">TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.itens.map((item: any, idx: number) => (
-                  <tr key={idx}>
-                    <td className="py-1 uppercase">{item.nome_produto}</td>
-                    <td className="text-right py-1">{item.qtde}</td>
-                    <td className="text-right py-1">{item.valor.toFixed(2)}</td>
-                    <td className="text-right py-1 font-bold">{item.subtotal.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="border-t border-dashed pt-2 space-y-1">
-              <div className="flex justify-between text-xs font-black">
-                <span>TOTAL GERAL</span>
-                <span>R$ {data.total.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-[10px]">
-                <span>FORMA PAGTO:</span>
-                <span className="font-bold">{data.meio_pagamento}</span>
-              </div>
-            </div>
-
-            <div className="mt-8 text-center border-t pt-4">
-              <p className="text-[9px] italic">Obrigado pela preferência!</p>
-              <p className="text-[8px] text-slate-400 mt-2">Sistema DyadERP - www.dyad.sh</p>
-            </div>
+            {renderContent()}
           </div>
         </div>
 

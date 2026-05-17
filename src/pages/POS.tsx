@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { 
   Search, 
@@ -18,7 +19,8 @@ import {
   Printer,
   Save,
   History,
-  FileCode
+  FileCode,
+  ArrowLeftRight
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 
 const POS = () => {
+  const navigate = useNavigate();
   const [cart, setCart] = React.useState<any[]>([]);
   const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Dinheiro');
   const [selectedClientId, setSelectedClientId] = React.useState<number>(1);
@@ -60,7 +63,6 @@ const POS = () => {
   const clientes = db.clientes.getAll() || [];
   const orcamentos = (db.orcamentos.getAll() || []).filter(o => o.status === 'Aberto');
 
-  // Atalho F1
   React.useEffect(() => {
     const handleF1 = (e: KeyboardEvent) => {
       if (e.key === 'F1') {
@@ -136,7 +138,6 @@ const POS = () => {
     } else {
       db.vendas.add({ ...payload, cd_venda: id });
       
-      // Financeiro
       db.financeiro.add({
         tipo: 'R',
         descricao: `Venda PDV #${id}`,
@@ -152,7 +153,6 @@ const POS = () => {
         cd_venda: id
       });
 
-      // Estoque
       cart.forEach(item => {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
@@ -190,14 +190,27 @@ const POS = () => {
               <TabsTrigger value="orcamentos" className="gap-2"><FileCode size={16} /> Orçamentos Salvos</TabsTrigger>
             </TabsList>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 text-xs font-bold">
-                <span className="bg-amber-200 px-1.5 rounded">F1</span> Pesquisar Produtos
-              </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => navigate('/daily-cash')}
+              >
+                <History size={16} /> Caixa Loja
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                onClick={() => navigate('/financial')}
+              >
+                <ArrowLeftRight size={16} /> Contas a Receber
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-slate-200 text-slate-600 hover:bg-slate-50"
                 onClick={() => setIsClientDetailsOpen(true)}
                 disabled={!selectedClient}
               >
@@ -222,6 +235,9 @@ const POS = () => {
                           <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
                         ))}
                       </select>
+                    </div>
+                    <div className="flex items-center gap-2 bg-amber-50/10 text-amber-400 px-3 py-1.5 rounded-lg border border-amber-400/20 text-xs font-bold">
+                      <span className="bg-amber-400 text-slate-900 px-1.5 rounded">F1</span> Pesquisar Produtos
                     </div>
                   </div>
                   <div className="text-right">
@@ -356,7 +372,6 @@ const POS = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Modais */}
         <ProductSearchModal 
           isOpen={isSearchOpen} 
           onClose={() => setIsSearchOpen(false)} 
