@@ -7,29 +7,31 @@ const AUTH_KEY = 'dyaderp_auth';
 
 const getDB = () => {
   const data = localStorage.getItem(STORAGE_KEY);
+  let database;
+
+  const adminUser = {
+    cd_clientes: 1,
+    tipo_entidade: 'A' as const,
+    is_funcionario: true,
+    nome: 'ADMINISTRADOR',
+    usuario: 'admin',
+    senha: 'Senha@123',
+    data: new Date().toISOString(),
+    permissoes: {
+      dashboard: true,
+      pos: true,
+      registrations: true,
+      inventory: true,
+      purchases: true,
+      financial: true,
+      reports: true,
+      settings: true
+    }
+  };
+
   if (!data) {
-    const initialDB = {
-      clientes: [
-        {
-          cd_clientes: 1,
-          tipo_entidade: 'A',
-          is_funcionario: true,
-          nome: 'ADMINISTRADOR',
-          usuario: 'admin',
-          senha: 'Senha@123',
-          data: new Date().toISOString(),
-          permissoes: {
-            dashboard: true,
-            pos: true,
-            registrations: true,
-            inventory: true,
-            purchases: true,
-            financial: true,
-            reports: true,
-            settings: true
-          }
-        }
-      ],
+    database = {
+      clientes: [adminUser],
       produtos: [],
       vendas: [],
       compras: [],
@@ -39,10 +41,18 @@ const getDB = () => {
         { cd_conta: 2, nome: 'Banco do Brasil', saldo: 0, tipo: 'Banco' }
       ],
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialDB));
-    return initialDB;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
+  } else {
+    database = JSON.parse(data);
+    
+    // Garante que o admin existe se a lista estiver vazia ou se o admin não for encontrado
+    if (!database.clientes || database.clientes.length === 0 || !database.clientes.find((c: any) => c.usuario === 'admin')) {
+      if (!database.clientes) database.clientes = [];
+      database.clientes.push(adminUser);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
+    }
   }
-  return JSON.parse(data);
+  return database;
 };
 
 const saveDB = (db: any) => {
@@ -82,7 +92,6 @@ export const db = {
         database.clientes[index] = { ...database.clientes[index], ...data };
         saveDB(database);
         
-        // Se for o usuário logado, atualiza a sessão
         const currentUser = db.auth.getUser();
         if (currentUser && currentUser.cd_clientes === id) {
           localStorage.setItem(AUTH_KEY, JSON.stringify(database.clientes[index]));
