@@ -324,25 +324,26 @@ const POS = () => {
   const confirmCheckout = (payments: any[]) => {
     try {
       const id = Date.now();
-      const entity = entities.find(e => e.cd_clientes === selectedEntityId) || entities[0];
+      // Proteção: Garante que entity não seja undefined
+      const entity = entities.find(e => e.cd_clientes === selectedEntityId) || entities[0] || { nome: 'CONSUMIDOR FINAL' };
       
       const payload = {
         data: new Date().toISOString(),
         total: total,
-        custo_total: cart.reduce((acc, item) => acc + (item.costPrice * item.quantity), 0),
+        custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
         cd_clientes: selectedEntityId || 1,
-        nome_cliente: entity?.nome,
+        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL', // Proteção adicional
         cd_func: Number(selectedSellerId),
         tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
-        meio_pagamento: payments.length > 1 ? 'Múltiplo' : payments[0].method,
+        meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
         itens: cart.map(item => ({
-          cd_produto: item.cd_produto,
-          nome_produto: item.nome,
-          valor: item.finalPrice,
-          custo: item.costPrice,
-          qtde: item.quantity,
-          subtotal: item.finalPrice * item.quantity,
-          un: item.selectedUnit
+          cd_produto: item?.cd_produto,
+          nome_produto: item?.nome || 'Produto sem nome', // Proteção adicional
+          valor: item?.finalPrice || 0,
+          custo: item?.costPrice || 0,
+          qtde: item?.quantity || 0,
+          subtotal: (item?.finalPrice || 0) * (item?.quantity || 0),
+          un: item?.selectedUnit || 'UN'
         }))
       };
 
@@ -396,7 +397,8 @@ const POS = () => {
       setIsCheckoutOpen(false);
       setIsPrintOpen(true);
     } catch (err) {
-      showError("Erro ao processar.");
+      console.error("Erro ao finalizar venda:", err);
+      showError("Erro ao processar a venda. Verifique os dados.");
     }
   };
 
@@ -559,11 +561,11 @@ const POS = () => {
                   className="h-8 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer"
                   onClick={() => handleOpenEdit(idx)}
                 >
-                  <TableCell className="py-0 text-xs font-mono border-r border-slate-200">{item.id_manual}</TableCell>
-                  <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">{item.nome}</TableCell>
-                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item.finalPrice.toFixed(2)}</TableCell>
+                  <TableCell className="py-0 text-xs font-mono border-r border-slate-200">{item?.id_manual}</TableCell>
+                  <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
+                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item?.finalPrice?.toFixed(2)}</TableCell>
                   <TableCell className="py-0 text-xs text-center border-r border-slate-200">
-                    {Number(item.quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                    {Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </TableCell>
                   <TableCell 
                     className="py-0 text-xs text-center border-r border-slate-200 font-bold cursor-pointer hover:bg-indigo-100 transition-colors"
@@ -572,9 +574,9 @@ const POS = () => {
                       toggleItemUnit(idx);
                     }}
                   >
-                    {item.selectedUnit}
+                    {item?.selectedUnit}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
+                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)}</TableCell>
                   <TableCell className="py-0 text-center">
                     <Button 
                       variant="ghost" 
@@ -684,8 +686,8 @@ const POS = () => {
             {editingIndex !== null && (
               <div className="p-3 bg-slate-50 rounded-lg border mb-4">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Produto</p>
-                <p className="text-sm font-bold text-slate-900">{cart[editingIndex].nome}</p>
-                <p className="text-[10px] text-indigo-600 font-bold">Custo Base: R$ {cart[editingIndex].costPrice.toFixed(2)}</p>
+                <p className="text-sm font-bold text-slate-900">{cart[editingIndex]?.nome}</p>
+                <p className="text-[10px] text-indigo-600 font-bold">Custo Base: R$ {(cart[editingIndex]?.costPrice || 0).toFixed(2)}</p>
               </div>
             )}
             
@@ -753,7 +755,7 @@ const POS = () => {
                 </div>
                 {showMargin ? (
                   <p className="text-2xl font-black text-indigo-700 animate-in fade-in zoom-in-95">
-                    {(((editData.valor / cart[editingIndex].costPrice) - 1) * 100).toFixed(1)}%
+                    {(((editData.valor / (cart[editingIndex]?.costPrice || 1)) - 1) * 100).toFixed(1)}%
                   </p>
                 ) : (
                   <div className="h-8 flex items-center gap-1">
