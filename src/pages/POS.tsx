@@ -48,6 +48,23 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 
+// Componente de botão de pagamento movido para fora para evitar problemas de hoisting
+const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
+  <button 
+    type="button"
+    onClick={onClick}
+    className={cn(
+      "flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left w-full",
+      active 
+        ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm" 
+        : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
+    )}
+  >
+    <Icon size={20} className={active ? "text-indigo-600" : "text-slate-400"} />
+    <span className="text-sm font-bold">{label}</span>
+  </button>
+);
+
 const POS = () => {
   const navigate = useNavigate();
   const [cart, setCart] = React.useState<any[]>([]);
@@ -59,138 +76,163 @@ const POS = () => {
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState("venda");
 
-  // Dados com fallback para evitar erros de undefined
-  const products = db.produtos.getAll() || [];
-  const clientes = db.clientes.getAll() || [];
-  const orcamentos = (db.orcamentos.getAll() || []).filter(o => o && o.status === 'Aberto');
+  // Dados com fallback agressivo
+  const products = React.useMemo(() => db.produtos.getAll() || [], []);
+  const clientes = React.useMemo(() => db.clientes.getAll() || [], []);
+  const orcamentos = React.useMemo(() => (db.orcamentos.getAll() || []).filter(o => o && o.status === 'Aberto'), []);
 
-  // Garantir que o cliente selecionado existe, senão pega o primeiro da lista
+  // Garantir que o cliente selecionado existe
   React.useEffect(() => {
-    if (clientes.length > 0 && !clientes.find(c => c.cd_clientes === selectedClientId)) {
-      setSelectedClientId(clientes[0].cd_clientes);
+    if (clientes.length > 0) {
+      const exists = clientes.some(c => c.cd_clientes === selectedClientId);
+      if (!exists) {
+        setSelectedClientId(clientes[0].cd_clientes);
+      }
     }
   }, [clientes, selectedClientId]);
 
+  // Atalho F1
   React.useEffect(() => {
-    const handleF1 = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F1') {
         e.preventDefault();
         setIsSearchOpen(true);
       }
     };
-    window.addEventListener('keydown', handleF1);
-    return () => window.removeEventListener('keydown', handleF1);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const addToCart = (product: any) => {
     if (!product) return;
-    const existing = cart.find(item => item.cd_produto === product.cd_produto);
-    if (existing) {
-      setCart(cart.map(item => 
-        item.cd_produto === product.cd_produto ? { ...item, quantity: item.quantity + 1 } : item
-      ));
-    } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
-    }
+    setCart(prev => {
+      const existing = prev.find(item => item.cd_produto === product.cd_produto);
+      if (existing) {
+        return prev.map(item => 
+          item.cd_produto === product.cd_produto ? { ...item, quantity: (item.quantity || 1) + 1 } : item
+        );
+      }
+      return [...prev, { ...product, quantity: 1 }];
+    });
   };
 
   const removeFromCart = (id: number) => {
-    setCart(cart.filter(item => item.cd_produto !== id));
+    setCart(prev => prev.filter(item => item.cd_produto !== id));
   };
 
   const updateQuantity = (id: number, delta: number) => {
-    setCart(cart.map(item => {
+    setCart(prev => prev.map(item => {
       if (item.cd_produto === id) {
-        const newQty = Math.max(1, item.quantity + delta);
+        const newQty = Math.max(1, (item.quantity || 1) + delta);
         return { ...item, quantity: newQty };
       }
       return item;
     }));
   };
 
-  // Cálculo do total com proteção contra valores nulos
-  const total = cart.reduce((acc, item) => {
-    if (!item) return acc;
-    const precoVista = item.venda_vista !== undefined && item.venda_vista !== null ? item.venda_vista : (item.venda || 0);
-    const precoPrazo = item.venda || 0;
-    const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
-    return acc + (preco * (item.quantity || 0));
-  }, 0);
+  // Cálculo do total ultra-seguro
+  const total = React.useMemo(() => {
+    return cart.reduce((acc, item) => {
+      if (!item) return acc;
+      const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
+      const precoPrazo = item.venda || 0;
+      const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+      return acc + (preco * (item.quantity || 0));
+    }, 0);
+  }, [cart, paymentMethod]);
 
   const handleCheckout = (isOrcamento = false) => {
     if (cart.length === 0) return;
 
-    const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
-    const id = Date.now();
+    try {
+      const cliente = clientes.find(c => c.cd_clientes === selectedClientId) || clientes[0];
+      const id = Date.now();
 
-    const payload = {
-      data: new Date().toISOString(),
-      total: total,
-      custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
-      cd_clientes: selectedClientId,
-      nome_cliente: cliente?.nome || 'CONSUMIDOR FINAL',
-      cd_func: 1,
-      tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
-      meio_pagamento: paymentMethod,
-      itens: cart.map(item => {
-        const precoVista = item.venda_vista !== undefined && item.venda_vista !== null ? item.venda_vista : (item.venda || 0);
-        const precoPrazo = item.venda || 0;
-        const precoFinal = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
-        return {
-          cd_produto: item.cd_produto,
-          nome_produto: item.nome || 'Produto sem nome',
-          valor: precoFinal,
-          qtde: item.quantity || 0,
-          subtotal: precoFinal * (item.quantity || 0)
-        };
-      })
-    };
-
-    if (isOrcamento) {
-      const orc = db.orcamentos.add(payload);
-      setLastActionData({ ...orc, type: 'Orcamento' });
-      showSuccess("Orçamento salvo com sucesso!");
-    } else {
-      db.vendas.add({ ...payload, cd_venda: id });
-      
-      db.financeiro.add({
-        tipo: 'R',
-        descricao: `Venda PDV #${id}`,
-        valor: total,
-        data_vencimento: new Date().toISOString(),
-        data_pagamento: paymentMethod === 'Crediário' ? undefined : new Date().toISOString(),
-        status: paymentMethod === 'Crediário' ? 'Pendente' : 'Pago',
-        categoria: 'Venda',
+      const payload = {
+        data: new Date().toISOString(),
+        total: total,
+        custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
+        cd_clientes: selectedClientId,
+        nome_cliente: cliente?.nome || 'CONSUMIDOR FINAL',
+        cd_func: 1,
+        tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
         meio_pagamento: paymentMethod,
-        cd_entidade: selectedClientId,
-        nome_entidade: cliente?.nome || 'CONSUMIDOR FINAL',
-        cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
-        cd_venda: id
-      });
+        itens: cart.map(item => {
+          const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
+          const precoPrazo = item.venda || 0;
+          const precoFinal = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+          return {
+            cd_produto: item.cd_produto,
+            nome_produto: item.nome || 'Produto',
+            valor: precoFinal,
+            qtde: item.quantity || 0,
+            subtotal: precoFinal * (item.quantity || 0)
+          };
+        })
+      };
 
-      cart.forEach(item => {
-        const prod = products.find(p => p.cd_produto === item.cd_produto);
-        if (prod) db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - (item.quantity || 0) });
-      });
+      if (isOrcamento) {
+        const orc = db.orcamentos.add(payload);
+        setLastActionData({ ...orc, type: 'Orcamento' });
+        showSuccess("Orçamento salvo!");
+      } else {
+        db.vendas.add({ ...payload, cd_venda: id });
+        
+        db.financeiro.add({
+          tipo: 'R',
+          descricao: `Venda PDV #${id}`,
+          valor: total,
+          data_vencimento: new Date().toISOString(),
+          data_pagamento: paymentMethod === 'Crediário' ? undefined : new Date().toISOString(),
+          status: paymentMethod === 'Crediário' ? 'Pendente' : 'Pago',
+          categoria: 'Venda',
+          meio_pagamento: paymentMethod,
+          cd_entidade: selectedClientId,
+          nome_entidade: cliente?.nome || 'CONSUMIDOR FINAL',
+          cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
+          cd_venda: id
+        });
 
-      setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
-      showSuccess("Venda finalizada!");
+        // Atualizar estoque
+        cart.forEach(item => {
+          const prod = products.find(p => p.cd_produto === item.cd_produto);
+          if (prod) {
+            db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - (item.quantity || 0) });
+          }
+        });
+
+        setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
+        showSuccess("Venda finalizada!");
+      }
+
+      setCart([]);
+      setIsPrintOpen(true);
+    } catch (err) {
+      showError("Erro ao processar operação.");
+      console.error(err);
     }
-
-    setCart([]);
-    setIsPrintOpen(true);
   };
 
   const loadOrcamento = (orc: any) => {
     if (!orc || !orc.itens) return;
-    setCart(orc.itens.map((item: any) => {
-      const prod = products.find(p => p.cd_produto === item.cd_produto);
-      return { ...(prod || {}), quantity: item.qtde, nome: item.nome_produto, cd_produto: item.cd_produto };
-    }));
-    setSelectedClientId(orc.cd_clientes);
-    setPaymentMethod(orc.meio_pagamento || 'Dinheiro');
-    setActiveTab("venda");
-    showSuccess("Orçamento carregado!");
+    try {
+      setCart(orc.itens.map((item: any) => {
+        const prod = products.find(p => p.cd_produto === item.cd_produto);
+        return { 
+          ...(prod || {}), 
+          quantity: item.qtde, 
+          nome: item.nome_produto, 
+          cd_produto: item.cd_produto,
+          venda: item.valor 
+        };
+      }));
+      setSelectedClientId(orc.cd_clientes);
+      setPaymentMethod(orc.meio_pagamento || 'Dinheiro');
+      setActiveTab("venda");
+      showSuccess("Orçamento carregado!");
+    } catch (e) {
+      showError("Erro ao carregar orçamento.");
+    }
   };
 
   const selectedClient = clientes.find(c => c.cd_clientes === selectedClientId);
@@ -283,7 +325,7 @@ const POS = () => {
                         </TableRow>
                       ) : (
                         cart.map((item) => {
-                          const precoVista = item.venda_vista !== undefined && item.venda_vista !== null ? item.venda_vista : (item.venda || 0);
+                          const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
                           const precoPrazo = item.venda || 0;
                           const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
                           return (
@@ -414,21 +456,5 @@ const POS = () => {
     </Layout>
   );
 };
-
-const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
-  <button 
-    type="button"
-    onClick={onClick}
-    className={cn(
-      "flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
-      active 
-        ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm" 
-        : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
-    )}
-  >
-    <Icon size={20} className={active ? "text-indigo-600" : "text-slate-400"} />
-    <span className="text-sm font-bold">{label}</span>
-  </button>
-);
 
 export default POS;

@@ -7,7 +7,7 @@ const AUTH_KEY = 'dyaderp_auth';
 
 const getDB = () => {
   const data = localStorage.getItem(STORAGE_KEY);
-  let database;
+  let database: any;
 
   const adminUser = {
     cd_clientes: 1,
@@ -48,23 +48,29 @@ const getDB = () => {
         margem_rodape: 5
       },
       contas: [
-        { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa' },
-        { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco' },
-        { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda' }
+        { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa', saldo_inicial: 0 },
+        { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco', saldo_inicial: 0 },
+        { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda', saldo_inicial: 0 }
       ],
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
   } else {
-    database = JSON.parse(data);
-    // Garantir que todas as tabelas existam para evitar erros de "undefined"
-    if (!database.clientes) database.clientes = [adminUser];
-    if (!database.produtos) database.produtos = [];
-    if (!database.vendas) database.vendas = [];
-    if (!database.orcamentos) database.orcamentos = [];
-    if (!database.compras) database.compras = [];
-    if (!database.financeiro) database.financeiro = [];
-    if (!database.transferencias) database.transferencias = [];
-    if (!database.patrimonio) database.patrimonio = [];
+    try {
+      database = JSON.parse(data);
+    } catch (e) {
+      database = {};
+    }
+    
+    // Garantir que todas as tabelas existam
+    if (!Array.isArray(database.clientes)) database.clientes = [adminUser];
+    if (!Array.isArray(database.produtos)) database.produtos = [];
+    if (!Array.isArray(database.vendas)) database.vendas = [];
+    if (!Array.isArray(database.orcamentos)) database.orcamentos = [];
+    if (!Array.isArray(database.compras)) database.compras = [];
+    if (!Array.isArray(database.financeiro)) database.financeiro = [];
+    if (!Array.isArray(database.transferencias)) database.transferencias = [];
+    if (!Array.isArray(database.patrimonio)) database.patrimonio = [];
+    
     if (!database.configuracoes) {
       database.configuracoes = {
         tipo_impressao: 'Bobina',
@@ -75,11 +81,12 @@ const getDB = () => {
         margem_rodape: 5
       };
     }
-    if (!database.contas) {
+    
+    if (!Array.isArray(database.contas) || database.contas.length === 0) {
       database.contas = [
-        { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa' },
-        { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco' },
-        { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda' }
+        { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa', saldo_inicial: 0 },
+        { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco', saldo_inicial: 0 },
+        { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda', saldo_inicial: 0 }
       ];
     }
   }
@@ -103,8 +110,12 @@ export const db = {
     },
     logout: () => localStorage.removeItem(AUTH_KEY),
     getUser: (): Cliente | null => {
-      const data = localStorage.getItem(AUTH_KEY);
-      return data ? JSON.parse(data) : null;
+      try {
+        const data = localStorage.getItem(AUTH_KEY);
+        return data ? JSON.parse(data) : null;
+      } catch (e) {
+        return null;
+      }
     }
   },
   config: {
@@ -176,6 +187,35 @@ export const db = {
         database.transferencias.push({ ...transf, cd_transferencia: Date.now() });
         saveDB(database);
       }
+    },
+    changeAccount: (lancamentoId: number, newAccountId: number) => {
+      const database = getDB();
+      const lIdx = database.financeiro.findIndex((l: any) => l.cd_lancamento === lancamentoId);
+      if (lIdx === -1) return;
+      
+      const lanc = database.financeiro[lIdx];
+      if (lanc.cd_conta === newAccountId) return;
+      
+      // Reverter saldo na conta antiga
+      if (lanc.status === 'Pago' && lanc.cd_conta) {
+        const oldCIdx = database.contas.findIndex((c: any) => c.cd_conta === lanc.cd_conta);
+        if (oldCIdx !== -1) {
+          if (lanc.tipo === 'R') database.contas[oldCIdx].saldo -= lanc.valor;
+          else database.contas[oldCIdx].saldo += lanc.valor;
+        }
+      }
+      
+      // Aplicar saldo na conta nova
+      lanc.cd_conta = newAccountId;
+      if (lanc.status === 'Pago') {
+        const newCIdx = database.contas.findIndex((c: any) => c.cd_conta === newAccountId);
+        if (newCIdx !== -1) {
+          if (lanc.tipo === 'R') database.contas[newCIdx].saldo += lanc.valor;
+          else database.contas[newCIdx].saldo -= lanc.valor;
+        }
+      }
+      
+      saveDB(database);
     }
   },
   vendas: {
@@ -224,6 +264,11 @@ export const db = {
   },
   contas: {
     getAll: (): ContaBancaria[] => getDB().contas || [],
+    add: (c: Omit<ContaBancaria, 'cd_conta'>) => {
+      const database = getDB();
+      database.contas.push({ ...c, cd_conta: Date.now() });
+      saveDB(database);
+    },
     update: (id: number, data: Partial<ContaBancaria>) => {
       const database = getDB();
       const idx = database.contas.findIndex((c: any) => c.cd_conta === id);
