@@ -31,12 +31,16 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const products = db.produtos.getAll() || [];
   
-  const filtered = products.filter(p => 
-    p.nome.toLowerCase().includes(search.toLowerCase()) ||
-    p.id_manual.includes(search) ||
-    p.id_importado?.includes(search) ||
-    p.cod_barras?.includes(search)
-  );
+  const filtered = products.filter(p => {
+    if (!p) return false;
+    const term = search.toLowerCase();
+    return (
+      (p.nome || "").toLowerCase().includes(term) ||
+      (p.id_manual || "").includes(search) ||
+      (p.id_importado || "").includes(search) ||
+      (p.cod_barras || "").includes(search)
+    );
+  });
 
   React.useEffect(() => {
     if (isOpen) {
@@ -69,7 +73,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
               onKeyDown={handleKeyDown}
               className="h-10 bg-white border-slate-400 rounded-none focus-visible:ring-0 focus-visible:border-indigo-500"
             />
-            <button className="px-8 bg-slate-200 border border-slate-400 font-bold text-sm hover:bg-slate-300">OK</button>
+            <button type="button" className="px-8 bg-slate-200 border border-slate-400 font-bold text-sm hover:bg-slate-300">OK</button>
           </div>
         </div>
 
@@ -87,33 +91,39 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p, idx) => (
-                <TableRow 
-                  key={p.cd_produto}
-                  className={cn(
-                    "h-7 border-b border-slate-200 cursor-pointer hover:bg-indigo-100",
-                    idx === selectedIndex ? "bg-[#0078D7] text-white hover:bg-[#0078D7]" : "text-slate-800"
-                  )}
-                  onClick={() => { onSelect(p); onClose(); }}
-                >
-                  <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.id_importado || "-"}</TableCell>
-                  <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold">{p.id_manual}</TableCell>
-                  <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.cod_barras || "-"}</TableCell>
-                  <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold uppercase">{p.nome}</TableCell>
-                  <TableCell className="py-0 text-[11px] border-r border-slate-200 text-right font-bold">
-                    R$ {p.venda_vista?.toFixed(2) || p.venda.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="py-0 text-[11px] border-r border-slate-200 text-right font-bold">
-                    R$ {p.venda.toFixed(2)}
-                  </TableCell>
-                  <TableCell className={cn(
-                    "py-0 text-[11px] text-right font-bold",
-                    p.estoque <= 0 ? "text-rose-500" : ""
-                  )}>
-                    {p.estoque} {p.un}
-                  </TableCell>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-10 text-slate-500">Nenhum produto encontrado.</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filtered.map((p, idx) => (
+                  <TableRow 
+                    key={p.cd_produto}
+                    className={cn(
+                      "h-7 border-b border-slate-200 cursor-pointer hover:bg-indigo-100",
+                      idx === selectedIndex ? "bg-[#0078D7] text-white hover:bg-[#0078D7]" : "text-slate-800"
+                    )}
+                    onClick={() => { onSelect(p); onClose(); }}
+                  >
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.id_importado || "-"}</TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold">{p.id_manual || "-"}</TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.cod_barras || "-"}</TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold uppercase">{p.nome || "SEM NOME"}</TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200 text-right font-bold">
+                      R$ {(p.venda_vista !== undefined ? p.venda_vista : p.venda).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200 text-right font-bold">
+                      R$ {(p.venda || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell className={cn(
+                      "py-0 text-[11px] text-right font-bold",
+                      (p.estoque || 0) <= 0 ? "text-rose-500" : ""
+                    )}>
+                      {p.estoque || 0} {p.un || "UN"}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

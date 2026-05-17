@@ -59,9 +59,17 @@ const POS = () => {
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState("venda");
 
+  // Dados com fallback para evitar erros de undefined
   const products = db.produtos.getAll() || [];
   const clientes = db.clientes.getAll() || [];
-  const orcamentos = (db.orcamentos.getAll() || []).filter(o => o.status === 'Aberto');
+  const orcamentos = (db.orcamentos.getAll() || []).filter(o => o && o.status === 'Aberto');
+
+  // Garantir que o cliente selecionado existe, senão pega o primeiro da lista
+  React.useEffect(() => {
+    if (clientes.length > 0 && !clientes.find(c => c.cd_clientes === selectedClientId)) {
+      setSelectedClientId(clientes[0].cd_clientes);
+    }
+  }, [clientes, selectedClientId]);
 
   React.useEffect(() => {
     const handleF1 = (e: KeyboardEvent) => {
@@ -100,11 +108,13 @@ const POS = () => {
     }));
   };
 
+  // Cálculo do total com proteção contra valores nulos
   const total = cart.reduce((acc, item) => {
-    const preco = paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' 
-      ? (item.venda_vista || item.venda) 
-      : item.venda;
-    return acc + (preco * item.quantity);
+    if (!item) return acc;
+    const precoVista = item.venda_vista !== undefined && item.venda_vista !== null ? item.venda_vista : (item.venda || 0);
+    const precoPrazo = item.venda || 0;
+    const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+    return acc + (preco * (item.quantity || 0));
   }, 0);
 
   const handleCheckout = (isOrcamento = false) => {
@@ -116,19 +126,24 @@ const POS = () => {
     const payload = {
       data: new Date().toISOString(),
       total: total,
-      custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * item.quantity), 0),
+      custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
       cd_clientes: selectedClientId,
       nome_cliente: cliente?.nome || 'CONSUMIDOR FINAL',
       cd_func: 1,
       tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
       meio_pagamento: paymentMethod,
-      itens: cart.map(item => ({
-        cd_produto: item.cd_produto,
-        nome_produto: item.nome,
-        valor: paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' ? (item.venda_vista || item.venda) : item.venda,
-        qtde: item.quantity,
-        subtotal: (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' ? (item.venda_vista || item.venda) : item.venda) * item.quantity
-      }))
+      itens: cart.map(item => {
+        const precoVista = item.venda_vista !== undefined && item.venda_vista !== null ? item.venda_vista : (item.venda || 0);
+        const precoPrazo = item.venda || 0;
+        const precoFinal = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+        return {
+          cd_produto: item.cd_produto,
+          nome_produto: item.nome || 'Produto sem nome',
+          valor: precoFinal,
+          qtde: item.quantity || 0,
+          subtotal: precoFinal * (item.quantity || 0)
+        };
+      })
     };
 
     if (isOrcamento) {
@@ -155,7 +170,7 @@ const POS = () => {
 
       cart.forEach(item => {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
-        if (prod) db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
+        if (prod) db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - (item.quantity || 0) });
       });
 
       setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
@@ -170,10 +185,10 @@ const POS = () => {
     if (!orc || !orc.itens) return;
     setCart(orc.itens.map((item: any) => {
       const prod = products.find(p => p.cd_produto === item.cd_produto);
-      return { ...prod, quantity: item.qtde };
+      return { ...(prod || {}), quantity: item.qtde, nome: item.nome_produto, cd_produto: item.cd_produto };
     }));
     setSelectedClientId(orc.cd_clientes);
-    setPaymentMethod(orc.meio_pagamento);
+    setPaymentMethod(orc.meio_pagamento || 'Dinheiro');
     setActiveTab("venda");
     showSuccess("Orçamento carregado!");
   };
@@ -268,13 +283,15 @@ const POS = () => {
                         </TableRow>
                       ) : (
                         cart.map((item) => {
-                          const preco = paymentMethod === 'Dinheiro' || paymentMethod === 'PIX' ? (item.venda_vista || item.venda) : item.venda;
+                          const precoVista = item.venda_vista !== undefined && item.venda_vista !== null ? item.venda_vista : (item.venda || 0);
+                          const precoPrazo = item.venda || 0;
+                          const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
                           return (
                             <TableRow key={item.cd_produto} className="hover:bg-slate-50">
-                              <TableCell className="font-mono text-xs">{item.id_manual}</TableCell>
+                              <TableCell className="font-mono text-xs">{item.id_manual || '-'}</TableCell>
                               <TableCell>
-                                <p className="font-bold text-slate-900 uppercase text-xs">{item.nome}</p>
-                                <p className="text-[10px] text-slate-500">{item.un}</p>
+                                <p className="font-bold text-slate-900 uppercase text-xs">{item.nome || 'Produto'}</p>
+                                <p className="text-[10px] text-slate-500">{item.un || 'UN'}</p>
                               </TableCell>
                               <TableCell className="text-right font-medium">R$ {preco.toFixed(2)}</TableCell>
                               <TableCell>
@@ -284,7 +301,7 @@ const POS = () => {
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.cd_produto, 1)}><Plus size={12} /></Button>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right font-bold text-indigo-600">R$ {(preco * item.quantity).toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-bold text-indigo-600">R$ {(preco * (item.quantity || 0)).toFixed(2)}</TableCell>
                               <TableCell>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeFromCart(item.cd_produto)}><Trash2 size={16} /></Button>
                               </TableCell>
@@ -351,8 +368,8 @@ const POS = () => {
                       <TableRow key={orc.cd_orcamento}>
                         <TableCell className="text-xs">{new Date(orc.data).toLocaleDateString()}</TableCell>
                         <TableCell className="font-bold text-slate-900">{orc.nome_cliente}</TableCell>
-                        <TableCell className="text-xs text-slate-500">{orc.itens.length} itens</TableCell>
-                        <TableCell className="text-right font-bold">R$ {orc.total.toFixed(2)}</TableCell>
+                        <TableCell className="text-xs text-slate-500">{(orc.itens || []).length} itens</TableCell>
+                        <TableCell className="text-right font-bold">R$ {(orc.total || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button variant="outline" size="sm" className="gap-2" onClick={() => loadOrcamento(orc)}>
@@ -382,7 +399,7 @@ const POS = () => {
           isOpen={isPrintOpen} 
           onClose={() => setIsPrintOpen(false)} 
           data={lastActionData}
-          type={lastActionData?.type}
+          type={lastActionData?.type || 'Venda'}
         />
 
         <Dialog open={isClientDetailsOpen} onOpenChange={setIsClientDetailsOpen}>
@@ -400,6 +417,7 @@ const POS = () => {
 
 const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
   <button 
+    type="button"
     onClick={onClick}
     className={cn(
       "flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
