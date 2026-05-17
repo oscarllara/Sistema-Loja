@@ -1,7 +1,7 @@
 "use client";
 
 export type TipoPessoa = 'F' | 'J';
-export type TipoEntidade = 'C' | 'F' | 'A' | 'T'; // C: Cliente, F: Fornecedor, A: Ambos, T: Transportadora
+export type TipoEntidade = 'C' | 'F' | 'A' | 'T';
 
 export interface Cliente {
   cd_clientes: number;
@@ -110,4 +110,27 @@ export interface Compra {
   cd_fornecedores: number;
   cd_func: number;
   confirmada: boolean;
+}
+
+export type TipoFinanceiro = 'R' | 'P'; // R: Receber, P: Pagar
+
+export interface LancamentoFinanceiro {
+  cd_lancamento: number;
+  tipo: TipoFinanceiro;
+  descricao: string;
+  valor: number;
+  data_vencimento: string;
+  data_pagamento?: string;
+  status: 'Pendente' | 'Pago' | 'Cancelado';
+  cd_entidade?: number; // Cliente ou Fornecedor
+  nome_entidade?: string;
+  categoria?: string;
+  forma_pagamento?: string;
+}
+
+export interface ContaBancaria {
+  cd_conta: number;
+  nome: string;
+  saldo: number;
+  tipo: 'Caixa' | 'Banco' | 'Digital';
 }
