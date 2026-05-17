@@ -20,7 +20,6 @@ const getDB = () => {
 };
 
 const saveDB = (db: any) => {
-  // Ordena por nome antes de salvar para manter a coerência visual
   if (db.produtos) {
     db.produtos.sort((a: Produto, b: Produto) => a.nome.localeCompare(b.nome));
   }
@@ -54,26 +53,38 @@ export const db = {
     add: (produto: Omit<Produto, 'data_atualizacao'>) => {
       const database = getDB();
       
-      // Verifica se o ID manual já existe
-      const exists = database.produtos.some((p: Produto) => p.id_manual === produto.id_manual);
-      if (exists) throw new Error("Este Código de Produto já está em uso.");
+      let finalIdManual = produto.id_manual;
+
+      // Se não digitou o código, gera o próximo sequencial numérico
+      if (!finalIdManual || finalIdManual.trim() === "") {
+        const numericIds = database.produtos
+          .map((p: Produto) => parseInt(p.id_manual))
+          .filter((id: number) => !isNaN(id));
+        
+        const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+        finalIdManual = (maxId + 1).toString();
+      } else {
+        // Se digitou, verifica se já existe
+        const exists = database.produtos.some((p: Produto) => p.id_manual === finalIdManual);
+        if (exists) throw new Error(`O código ${finalIdManual} já está em uso.`);
+      }
 
       const novoProduto = {
         ...produto,
+        id_manual: finalIdManual,
         nome: produto.nome.toUpperCase(),
         data_atualizacao: new Date().toISOString()
       };
-      database.produtos.push(novoProduto);
+      database.produtos.push(novoProduct);
       saveDB(database);
     },
     update: (id: number, data: Partial<Produto>) => {
       const database = getDB();
       const index = database.produtos.findIndex((p: Produto) => p.cd_produto === id);
       if (index !== -1) {
-        // Se mudou o ID manual, verifica se o novo já existe em outro produto
         if (data.id_manual && data.id_manual !== database.produtos[index].id_manual) {
           const exists = database.produtos.some((p: Produto) => p.id_manual === data.id_manual);
-          if (exists) throw new Error("Este Código de Produto já está em uso.");
+          if (exists) throw new Error(`O código ${data.id_manual} já está em uso.`);
         }
 
         database.produtos[index] = { 

@@ -29,28 +29,21 @@ import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const productSchema = z.object({
-  id_manual: z.string().min(1, "Código obrigatório"),
+  id_manual: z.string().optional(), // Agora é opcional
   nome: z.string().min(2, "Nome obrigatório"),
   id_importado: z.string().optional(),
   un: z.string().default("UN"),
   cod_barras: z.string().optional(),
   compra: z.string().optional(),
   venda: z.string().min(1, "Preço de venda obrigatório"),
-  
-  // Preço à Vista
   desconto_vista_tipo: z.enum(['P', 'V']).default('P'),
   desconto_vista_valor: z.string().default("0"),
-  
   estoque: z.string().default("0"),
   minimo: z.string().default("0"),
   ncm: z.string().optional(),
-  
-  // Fracionamento
   fracionado: z.boolean().default(false),
   un_fracionada: z.string().optional(),
   fator_conversao: z.string().optional(),
-  
-  // Kit
   is_kit: z.boolean().default(false),
   itens_kit: z.array(z.object({
     cd_produto_filho: z.number(),
@@ -145,9 +138,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         <TabsContent value="geral" className="mt-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2"><Hash size={14} /> Código (ID) *</Label>
-              <Input {...register("id_manual")} placeholder="Ex: 300.1" className="font-bold text-indigo-600" />
-              {errors.id_manual && <p className="text-xs text-red-500">{errors.id_manual.message}</p>}
+              <Label className="flex items-center gap-2"><Hash size={14} /> Código (ID)</Label>
+              <Input 
+                {...register("id_manual")} 
+                placeholder="Vazio para automático" 
+                className="font-bold text-indigo-600" 
+              />
+              <p className="text-[10px] text-slate-400">Se deixar vazio, o sistema gera o próximo número.</p>
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label className="flex items-center gap-2"><Package size={14} /> Nome do Produto *</Label>
@@ -316,7 +313,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     </Button>
                   </div>
                 ))}
-                <p className="text-[10px] text-amber-600">Ao vender este Kit, o sistema dará baixa automática no estoque de cada item acima.</p>
               </div>
             )}
           </div>
