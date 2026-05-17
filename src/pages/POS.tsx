@@ -29,7 +29,8 @@ import {
   CreditCard,
   CheckCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  FileText
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,9 @@ import ProductSearchModal from '@/components/ProductSearchModal';
 import PrintPreview from '@/components/PrintPreview';
 import CheckoutModal from '@/components/CheckoutModal';
 import ClientForm from '@/components/ClientForm';
+import SalesHistoryModal from '@/components/SalesHistoryModal';
+import QuotesModal from '@/components/QuotesModal';
+import PaymentsModal from '@/components/PaymentsModal';
 
 const POS = () => {
   const navigate = useNavigate();
@@ -84,6 +88,11 @@ const POS = () => {
   const [isAddEntityOpen, setIsAddEntityOpen] = React.useState(false);
   const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
   const [isEditItemOpen, setIsEditItemOpen] = React.useState(false);
+  
+  // Novos Modais
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+  const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
+  const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
   const [editData, setEditData] = React.useState({ qtde: 1, valor: 0, total: 0 });
@@ -248,7 +257,6 @@ const POS = () => {
         const isSwitchingToFractional = item.selectedUnit === product.un;
         const newUnit = isSwitchingToFractional ? product.un_fracionada : product.un;
         
-        // Mantém a quantidade original conforme solicitado pelo usuário
         item.selectedUnit = newUnit;
         item.finalPrice = getProductPrice(product, newUnit, priceMode);
         newCart[index] = item;
@@ -324,7 +332,6 @@ const POS = () => {
   const confirmCheckout = (payments: any[]) => {
     try {
       const id = Date.now();
-      // Proteção: Garante que entity não seja undefined
       const entity = entities.find(e => e.cd_clientes === selectedEntityId) || entities[0] || { nome: 'CONSUMIDOR FINAL' };
       
       const payload = {
@@ -332,13 +339,13 @@ const POS = () => {
         total: total,
         custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
         cd_clientes: selectedEntityId || 1,
-        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL', // Proteção adicional
+        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
         cd_func: Number(selectedSellerId),
         tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
         meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
         itens: cart.map(item => ({
           cd_produto: item?.cd_produto,
-          nome_produto: item?.nome || 'Produto sem nome', // Proteção adicional
+          nome_produto: item?.nome || 'Produto sem nome',
           valor: item?.finalPrice || 0,
           custo: item?.costPrice || 0,
           qtde: item?.quantity || 0,
@@ -400,6 +407,32 @@ const POS = () => {
       console.error("Erro ao finalizar venda:", err);
       showError("Erro ao processar a venda. Verifique os dados.");
     }
+  };
+
+  const handleReprint = (venda: any) => {
+    setLastActionData({ ...venda, type: 'Venda' });
+    setIsHistoryOpen(false);
+    setIsPrintOpen(true);
+  };
+
+  const handleLoadQuote = (quote: any) => {
+    if (cart.length > 0 && !confirm("O carrinho já possui itens. Deseja limpar e carregar o orçamento?")) return;
+    
+    const newCart = quote.itens.map((item: any) => {
+      const product = products.find(p => p.cd_produto === item.cd_produto);
+      return {
+        ...product,
+        quantity: item.qtde,
+        selectedUnit: item.un,
+        finalPrice: item.valor,
+        costPrice: item.custo
+      };
+    });
+    
+    setCart(newCart);
+    setSelectedEntityId(quote.cd_clientes);
+    setIsQuotesOpen(false);
+    showSuccess("Orçamento carregado no carrinho!");
   };
 
   const themeColor = mode === 'VENDA' ? 'indigo' : 'emerald';
@@ -466,6 +499,33 @@ const POS = () => {
                   onClick={() => handleShortcut('F3')}
                 >
                   <Trash2 size={18} /> ZERAR OPERAÇÃO (F3)
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Consultas e Recebimentos</h3>
+              <div className="space-y-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-10 justify-start gap-3 border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl font-bold text-xs"
+                  onClick={() => setIsHistoryOpen(true)}
+                >
+                  <History size={16} /> HISTÓRICO / REIMPRIMIR
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-10 justify-start gap-3 border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl font-bold text-xs"
+                  onClick={() => setIsQuotesOpen(true)}
+                >
+                  <FileText size={16} /> PUXAR ORÇAMENTOS
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-10 justify-start gap-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl font-bold text-xs"
+                  onClick={() => setIsPaymentsOpen(true)}
+                >
+                  <Wallet size={16} /> RECEBER CREDIÁRIO
                 </Button>
               </div>
             </div>
@@ -673,6 +733,22 @@ const POS = () => {
         </footer>
       </main>
 
+      {/* Modais de Consulta */}
+      <SalesHistoryModal 
+        isOpen={isHistoryOpen} 
+        onClose={() => setIsHistoryOpen(false)} 
+        onReprint={handleReprint} 
+      />
+      <QuotesModal 
+        isOpen={isQuotesOpen} 
+        onClose={() => setIsQuotesOpen(false)} 
+        onLoadQuote={handleLoadQuote} 
+      />
+      <PaymentsModal 
+        isOpen={isPaymentsOpen} 
+        onClose={() => setIsPaymentsOpen(false)} 
+      />
+
       {/* Modal de Edição de Item (Ctrl + L) */}
       <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}>
         <DialogContent className="max-w-md">
@@ -836,12 +912,5 @@ const POS = () => {
     </div>
   );
 };
-
-const ShortcutItem = ({ key, label, onClick }: { key: string, label: string, onClick: () => void }) => (
-  <div className="flex items-center justify-between text-[10px] group cursor-pointer hover:bg-slate-50 p-1 rounded transition-colors" onClick={onClick}>
-    <span className="font-bold text-slate-900 group-hover:text-indigo-600">{label}</span>
-    <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-mono font-bold text-slate-500">{key}</span>
-  </div>
-);
 
 export default POS;
