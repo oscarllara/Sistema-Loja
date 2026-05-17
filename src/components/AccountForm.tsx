@@ -12,6 +12,7 @@ import { showSuccess, showError } from '@/utils/toast';
 
 const accountSchema = z.object({
   nome: z.string().min(3, "Nome da conta obrigatório"),
+  banco_numero: z.string().optional(),
   agencia: z.string().optional(),
   conta_numero: z.string().optional(),
   tipo: z.enum(['Caixa', 'Banco', 'Retaguarda', 'Digital']),
@@ -45,6 +46,7 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
       
       db.contas.add({
         nome: data.nome.toUpperCase(),
+        banco_numero: data.banco_numero,
         agencia: data.agencia,
         conta_numero: data.conta_numero,
         tipo: data.tipo,
@@ -54,15 +56,23 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
       showSuccess("Conta cadastrada com sucesso!");
       onSuccess();
     } catch (err: any) {
-      showError("Erro ao cadastrar conta.");
+      console.error("Erro ao cadastrar conta:", err);
+      showError(err.message || "Erro ao cadastrar conta.");
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
-      <div className="space-y-2">
-        <Label>Nome da Conta / Banco</Label>
-        <Input {...register("nome")} placeholder="Ex: Itaú Empresa, Caixa Principal..." />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 space-y-2">
+          <Label>Nome da Conta / Banco</Label>
+          <Input {...register("nome")} placeholder="Ex: Itaú Empresa, Caixa Principal..." />
+          {errors.nome && <p className="text-xs text-rose-500">{errors.nome.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label>Nº do Banco (Cód)</Label>
+          <Input {...register("banco_numero")} placeholder="Ex: 001, 756..." />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
