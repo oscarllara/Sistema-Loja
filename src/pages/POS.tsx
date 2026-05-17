@@ -150,14 +150,10 @@ const POS = () => {
     if (item.selectedUnit === item.un_fracionada && item.venda_fracionada > 0) {
       return item.venda_fracionada;
     }
-    
-    // Regra: Dinheiro, PIX e Débito usam preço À VISTA. Crédito e Crediário usam preço À PRAZO.
     const isVista = ['Dinheiro', 'PIX', 'Cartão Débito'].includes(paymentMethod);
     const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
     const precoPrazo = item.venda || 0;
-    
     let precoBase = isVista ? precoVista : precoPrazo;
-    
     if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
       return precoBase * item.fator_conversao;
     }
@@ -174,13 +170,11 @@ const POS = () => {
 
   const handleSaveBudget = () => {
     if (cart.length === 0) return;
-    
     if (!selectedClientId) {
       setPendingAction('budget');
       setIsClientModalOpen(true);
       return;
     }
-
     setIsBudgetModalOpen(true);
   };
 
@@ -188,7 +182,6 @@ const POS = () => {
     try {
       const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
       const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
-      
       const payload = {
         data: new Date().toISOString(),
         total: total,
@@ -210,11 +203,9 @@ const POS = () => {
           };
         })
       };
-
       const orc = db.orcamentos.add(payload);
       setLastActionData({ ...orc, type: 'Orcamento' });
       showSuccess(`Orçamento #${orc.cd_orcamento} salvo!`);
-      
       setCart([]);
       setBudgetName("");
       setSelectedClientId(null);
@@ -227,13 +218,11 @@ const POS = () => {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-
     if (!selectedClientId) {
       setPendingAction('checkout');
       setIsClientModalOpen(true);
       return;
     }
-
     setIsCheckoutOpen(true);
   };
 
@@ -242,14 +231,11 @@ const POS = () => {
       const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
       const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
       const id = Date.now();
-
-      // Se houver crediário nos pagamentos, valida o cliente
       const hasCrediario = payments.some(p => p.method === 'Crediário');
       if (hasCrediario && selectedClientId === 1) {
         showError("Para pagamentos no Crediário, selecione um cliente cadastrado.");
         return;
       }
-
       const payload = {
         data: new Date().toISOString(),
         total: total,
@@ -271,10 +257,7 @@ const POS = () => {
           };
         })
       };
-
       db.vendas.add({ ...payload, cd_venda: id });
-      
-      // Registra cada pagamento no financeiro
       payments.forEach((p, idx) => {
         db.financeiro.add({
           tipo: 'R',
@@ -291,8 +274,6 @@ const POS = () => {
           cd_venda: id
         });
       });
-
-      // Baixa estoque
       cart.forEach(item => {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
@@ -303,12 +284,10 @@ const POS = () => {
           db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - qtdeBaixa });
         }
       });
-
       if (convertedOrcamentoId) {
         db.orcamentos.delete(convertedOrcamentoId);
         setConvertedOrcamentoId(null);
       }
-
       setLastActionData({ ...payload, cd_venda: id, type: 'Venda', payments });
       showSuccess("Venda finalizada com sucesso!");
       setCart([]);
@@ -354,7 +333,6 @@ const POS = () => {
             db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) + item.qtde });
           }
         });
-
         const lancamentos = db.financeiro.getAll().filter(l => l.cd_venda === venda.cd_venda);
         lancamentos.forEach(l => {
           if (l.status === 'Pago' && l.cd_conta) {
@@ -364,7 +342,6 @@ const POS = () => {
             }
           }
         });
-
         showSuccess("Venda cancelada e estoque devolvido!");
       } catch (e) {
         showError("Erro ao cancelar venda.");
@@ -392,7 +369,6 @@ const POS = () => {
               <TabsTrigger value="orcamentos" className="gap-2"><FileCode size={16} /> Orçamentos Salvos</TabsTrigger>
               <TabsTrigger value="historico" className="gap-2"><History size={16} /> Vendas Realizadas</TabsTrigger>
             </TabsList>
-
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
@@ -408,12 +384,12 @@ const POS = () => {
           <TabsContent value="venda" className="flex-1 flex flex-col lg:flex-row gap-6 mt-0">
             <div className="flex-1 flex flex-col gap-4 min-w-0">
               <Card className="border-none shadow-sm overflow-hidden flex-1 flex flex-col">
-                <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="relative w-56">
-                      <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <div className="p-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+                    <div className="relative w-full sm:w-48">
+                      <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                       <select 
-                        className="w-full h-10 pl-10 rounded-lg border-none bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                        className="w-full h-9 pl-9 rounded-lg border-none bg-slate-800 text-xs font-bold focus:ring-2 focus:ring-indigo-500"
                         value={selectedSellerId}
                         onChange={(e) => setSelectedSellerId(Number(e.target.value))}
                       >
@@ -422,11 +398,11 @@ const POS = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="relative w-64">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <div className="relative w-full sm:w-56">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                       <select 
                         className={cn(
-                          "w-full h-10 pl-10 rounded-lg border-none text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-colors",
+                          "w-full h-9 pl-9 rounded-lg border-none text-xs font-bold focus:ring-2 focus:ring-indigo-500 transition-colors",
                           selectedClientId ? "bg-slate-800" : "bg-rose-900/50 ring-1 ring-rose-500"
                         )}
                         value={selectedClientId || ""}
@@ -440,14 +416,14 @@ const POS = () => {
                     </div>
                     <button 
                       onClick={() => setIsSearchOpen(true)}
-                      className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                      className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-slate-900 px-3 py-2 rounded-lg text-[10px] font-bold transition-colors shadow-sm whitespace-nowrap"
                     >
-                      <span className="bg-slate-900 text-white px-1.5 rounded">F1</span> Pesquisar Produtos
+                      <span className="bg-slate-900 text-white px-1 rounded">F1</span> Pesquisar Produtos
                     </button>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Total do Carrinho</p>
-                    <p className="text-2xl font-black text-indigo-400">R$ {total.toFixed(2)}</p>
+                  <div className="text-right shrink-0">
+                    <p className="text-[9px] text-slate-400 uppercase font-bold">Total do Carrinho</p>
+                    <p className="text-xl font-black text-indigo-400">R$ {total.toFixed(2)}</p>
                   </div>
                 </div>
 
@@ -534,7 +510,6 @@ const POS = () => {
                     <PaymentButton active={paymentMethod === 'Crediário'} onClick={() => setPaymentMethod('Crediário')} icon={Wallet} label="Crediário (Prazo)" />
                   </div>
                 </div>
-
                 <div className="pt-4 border-t space-y-3">
                   <Button 
                     className="w-full h-12 bg-slate-100 text-slate-900 hover:bg-slate-200 gap-2 font-bold"
@@ -647,7 +622,6 @@ const POS = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Modal de Seleção de Cliente (Prompt) */}
         <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -658,7 +632,6 @@ const POS = () => {
             </DialogHeader>
             <div className="py-6 space-y-6">
               <p className="text-sm text-slate-500">Para prosseguir, identifique o cliente desta operação:</p>
-              
               <div className="grid grid-cols-1 gap-3">
                 <Button 
                   variant="outline" 
@@ -673,12 +646,10 @@ const POS = () => {
                     <p className="text-[10px] text-slate-500 uppercase">Venda rápida sem cadastro</p>
                   </div>
                 </Button>
-
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
                   <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400">Ou selecione um cadastrado</span></div>
                 </div>
-
                 <div className="space-y-2">
                   <select 
                     className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
@@ -699,7 +670,6 @@ const POS = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Modal para Nome do Cliente no Orçamento */}
         <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
