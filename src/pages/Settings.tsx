@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Printer, Save, Layout as LayoutIcon, Percent } from 'lucide-react';
+import { Printer, Save, Layout as LayoutIcon, Percent, Wallet } from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess } from '@/utils/toast';
 
@@ -24,7 +24,7 @@ const Settings = () => {
       <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Configurações do Sistema</h1>
-          <p className="text-slate-500">Personalize a impressão e o comportamento do PDV.</p>
+          <p className="text-slate-500">Personalize a impressão, juros e o comportamento do sistema.</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -115,26 +115,61 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
-            <CardHeader className="border-b bg-slate-50/50">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Percent size={18} className="text-indigo-600" /> Regras de Negócio
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="space-y-2">
-                <Label>Juros de Parcelamento (%)</Label>
-                <Input 
-                  type="number" 
-                  step="0.01"
-                  value={config.juros_parcelamento} 
-                  onChange={(e) => setConfig({ ...config, juros_parcelamento: Number(e.target.value) })}
-                  placeholder="Ex: 2.5"
-                />
-                <p className="text-[10px] text-slate-500">Taxa aplicada ao total da venda quando parcelada no crediário.</p>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm">
+              <CardHeader className="border-b bg-slate-50/50">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Percent size={18} className="text-indigo-600" /> Regras de Venda
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <Label>Juros de Parcelamento (%)</Label>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    value={config.juros_parcelamento} 
+                    onChange={(e) => setConfig({ ...config, juros_parcelamento: Number(e.target.value) })}
+                    placeholder="Ex: 2.5"
+                  />
+                  <p className="text-[10px] text-slate-500">Taxa aplicada ao total da venda quando parcelada no crediário.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardHeader className="border-b bg-slate-50/50">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Wallet size={18} className="text-indigo-600" /> Financeiro / Atrasos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Multa por Atraso (%)</Label>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      value={config.multa_atraso} 
+                      onChange={(e) => setConfig({ ...config, multa_atraso: Number(e.target.value) })}
+                      placeholder="Ex: 2.0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Juros Diário (%)</Label>
+                    <Input 
+                      type="number" 
+                      step="0.001"
+                      value={config.juros_atraso} 
+                      onChange={(e) => setConfig({ ...config, juros_atraso: Number(e.target.value) })}
+                      placeholder="Ex: 0.033"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">Configurações para cálculo automático em contas a receber vencidas.</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <div className="flex justify-end">

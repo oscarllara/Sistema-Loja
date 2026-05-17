@@ -40,7 +40,10 @@ const getDB = () => {
     margem_esquerda: 5,
     margem_direita: 5,
     margem_topo: 5,
-    margem_rodape: 5
+    margem_rodape: 5,
+    juros_parcelamento: 0,
+    juros_atraso: 0.033, // 1% ao mês aprox.
+    multa_atraso: 2.00    // 2% de multa padrão
   };
 
   if (!data) {
