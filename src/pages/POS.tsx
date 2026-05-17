@@ -109,15 +109,21 @@ const POS = () => {
     }
   }, [selectedSellerId]);
 
-  const handleShortcut = (key: string) => {
+  const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') {
       setSearchInitialTerm("");
       setIsSearchOpen(true);
     }
     if (key === 'F3') { if(confirm("Zerar operação atual?")) setCart([]); }
     if (key === 'F10') {
-      if (cart.length === 0) return showError("Carrinho vazio!");
-      if (!selectedSellerId) return showError("Selecione o Usuário primeiro!");
+      if (cart.length === 0) {
+        showError("Carrinho vazio!");
+        return;
+      }
+      if (!selectedSellerId) {
+        showError("Selecione o Usuário primeiro!");
+        return;
+      }
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
@@ -126,19 +132,26 @@ const POS = () => {
         handleOpenEdit(cart.length - 1);
       }
     }
-  };
+  }, [cart, selectedSellerId]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F1') { e.preventDefault(); handleShortcut('F1'); }
-      if (e.key === 'F3') { e.preventDefault(); handleShortcut('F3'); }
-      if (e.key === 'F10') { e.preventDefault(); handleShortcut('F10'); }
-      if (e.key === 'F4') { e.preventDefault(); handleShortcut('F4'); }
-      if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); handleShortcut('CtrlL'); }
+      // Previne comportamentos padrão do navegador para teclas de função
+      if (['F1', 'F3', 'F4', 'F10'].includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleShortcut(e.key);
+      }
+      
+      if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
+        e.preventDefault();
+        handleShortcut('CtrlL');
+      }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, selectedSellerId, isSearchOpen, isPrintOpen, isCheckoutOpen, isAddEntityOpen, isAdminAuthOpen]);
+    
+    window.addEventListener('keydown', handleKeyDown, true); // Use capture para garantir que pegamos antes de outros elementos
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [handleShortcut]);
 
   const handleAdminAuth = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
