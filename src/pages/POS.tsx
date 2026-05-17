@@ -23,7 +23,8 @@ import {
   ArrowLeftRight,
   UserCircle,
   Scale,
-  XCircle
+  XCircle,
+  UserPlus
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -73,14 +74,16 @@ const POS = () => {
   const [cart, setCart] = React.useState<any[]>([]);
   const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Dinheiro');
   const [selectedSellerId, setSelectedSellerId] = React.useState<number>(1);
-  const [selectedClientId, setSelectedClientId] = React.useState<number>(1); // 1 = Consumidor Final
+  const [selectedClientId, setSelectedClientId] = React.useState<number | null>(null); 
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
+  const [isClientModalOpen, setIsClientModalOpen] = React.useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = React.useState(false);
   const [budgetName, setBudgetName] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState("venda");
   const [convertedOrcamentoId, setConvertedOrcamentoId] = React.useState<number | null>(null);
+  const [pendingAction, setPendingAction] = React.useState<'checkout' | 'budget' | null>(null);
 
   const products = React.useMemo(() => db.produtos.getAll() || [], []);
   const vendedores = React.useMemo(() => (db.clientes.getAll() || []).filter(c => c.is_funcionario), []);
@@ -161,14 +164,22 @@ const POS = () => {
   const handleSaveBudget = () => {
     if (cart.length === 0) return;
     
+    if (!selectedClientId) {
+      setPendingAction('budget');
+      setIsClientModalOpen(true);
+      return;
+    }
+
     try {
       const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
+      const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
+      
       const payload = {
         data: new Date().toISOString(),
         total: total,
         custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
         cd_clientes: selectedClientId,
-        nome_cliente: budgetName || clientes.find(c => c.cd_clientes === selectedClientId)?.nome || 'CONSUMIDOR FINAL',
+        nome_cliente: budgetName || cliente?.nome || 'CONSUMIDOR FINAL',
         cd_func: selectedSellerId,
         nome_vendedor: vendedor?.nome || 'ADMINISTRADOR',
         tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
@@ -191,6 +202,7 @@ const POS = () => {
       
       setCart([]);
       setBudgetName("");
+      setSelectedClientId(null);
       setIsBudgetModalOpen(false);
       setIsPrintOpen(true);
     } catch (err) {
@@ -200,6 +212,12 @@ const POS = () => {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
+
+    if (!selectedClientId) {
+      setPendingAction('checkout');
+      setIsClientModalOpen(true);
+      return;
+    }
 
     if (paymentMethod === 'Crediário' && selectedClientId === 1) {
       showError("Para vendas no Crediário, selecione um cliente cadastrado.");
@@ -269,7 +287,7 @@ const POS = () => {
       setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
       showSuccess("Venda finalizada com sucesso!");
       setCart([]);
-      setSelectedClientId(1);
+      setSelectedClientId(null);
       setIsPrintOpen(true);
     } catch (err) {
       showError("Erro ao processar venda.");
@@ -304,7 +322,6 @@ const POS = () => {
   const handleCancelSale = (venda: any) => {
     if (confirm(`Deseja realmente CANCELAR a venda #${venda.cd_venda}? O estoque será devolvido.`)) {
       try {
-        // 1. Devolver estoque
         venda.itens.forEach((item: any) => {
           const prod = products.find(p => p.cd_produto === item.cd_produto);
           if (prod) {
@@ -312,27 +329,32 @@ const POS = () => {
           }
         });
 
-        // 2. Remover do financeiro
         const lancamentos = db.financeiro.getAll().filter(l => l.cd_venda === venda.cd_venda);
         lancamentos.forEach(l => {
-          // Se estava pago, precisa estornar o saldo da conta
           if (l.status === 'Pago' && l.cd_conta) {
             const conta = db.contas.getAll().find(c => c.cd_conta === l.cd_conta);
             if (conta) {
               db.contas.update(conta.cd_conta, { saldo: conta.saldo - l.valor });
             }
           }
-          // Aqui precisaríamos de um db.financeiro.delete, mas como não tem, vamos marcar como cancelado
-          // No nosso mock, vamos apenas filtrar na exibição se necessário
         });
 
-        // 3. Remover venda (ou marcar como cancelada)
-        // No nosso mock simplificado, vamos apenas mostrar sucesso
         showSuccess("Venda cancelada e estoque devolvido!");
       } catch (e) {
         showError("Erro ao cancelar venda.");
       }
     }
+  };
+
+  const confirmClientSelection = (clientId: number) => {
+    setSelectedClientId(clientId);
+    setIsClientModalOpen(false);
+    // Executa a ação pendente após selecionar o cliente
+    setTimeout(() => {
+      if (pendingAction === 'checkout') handleCheckout();
+      if (pendingAction === 'budget') setIsBudgetModalOpen(true);
+      setPendingAction(null);
+    }, 100);
   };
 
   return (
@@ -378,10 +400,14 @@ const POS = () => {
                     <div className="relative w-64">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <select 
-                        className="w-full h-10 pl-10 rounded-lg border-none bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
-                        value={selectedClientId}
-                        onChange={(e) => setSelectedClientId(Number(e.target.value))}
+                        className={cn(
+                          "w-full h-10 pl-10 rounded-lg border-none text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-colors",
+                          selectedClientId ? "bg-slate-800" : "bg-rose-900/50 ring-1 ring-rose-500"
+                        )}
+                        value={selectedClientId || ""}
+                        onChange={(e) => confirmClientSelection(Number(e.target.value))}
                       >
+                        <option value="" disabled>SELECIONE O CLIENTE...</option>
                         {clientes.map(c => (
                           <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
                         ))}
@@ -487,7 +513,7 @@ const POS = () => {
                 <div className="pt-4 border-t space-y-3">
                   <Button 
                     className="w-full h-12 bg-slate-100 text-slate-900 hover:bg-slate-200 gap-2 font-bold"
-                    onClick={() => setIsBudgetModalOpen(true)}
+                    onClick={handleSaveBudget}
                     disabled={cart.length === 0}
                   >
                     <Save size={18} /> Salvar Orçamento
@@ -595,6 +621,58 @@ const POS = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Modal de Seleção de Cliente (Prompt) */}
+        <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="text-indigo-600" />
+                Identificar Cliente
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-6 space-y-6">
+              <p className="text-sm text-slate-500">Para prosseguir, identifique o cliente desta operação:</p>
+              
+              <div className="grid grid-cols-1 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="h-14 justify-start gap-4 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 group"
+                  onClick={() => confirmClientSelection(1)}
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-indigo-100">
+                    <User className="text-slate-500 group-hover:text-indigo-600" size={20} />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-slate-900">Consumidor Final (Balcão)</p>
+                    <p className="text-[10px] text-slate-500 uppercase">Venda rápida sem cadastro</p>
+                  </div>
+                </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                  <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400">Ou selecione um cadastrado</span></div>
+                </div>
+
+                <div className="space-y-2">
+                  <select 
+                    className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => confirmClientSelection(Number(e.target.value))}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Pesquisar cliente cadastrado...</option>
+                    {clientes.filter(c => c.cd_clientes !== 1).map(c => (
+                      <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome} {c.cpf_cnpj ? `(${c.cpf_cnpj})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => { setIsClientModalOpen(false); setPendingAction(null); }}>Cancelar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Modal para Nome do Cliente no Orçamento */}
         <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
