@@ -71,13 +71,28 @@ export const db = {
   },
   produtos: {
     getAll: (): Produto[] => getDB().produtos,
+    getById: (id: number): Produto | undefined => 
+      getDB().produtos.find((p: Produto) => p.cd_produto === id),
     add: (produto: Produto) => {
       const database = getDB();
       database.produtos.push(produto);
       saveDB(database);
+      return produto;
+    },
+    update: (id: number, data: Partial<Produto>) => {
+      const database = getDB();
+      const index = database.produtos.findIndex((p: Produto) => p.cd_produto === id);
+      if (index !== -1) {
+        database.produtos[index] = { ...database.produtos[index], ...data };
+        saveDB(database);
+      }
+    },
+    delete: (id: number) => {
+      const database = getDB();
+      database.produtos = database.produtos.filter((p: Produto) => p.cd_produto !== id);
+      saveDB(database);
     }
   },
-  // ... outros métodos mantidos para compatibilidade
   compras: {
     getAll: (): Compra[] => getDB().compras,
     create: (compra: Compra, itens: any[]) => {
