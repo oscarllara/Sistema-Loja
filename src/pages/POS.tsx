@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Table, 
@@ -104,7 +105,6 @@ const POS = () => {
 
   const handleAdminAuth = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    // Verifica contra o usuário admin padrão ou qualquer usuário com permissão de configurações
     const admin = db.clientes.getAll().find(c => c.usuario === 'admin' && c.senha === adminPassword);
     
     if (admin) {
