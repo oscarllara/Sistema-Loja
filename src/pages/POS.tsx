@@ -73,7 +73,8 @@ const POS = () => {
 
   const config = db.config.get();
   const products = db.produtos.getAll() || [];
-  // Filtra apenas funcionários ou admin para a lista de usuários
+  
+  // Filtra apenas funcionários ou o usuário admin padrão
   const usuarios = (db.clientes.getAll() || []).filter(c => c.is_funcionario || c.usuario === 'admin');
   const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
   const fornecedores = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
@@ -91,13 +92,8 @@ const POS = () => {
     if (key === 'F4') setIsAddEntityOpen(true);
     
     if (key === 'ESC') {
-      // Se houver qualquer modal aberto, o ESC do Dialog já cuida de fechar.
-      // Mas nossa lógica global precisa saber se deve abrir o modal de Admin.
-      const anyModalOpen = isSearchOpen || isPrintOpen || isCheckoutOpen || isAddEntityOpen;
-      
-      if (!anyModalOpen) {
-        setIsAdminAuthOpen(true);
-      }
+      // Se não houver nenhum modal operacional aberto, abrimos o de senha
+      setIsAdminAuthOpen(true);
     }
   };
 
@@ -107,14 +103,22 @@ const POS = () => {
       if (e.key === 'F3') { e.preventDefault(); handleShortcut('F3'); }
       if (e.key === 'F10') { e.preventDefault(); handleShortcut('F10'); }
       if (e.key === 'F4') { e.preventDefault(); handleShortcut('F4'); }
+      
       if (e.key === 'Escape') { 
-        // Não damos preventDefault aqui para permitir que o Radix UI feche os modais
-        handleShortcut('ESC'); 
+        // Verificamos se algum modal está aberto. 
+        // Se estiver, o próprio componente Dialog do shadcn/Radix vai fechar o modal.
+        // Nós só interceptamos o ESC para abrir a senha se TUDO estiver fechado.
+        const anyModalOpen = isSearchOpen || isPrintOpen || isCheckoutOpen || isAddEntityOpen || isAdminAuthOpen;
+        
+        if (!anyModalOpen) {
+          e.preventDefault();
+          handleShortcut('ESC');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, selectedSellerId, isSearchOpen, isPrintOpen, isCheckoutOpen, isAddEntityOpen]);
+  }, [cart, selectedSellerId, isSearchOpen, isPrintOpen, isCheckoutOpen, isAddEntityOpen, isAdminAuthOpen]);
 
   const handleAdminAuth = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
