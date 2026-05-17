@@ -8,7 +8,7 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Printer, Download, X, FileText } from 'lucide-react';
+import { Printer, FileText } from 'lucide-react';
 import { db } from '@/services/api';
 
 interface PrintPreviewProps {
@@ -116,7 +116,7 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
                 <td className="text-right py-1">{item.valor.toFixed(2)}</td>
                 <td className="text-right py-1 font-bold">{item.subtotal.toFixed(2)}</td>
               </tr>
-            </thead>
+            ))}
           </tbody>
         </table>
 
