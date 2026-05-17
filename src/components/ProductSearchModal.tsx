@@ -24,9 +24,10 @@ interface ProductSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (product: Produto) => void;
+  initialSearch?: string;
 }
 
-const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalProps) => {
+const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: ProductSearchModalProps) => {
   const [search, setSearch] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const products = db.produtos.getAll() || [];
@@ -44,79 +45,80 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
 
   React.useEffect(() => {
     if (isOpen) {
-      setSearch("");
+      setSearch(initialSearch);
       setSelectedIndex(0);
     }
-  }, [isOpen]);
+  }, [isOpen, initialSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
+      e.preventDefault();
       setSelectedIndex(prev => Math.min(prev + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
       setSelectedIndex(prev => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter' && filtered[selectedIndex]) {
+      e.preventDefault();
       onSelect(filtered[selectedIndex]);
       onClose();
+    } else if (e.key === 'Escape') {
+      onClose();
     }
-  };
-
-  const formatStock = (value: number) => {
-    // Arredonda para 3 casas decimais para evitar dízimas periódicas na tela
-    return Number(Math.round(Number(value + 'e3')) + 'e-3');
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+        {/* Cabeçalho de Pesquisa Estilo ERP */}
         <div className="bg-[#FFFFE1] p-4 border-b border-slate-300">
-          <p className="text-[10px] text-slate-600 mb-1">Para pesquisar itens com a mesma descrição, basta digitar parte do nome abaixo</p>
+          <p className="text-[10px] text-slate-600 mb-1 font-bold uppercase">Pesquisa de Produtos (Setas para navegar, Enter para selecionar)</p>
           <div className="flex gap-2">
             <Input 
               autoFocus
               value={search}
               onChange={(e) => { setSearch(e.target.value); setSelectedIndex(0); }}
               onKeyDown={handleKeyDown}
-              className="h-10 bg-white border-slate-400 rounded-none focus-visible:ring-0 focus-visible:border-indigo-500"
+              className="h-10 bg-white border-slate-400 rounded-none focus-visible:ring-0 focus-visible:border-indigo-500 font-bold text-lg"
+              placeholder="Digite o nome ou código do produto..."
             />
             <button 
               type="button" 
               onClick={() => { if(filtered[selectedIndex]) { onSelect(filtered[selectedIndex]); onClose(); } }}
-              className="px-8 bg-slate-200 border border-slate-400 font-bold text-sm hover:bg-slate-300"
+              className="px-8 bg-slate-200 border border-slate-400 font-bold text-sm hover:bg-slate-300 uppercase"
             >
-              OK
+              Selecionar
             </button>
           </div>
         </div>
 
+        {/* Tabela de Resultados */}
         <div className="flex-1 overflow-auto bg-[#FFFFE1]">
           <Table className="border-collapse">
             <TableHeader className="sticky top-0 z-10">
               <TableRow className="bg-[#F39C12] hover:bg-[#F39C12] border-b border-slate-400">
-                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-slate-400">FORNEC</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-slate-400">CD_PROD</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-slate-400">COD_BARRAS</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-slate-400">PRODUTO</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-slate-400 text-right">VLR VISTA</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-slate-400 text-right">VLR PRAZO</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">CÓD. INTERNO</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">CÓD. BARRAS</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">DESCRIÇÃO DO PRODUTO</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20 text-right">PREÇO VISTA</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20 text-right">PREÇO PRAZO</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-8 text-right">ESTOQUE</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-slate-500">Nenhum produto encontrado.</TableCell>
+                  <TableCell colSpan={6} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
                 </TableRow>
               ) : (
                 filtered.map((p, idx) => (
                   <TableRow 
                     key={p.cd_produto}
                     className={cn(
-                      "h-7 border-b border-slate-200 cursor-pointer hover:bg-indigo-100",
-                      idx === selectedIndex ? "bg-[#0078D7] text-white hover:bg-[#0078D7]" : "text-slate-800"
+                      "h-8 border-b border-slate-200 cursor-pointer transition-colors",
+                      idx === selectedIndex ? "bg-[#0078D7] text-white hover:bg-[#0078D7]" : "text-slate-800 hover:bg-indigo-50"
                     )}
                     onClick={() => { onSelect(p); onClose(); }}
                   >
-                    <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.id_importado || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold">{p.id_manual || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.cod_barras || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold uppercase">{p.nome || "SEM NOME"}</TableCell>
@@ -128,9 +130,9 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
                     </TableCell>
                     <TableCell className={cn(
                       "py-0 text-[11px] text-right font-bold",
-                      (p.estoque || 0) <= 0 ? "text-rose-500" : ""
+                      (p.estoque || 0) <= 0 ? (idx === selectedIndex ? "text-white" : "text-rose-500") : ""
                     )}>
-                      {formatStock(p.estoque || 0)} {p.un || "UN"}
+                      {(p.estoque || 0).toFixed(3)} {p.un || "UN"}
                     </TableCell>
                   </TableRow>
                 ))
@@ -138,9 +140,15 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
             </TableBody>
           </Table>
         </div>
-        <div className="bg-slate-100 p-2 text-[10px] text-slate-500 flex justify-between border-t">
-          <span>Use as setas para navegar e ENTER para selecionar</span>
-          <span>Total de itens: {filtered.length}</span>
+        
+        {/* Rodapé Informativo */}
+        <div className="bg-slate-100 p-2 text-[10px] text-slate-500 flex justify-between border-t border-slate-300 font-bold uppercase">
+          <div className="flex gap-4">
+            <span>[↑↓] Navegar</span>
+            <span>[ENTER] Selecionar</span>
+            <span>[ESC] Sair</span>
+          </div>
+          <span>Total de itens encontrados: {filtered.length}</span>
         </div>
       </DialogContent>
     </Dialog>

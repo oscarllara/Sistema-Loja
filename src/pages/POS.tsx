@@ -75,6 +75,7 @@ const POS = () => {
   const unitRef = React.useRef<HTMLSelectElement>(null);
 
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [searchInitialTerm, setSearchInitialTerm] = React.useState("");
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [isAddEntityOpen, setIsAddEntityOpen] = React.useState(false);
@@ -96,7 +97,10 @@ const POS = () => {
   const entities = mode === 'VENDA' ? clientes : fornecedores;
 
   const handleShortcut = (key: string) => {
-    if (key === 'F1') setIsSearchOpen(true);
+    if (key === 'F1') {
+      setSearchInitialTerm("");
+      setIsSearchOpen(true);
+    }
     if (key === 'F3') { if(confirm("Zerar operação atual?")) setCart([]); }
     if (key === 'F10') {
       if (cart.length === 0) return showError("Carrinho vazio!");
@@ -201,10 +205,16 @@ const POS = () => {
 
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!inputCode.trim()) return;
+
+    // Tenta encontrar por código exato primeiro
     const product = products.find(p => p.id_manual === inputCode || p.cod_barras === inputCode);
+    
     if (product) {
       startInsertion(product);
     } else {
+      // Se não for código, abre a pesquisa com o que foi digitado
+      setSearchInitialTerm(inputCode);
       setIsSearchOpen(true);
     }
   };
@@ -588,6 +598,7 @@ const POS = () => {
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
         onSelect={startInsertion} 
+        initialSearch={searchInitialTerm}
       />
 
       <CheckoutModal 
