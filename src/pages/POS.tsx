@@ -741,6 +741,7 @@ const POS = () => {
         total={total}
         clientName={entities.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'}
         clientId={selectedEntityId}
+        onClientChange={(id) => setSelectedEntityId(id)}
         onConfirm={confirmCheckout}
       />
 

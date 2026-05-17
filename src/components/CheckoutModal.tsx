@@ -21,11 +21,13 @@ import {
   Calendar,
   Plus,
   Minus,
-  AlertCircle
+  AlertCircle,
+  UserPlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { db } from '@/services/api';
 import { showError } from '@/utils/toast';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Installment {
   date: string;
@@ -45,9 +47,10 @@ interface CheckoutModalProps {
   onConfirm: (payments: Payment[]) => void;
   clientName: string;
   clientId: number | "";
+  onClientChange: (id: number | "") => void;
 }
 
-const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId }: CheckoutModalProps) => {
+const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId, onClientChange }: CheckoutModalProps) => {
   const [payments, setPayments] = React.useState<Payment[]>([]);
   const [inputValue, setInputValue] = React.useState("");
   const [isInstallmentMode, setIsInstallmentMode] = React.useState(false);
@@ -55,6 +58,8 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [tempInstallments, setTempInstallments] = React.useState<Installment[]>([]);
   
   const config = db.config.get();
+  const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
+  
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remaining = Math.max(0, total - totalPaid);
   const change = Math.max(0, totalPaid - total);
@@ -74,7 +79,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       return;
     }
 
-    // Se for crediário, preenche o valor total restante automaticamente
     const amount = method === 'Crediário' 
       ? remaining 
       : parseFloat(inputValue.replace(',', '.'));
@@ -148,11 +152,20 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl">
         <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Lado Esquerdo: Resumo */}
+          {/* Lado Esquerdo: Resumo e Identificação */}
           <div className="p-6 bg-slate-50 border-r border-slate-200">
-            <div className="mb-6">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Cliente</p>
-              <p className="text-sm font-bold text-slate-900">{clientName}</p>
+            <div className="mb-6 space-y-2">
+              <Label className="text-[10px] font-bold text-slate-400 uppercase">Identificar Cliente</Label>
+              <select 
+                className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                value={clientId}
+                onChange={(e) => onClientChange(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">CONSUMIDOR FINAL</option>
+                {clientes.map(c => (
+                  <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-4">
@@ -176,32 +189,34 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
 
             <div className="mt-6 space-y-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Pagamentos Realizados</p>
-              <div className="space-y-1 max-h-60 overflow-y-auto pr-2">
-                {payments.map((p, i) => (
-                  <div key={i} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-700">{p.method}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="font-black">R$ {p.amount.toFixed(2)}</span>
-                        <button onClick={() => removePayment(i)} className="text-rose-500 hover:text-rose-700">
-                          <Trash2 size={14} />
-                        </button>
+              <ScrollArea className="h-48 pr-2">
+                <div className="space-y-1">
+                  {payments.map((p, i) => (
+                    <div key={i} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700">{p.method}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-black">R$ {p.amount.toFixed(2)}</span>
+                          <button onClick={() => removePayment(i)} className="text-rose-500 hover:text-rose-700">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
+                      {p.installments && (
+                        <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-1">
+                          {p.installments.map((inst, idx) => (
+                            <div key={idx} className="text-[9px] text-slate-500 flex justify-between bg-slate-50 p-1 rounded">
+                              <span>{idx + 1}ª {new Date(inst.date).toLocaleDateString()}</span>
+                              <span className="font-bold">R$ {inst.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {p.installments && (
-                      <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-1">
-                        {p.installments.map((inst, idx) => (
-                          <div key={idx} className="text-[9px] text-slate-500 flex justify-between bg-slate-50 p-1 rounded">
-                            <span>{idx + 1}ª {new Date(inst.date).toLocaleDateString()}</span>
-                            <span className="font-bold">R$ {inst.amount.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {payments.length === 0 && <p className="text-xs text-slate-400 italic">Nenhum pagamento adicionado.</p>}
-              </div>
+                  ))}
+                  {payments.length === 0 && <p className="text-xs text-slate-400 italic">Nenhum pagamento adicionado.</p>}
+                </div>
+              </ScrollArea>
             </div>
           </div>
 
