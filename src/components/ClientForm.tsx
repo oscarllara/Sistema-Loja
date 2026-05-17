@@ -12,7 +12,9 @@ import {
   ShieldCheck, 
   Plus, 
   Trash2,
-  Search
+  Search,
+  Globe,
+  Users2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,11 +30,12 @@ import { cn } from '@/lib/utils';
 const clientSchema = z.object({
   tipo_entidade: z.enum(['C', 'F', 'A']),
   tipo_pessoa: z.enum(['F', 'J']),
-  nome: z.string().min(3, "Nome obrigatório"),
+  nome: z.string().min(3, "Nome/Razão Social obrigatório"),
   apelido_fantasia: z.string().optional(),
   cpf_cnpj: z.string().optional(),
   rg_ie: z.string().optional(),
-  tipo_documento: z.string().optional(),
+  inscricao_municipal: z.string().optional(),
+  site: z.string().optional(),
   
   // Pessoal
   sexo: z.string().optional(),
@@ -72,15 +75,24 @@ const clientSchema = z.object({
   cel: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
   
+  // Listas Dinâmicas
+  contatos_responsaveis: z.array(z.object({
+    nome: z.string(),
+    cargo: z.string(),
+    telefone: z.string().optional(),
+    email: z.string().optional(),
+  })).optional(),
+  quadro_societario: z.array(z.object({
+    nome: z.string(),
+    cpf: z.string(),
+  })).optional(),
+  
   // Financeiro
   limite: z.coerce.number().optional(),
   despesa_fixa: z.coerce.number().optional(),
   despesa_alimentacao: z.coerce.number().optional(),
   despesa_aluguel: z.coerce.number().optional(),
   obs1: z.string().optional(),
-  
-  // Autorizações
-  pessoas_autorizadas: z.array(z.string()).optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -99,8 +111,19 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       tipo_entidade: 'C',
       tipo_pessoa: 'F',
       nome: "",
-      pessoas_autorizadas: [""],
+      contatos_responsaveis: [],
+      quadro_societario: [],
     }
+  });
+
+  const { fields: contactFields, append: appendContact, remove: removeContact } = useFieldArray({
+    control,
+    name: "contatos_responsaveis"
+  });
+
+  const { fields: socioFields, append: appendSocio, remove: removeSocio } = useFieldArray({
+    control,
+    name: "quadro_societario"
   });
 
   const tipoPessoa = watch("tipo_pessoa");
@@ -200,15 +223,15 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         <TabsList className="grid grid-cols-4 w-full bg-slate-100 p-1 rounded-xl">
           <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
           <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
-          <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> Pessoal/Prof.</TabsTrigger>
+          <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> {tipoPessoa === 'F' ? 'Pessoal/Prof.' : 'Empresa/Sócios'}</TabsTrigger>
           <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>
         </TabsList>
 
         <TabsContent value="geral" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Nome / Razão Social *</Label>
-              <Input {...register("nome")} placeholder="Nome completo" />
+              <Label>{tipoPessoa === 'F' ? 'Nome Completo *' : 'Razão Social *'}</Label>
+              <Input {...register("nome")} placeholder={tipoPessoa === 'F' ? "Nome do cliente" : "Razão social da empresa"} />
               {errors.nome && <p className="text-xs text-red-500">{errors.nome.message}</p>}
             </div>
             <div className="space-y-2">
@@ -217,16 +240,31 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </div>
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label>
-              <Input {...register("cpf_cnpj")} placeholder="000.000.000-00" />
+              <Input {...register("cpf_cnpj")} placeholder={tipoPessoa === 'F' ? "000.000.000-00" : "00.000.000/0000-00"} />
             </div>
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'RG / Identidade' : 'Inscrição Estadual'}</Label>
               <Input {...register("rg_ie")} />
             </div>
+            {tipoPessoa === 'J' && (
+              <div className="space-y-2">
+                <Label>Inscrição Municipal</Label>
+                <Input {...register("inscricao_municipal")} />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>E-mail Principal</Label>
               <Input type="email" {...register("email")} />
             </div>
+            {tipoPessoa === 'J' && (
+              <div className="space-y-2">
+                <Label>Site / URL</Label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <Input {...register("site")} className="pl-10" placeholder="www.empresa.com.br" />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>Celular</Label>
@@ -280,7 +318,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         </TabsContent>
 
         <TabsContent value="pessoal" className="mt-6 space-y-6">
-          {tipoPessoa === 'F' && (
+          {tipoPessoa === 'F' ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -336,33 +374,116 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 </div>
               </div>
             </>
+          ) : (
+            <>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Users2 size={16} /> Quadro Societário
+                  </h4>
+                  <Button type="button" variant="outline" size="sm" onClick={() => appendSocio({ nome: "", cpf: "" })} className="gap-2">
+                    <Plus size={14} /> Adicionar Sócio
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {socioFields.map((field, index) => (
+                    <div key={field.id} className="flex gap-3 items-end bg-white p-3 rounded-lg border border-slate-100">
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-[10px]">Nome do Sócio</Label>
+                        <Input {...register(`quadro_societario.${index}.nome` as const)} />
+                      </div>
+                      <div className="w-48 space-y-1">
+                        <Label className="text-[10px]">CPF</Label>
+                        <Input {...register(`quadro_societario.${index}.cpf` as const)} />
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeSocio(index)} className="text-rose-500">
+                        <Trash2 size={18} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                    <User size={16} /> Contatos Responsáveis (Financeiro, Compras, etc)
+                  </h4>
+                  <Button type="button" variant="outline" size="sm" onClick={() => appendContact({ nome: "", cargo: "" })} className="gap-2">
+                    <Plus size={14} /> Adicionar Contato
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {contactFields.map((field, index) => (
+                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-indigo-50">
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Nome</Label>
+                        <Input {...register(`contatos_responsaveis.${index}.nome` as const)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Cargo/Setor</Label>
+                        <Input {...register(`contatos_responsaveis.${index}.cargo` as const)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Telefone</Label>
+                        <Input {...register(`contatos_responsaveis.${index}.telefone` as const)} />
+                      </div>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-[10px]">E-mail</Label>
+                          <Input {...register(`contatos_responsaveis.${index}.email` as const)} />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeContact(index)} className="text-rose-500">
+                          <Trash2 size={18} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Briefcase size={16} /> Dados Profissionais
+              <Briefcase size={16} /> {tipoPessoa === 'F' ? 'Dados Profissionais' : 'Dados Adicionais da Empresa'}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Profissão</Label>
-                <Input {...register("profissao")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Local de Trabalho</Label>
-                <Input {...register("local_trabalho")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Cargo</Label>
-                <Input {...register("cargo")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Data Admissão</Label>
-                <Input type="date" {...register("data_admissao")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Salário Mensal</Label>
-                <Input type="number" step="0.01" {...register("salario")} />
-              </div>
+              {tipoPessoa === 'F' ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Profissão</Label>
+                    <Input {...register("profissao")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Local de Trabalho</Label>
+                    <Input {...register("local_trabalho")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Cargo</Label>
+                    <Input {...register("cargo")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data Admissão</Label>
+                    <Input type="date" {...register("data_admissao")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Salário Mensal</Label>
+                    <Input type="number" step="0.01" {...register("salario")} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Data de Fundação</Label>
+                    <Input type="date" {...register("data_nascimento")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Número de Funcionários</Label>
+                    <Input type="number" {...register("salario")} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -395,7 +516,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               <Textarea 
                 placeholder="Digite os nomes das pessoas autorizadas, um por linha..." 
                 className="min-h-[100px]"
-                {...register("obs1")} // Usando obs1 temporariamente para simplificar a lista
+                {...register("obs1")} 
               />
               <p className="text-[10px] text-emerald-600">Estas pessoas serão consultadas no momento da venda.</p>
             </div>

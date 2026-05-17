@@ -1,7 +1,7 @@
 "use client";
 
 export type TipoPessoa = 'F' | 'J';
-export type TipoEntidade = 'C' | 'F' | 'A'; // Cliente, Fornecedor, Ambos
+export type TipoEntidade = 'C' | 'F' | 'A';
 
 export interface EnderecoAdicional {
   tipo: 'Entrega' | 'Cobrança' | 'Trabalho';
@@ -14,18 +14,31 @@ export interface EnderecoAdicional {
   uf?: string;
 }
 
+export interface ContatoResponsavel {
+  nome: string;
+  cargo: string;
+  telefone?: string;
+  email?: string;
+}
+
+export interface Socio {
+  nome: string;
+  cpf: string;
+}
+
 export interface Cliente {
   cd_clientes: number;
   tipo_entidade: TipoEntidade;
   tipo_pessoa: TipoPessoa;
   data: string;
-  nome: string;
+  nome: string; // Razão Social para PJ
   apelido_fantasia?: string;
   
   // Documentos
   cpf_cnpj?: string;
   rg_ie?: string;
-  tipo_documento?: string; // RG, CNH, Passaporte, etc.
+  inscricao_municipal?: string;
+  tipo_documento?: string;
   
   // Pessoal (PF)
   sexo?: string;
@@ -43,11 +56,16 @@ export interface Cliente {
   conjuge_telefone?: string;
   conjuge_salario?: number;
   
-  // Profissional
+  // Profissional / Empresa
   local_trabalho?: string;
   cargo?: string;
   data_admissao?: string;
   salario?: number;
+  site?: string;
+  
+  // Listas Dinâmicas (PJ)
+  contatos_responsaveis?: ContatoResponsavel[];
+  quadro_societario?: Socio[];
   
   // Endereço Principal
   cep?: string;
@@ -65,21 +83,18 @@ export interface Cliente {
   cel?: string;
   email?: string;
   
-  // Financeiro / Adicional
+  // Financeiro
   limite?: number;
-  despesa_fixa?: number; // Água/Luz/Tel
+  despesa_fixa?: number;
   despesa_alimentacao?: number;
   despesa_aluguel?: number;
   obs1?: string;
   
   // Autorizações
-  pessoas_autorizadas?: string[]; // Lista de nomes
-  
-  // Múltiplos Endereços
+  pessoas_autorizadas?: string[];
   enderecos_adicionais?: EnderecoAdicional[];
 }
 
-// ... manter as outras interfaces (Produto, Venda, etc)
 export interface Produto {
   cd_produto: number;
   nome: string;
