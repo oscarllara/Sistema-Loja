@@ -42,6 +42,7 @@ import { LancamentoFinanceiro, ContaBancaria, Patrimonio } from '@/types/databas
 import { Badge } from "@/components/ui/badge";
 import { showSuccess, showError } from '@/utils/toast';
 import FinancialForm from '@/components/FinancialForm';
+import AccountForm from '@/components/AccountForm';
 
 const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
@@ -50,6 +51,7 @@ const Financial = () => {
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [editValue, setEditValue] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = React.useState(false);
   const user = db.auth.getUser();
 
   const loadData = () => {
@@ -181,6 +183,23 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
+              
+              <Dialog open={isAccountModalOpen} onOpenChange={setIsAccountModalOpen}>
+                <DialogTrigger asChild>
+                  <Card className="border-dashed border-2 border-slate-200 flex items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors">
+                    <div className="text-center text-slate-400">
+                      <Plus className="mx-auto mb-2" />
+                      <p className="text-sm font-medium">Nova Conta / Caixa</p>
+                    </div>
+                  </Card>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cadastrar Nova Conta</DialogTitle>
+                  </DialogHeader>
+                  <AccountForm onSuccess={() => { setIsAccountModalOpen(false); loadData(); }} />
+                </DialogContent>
+              </Dialog>
             </div>
           </TabsContent>
 
