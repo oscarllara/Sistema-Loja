@@ -48,7 +48,8 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle 
+  DialogTitle,
+  DialogFooter
 } from "@/components/ui/dialog";
 
 const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
@@ -74,12 +75,14 @@ const POS = () => {
   const [selectedSellerId, setSelectedSellerId] = React.useState<number>(1);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = React.useState(false);
+  const [budgetName, setBudgetName] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState("venda");
 
   const products = React.useMemo(() => db.produtos.getAll() || [], []);
   const vendedores = React.useMemo(() => (db.clientes.getAll() || []).filter(c => c.is_funcionario), []);
-  const orcamentos = React.useMemo(() => (db.orcamentos.getAll() || []).filter(o => o && o.status === 'Aberto'), []);
+  const orcamentos = db.orcamentos.getAll().filter(o => o && o.status === 'Aberto');
 
   React.useEffect(() => {
     if (vendedores.length > 0) {
@@ -140,16 +143,12 @@ const POS = () => {
   };
 
   const getItemPrice = (item: any) => {
-    // Se a unidade selecionada for a fracionada e houver um preço manual definido
     if (item.selectedUnit === item.un_fracionada && item.venda_fracionada > 0) {
       return item.venda_fracionada;
     }
-
     const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
     const precoPrazo = item.venda || 0;
     let precoBase = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
-
-    // Se a unidade selecionada for a fracionada mas não houver preço manual, usa o fator de conversão
     if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
       return precoBase * item.fator_conversao;
     }
@@ -164,7 +163,47 @@ const POS = () => {
     }, 0);
   }, [cart, paymentMethod]);
 
-  const handleCheckout = (isOrcamento = false) => {
+  const handleSaveBudget = () => {
+    if (cart.length === 0) return;
+    
+    try {
+      const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
+      const payload = {
+        data: new Date().toISOString(),
+        total: total,
+        custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
+        cd_clientes: 1,
+        nome_cliente: budgetName || 'CONSUMIDOR FINAL',
+        cd_func: selectedSellerId,
+        nome_vendedor: vendedor?.nome || 'ADMINISTRADOR',
+        tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
+        meio_pagamento: paymentMethod,
+        itens: cart.map(item => {
+          const precoFinal = getItemPrice(item);
+          return {
+            cd_produto: item.cd_produto,
+            nome_produto: `${item.nome || 'Produto'} (${item.selectedUnit})`,
+            valor: precoFinal,
+            qtde: item.quantity || 0,
+            subtotal: precoFinal * (item.quantity || 0)
+          };
+        })
+      };
+
+      const orc = db.orcamentos.add(payload);
+      setLastActionData({ ...orc, type: 'Orcamento' });
+      showSuccess(`Orçamento #${orc.cd_orcamento} salvo com sucesso!`);
+      
+      setCart([]);
+      setBudgetName("");
+      setIsBudgetModalOpen(false);
+      setIsPrintOpen(true);
+    } catch (err) {
+      showError("Erro ao salvar orçamento.");
+    }
+  };
+
+  const handleCheckout = () => {
     if (cart.length === 0) return;
 
     try {
@@ -193,48 +232,40 @@ const POS = () => {
         })
       };
 
-      if (isOrcamento) {
-        const orc = db.orcamentos.add(payload);
-        setLastActionData({ ...orc, type: 'Orcamento' });
-        showSuccess("Orçamento salvo!");
-      } else {
-        db.vendas.add({ ...payload, cd_venda: id });
-        
-        db.financeiro.add({
-          tipo: 'R',
-          descricao: `Venda PDV #${id}`,
-          valor: total,
-          data_vencimento: new Date().toISOString(),
-          data_pagamento: paymentMethod === 'Crediário' ? undefined : new Date().toISOString(),
-          status: paymentMethod === 'Crediário' ? 'Pendente' : 'Pago',
-          categoria: 'Venda',
-          meio_pagamento: paymentMethod,
-          cd_entidade: 1,
-          nome_entidade: 'CONSUMIDOR FINAL',
-          cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
-          cd_venda: id
-        });
+      db.vendas.add({ ...payload, cd_venda: id });
+      
+      db.financeiro.add({
+        tipo: 'R',
+        descricao: `Venda PDV #${id}`,
+        valor: total,
+        data_vencimento: new Date().toISOString(),
+        data_pagamento: paymentMethod === 'Crediário' ? undefined : new Date().toISOString(),
+        status: paymentMethod === 'Crediário' ? 'Pendente' : 'Pago',
+        categoria: 'Venda',
+        meio_pagamento: paymentMethod,
+        cd_entidade: 1,
+        nome_entidade: 'CONSUMIDOR FINAL',
+        cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
+        cd_venda: id
+      });
 
-        cart.forEach(item => {
-          const prod = products.find(p => p.cd_produto === item.cd_produto);
-          if (prod) {
-            let qtdeBaixa = item.quantity || 0;
-            if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
-              qtdeBaixa = (item.quantity || 0) * item.fator_conversao;
-            }
-            db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - qtdeBaixa });
+      cart.forEach(item => {
+        const prod = products.find(p => p.cd_produto === item.cd_produto);
+        if (prod) {
+          let qtdeBaixa = item.quantity || 0;
+          if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
+            qtdeBaixa = (item.quantity || 0) * item.fator_conversao;
           }
-        });
+          db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - qtdeBaixa });
+        }
+      });
 
-        setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
-        showSuccess("Venda finalizada!");
-      }
-
+      setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
+      showSuccess("Venda finalizada!");
       setCart([]);
       setIsPrintOpen(true);
     } catch (err) {
       showError("Erro ao processar operação.");
-      console.error(err);
     }
   };
 
@@ -255,9 +286,16 @@ const POS = () => {
       setSelectedSellerId(orc.cd_func || 1);
       setPaymentMethod(orc.meio_pagamento || 'Dinheiro');
       setActiveTab("venda");
-      showSuccess("Orçamento carregado!");
+      showSuccess(`Orçamento #${orc.cd_orcamento} carregado!`);
     } catch (e) {
       showError("Erro ao carregar orçamento.");
+    }
+  };
+
+  const deleteOrcamento = (id: number) => {
+    if (confirm("Deseja excluir este orçamento?")) {
+      db.orcamentos.delete(id);
+      showSuccess("Orçamento excluído.");
     }
   };
 
@@ -302,7 +340,6 @@ const POS = () => {
                         className="w-full h-10 pl-10 rounded-lg border-none bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
                         value={selectedSellerId}
                         onChange={(e) => setSelectedSellerId(Number(e.target.value))}
-                        title="Selecione o Vendedor"
                       >
                         {vendedores.map(v => (
                           <option key={v.cd_clientes} value={v.cd_clientes}>{v.nome}</option>
@@ -362,7 +399,6 @@ const POS = () => {
                                       ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer border border-indigo-200" 
                                       : "bg-slate-100 text-slate-500"
                                   )}
-                                  title={item.fracionado ? "Clique para alternar unidade" : ""}
                                 >
                                   {item.selectedUnit || item.un || 'UN'}
                                   {item.fracionado && <Scale size={10} className="inline ml-1" />}
@@ -410,14 +446,14 @@ const POS = () => {
                 <div className="pt-4 border-t space-y-3">
                   <Button 
                     className="w-full h-12 bg-slate-100 text-slate-900 hover:bg-slate-200 gap-2 font-bold"
-                    onClick={() => handleCheckout(true)}
+                    onClick={() => setIsBudgetModalOpen(true)}
                     disabled={cart.length === 0}
                   >
                     <Save size={18} /> Salvar Orçamento
                   </Button>
                   <Button 
                     className="w-full h-16 bg-indigo-600 hover:bg-indigo-700 text-lg font-black shadow-lg shadow-indigo-100"
-                    onClick={() => handleCheckout(false)}
+                    onClick={handleCheckout}
                     disabled={cart.length === 0}
                   >
                     FINALIZAR VENDA
@@ -432,30 +468,35 @@ const POS = () => {
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
+                    <TableHead className="w-24">Nº Orç.</TableHead>
                     <TableHead>Data</TableHead>
+                    <TableHead>Cliente / Referência</TableHead>
                     <TableHead>Vendedor</TableHead>
-                    <TableHead>Itens</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {orcamentos.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhum orçamento aberto.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-20 text-slate-400">Nenhum orçamento aberto.</TableCell></TableRow>
                   ) : (
                     orcamentos.map((orc) => (
                       <TableRow key={orc.cd_orcamento}>
+                        <TableCell className="font-bold text-indigo-600">#{orc.cd_orcamento}</TableCell>
                         <TableCell className="text-xs">{new Date(orc.data).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-bold text-slate-900">{orc.nome_vendedor || 'ADMINISTRADOR'}</TableCell>
-                        <TableCell className="text-xs text-slate-500">{(orc.itens || []).length} itens</TableCell>
+                        <TableCell className="font-medium">{orc.nome_cliente || 'CONSUMIDOR'}</TableCell>
+                        <TableCell className="text-xs text-slate-500">{orc.nome_vendedor}</TableCell>
                         <TableCell className="text-right font-bold">R$ {(orc.total || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => loadOrcamento(orc)}>
+                            <Button variant="outline" size="sm" className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50" onClick={() => loadOrcamento(orc)}>
                               <ShoppingCart size={14} /> Abrir Venda
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => { setLastActionData({ ...orc, type: 'Orcamento' }); setIsPrintOpen(true); }}>
                               <Printer size={16} />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-rose-500" onClick={() => deleteOrcamento(orc.cd_orcamento)}>
+                              <Trash2 size={16} />
                             </Button>
                           </div>
                         </TableCell>
@@ -467,6 +508,30 @@ const POS = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Modal para Nome do Cliente no Orçamento */}
+        <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Salvar Orçamento</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Nome do Cliente ou Referência</Label>
+                <Input 
+                  placeholder="Ex: João da Silva / Obra Centro" 
+                  value={budgetName}
+                  onChange={(e) => setBudgetName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsBudgetModalOpen(false)}>Cancelar</Button>
+              <Button className="bg-indigo-600" onClick={handleSaveBudget}>Salvar Orçamento</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <ProductSearchModal 
           isOpen={isSearchOpen} 

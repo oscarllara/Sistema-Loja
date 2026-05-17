@@ -61,7 +61,6 @@ const getDB = () => {
       database = {};
     }
     
-    // Garantir que todas as tabelas existam
     if (!Array.isArray(database.clientes)) database.clientes = [adminUser];
     if (!Array.isArray(database.produtos)) database.produtos = [];
     if (!Array.isArray(database.vendas)) database.vendas = [];
@@ -130,7 +129,12 @@ export const db = {
     getAll: (): Orcamento[] => getDB().orcamentos || [],
     add: (o: Omit<Orcamento, 'cd_orcamento'>) => {
       const database = getDB();
-      const novo = { ...o, cd_orcamento: Date.now(), status: 'Aberto' as const };
+      // Gera um ID sequencial simples baseado no tamanho da lista
+      const nextId = (database.orcamentos.length > 0) 
+        ? Math.max(...database.orcamentos.map((orc: any) => orc.cd_orcamento)) + 1 
+        : 100;
+      
+      const novo = { ...o, cd_orcamento: nextId, status: 'Aberto' as const };
       database.orcamentos.push(novo);
       saveDB(database);
       return novo;
@@ -142,6 +146,11 @@ export const db = {
         database.orcamentos[idx].status = status;
         saveDB(database);
       }
+    },
+    delete: (id: number) => {
+      const database = getDB();
+      database.orcamentos = database.orcamentos.filter((o: any) => o.cd_orcamento !== id);
+      saveDB(database);
     }
   },
   financeiro: {
@@ -196,7 +205,6 @@ export const db = {
       const lanc = database.financeiro[lIdx];
       if (lanc.cd_conta === newAccountId) return;
       
-      // Reverter saldo na conta antiga
       if (lanc.status === 'Pago' && lanc.cd_conta) {
         const oldCIdx = database.contas.findIndex((c: any) => c.cd_conta === lanc.cd_conta);
         if (oldCIdx !== -1) {
@@ -205,7 +213,6 @@ export const db = {
         }
       }
       
-      // Aplicar saldo na conta nova
       lanc.cd_conta = newAccountId;
       if (lanc.status === 'Pago') {
         const newCIdx = database.contas.findIndex((c: any) => c.cd_conta === newAccountId);
