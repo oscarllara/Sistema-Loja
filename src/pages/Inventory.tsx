@@ -54,8 +54,8 @@ const Inventory = () => {
       if (isNaN(numValue)) return;
 
       db.produtos.update(id, { [field]: numValue });
-      // Atualiza o estado local para refletir a mudança sem recarregar tudo
       setProducts(prev => prev.map(p => p.cd_produto === id ? { ...p, [field]: numValue } : p));
+      showSuccess("Alteração salva!");
     } catch (err: any) {
       showError(err.message);
     }
@@ -135,7 +135,7 @@ const Inventory = () => {
                   <TableHead className="font-bold w-32">Custo (R$)</TableHead>
                   <TableHead className="font-bold w-32">À Vista (R$)</TableHead>
                   <TableHead className="font-bold w-32">A Prazo (R$)</TableHead>
-                  <TableHead className="text-right font-bold w-20">Ações</TableHead>
+                  <TableHead className="text-right font-bold w-28">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -158,7 +158,9 @@ const Inventory = () => {
                         <div>
                           <p className="font-bold text-slate-900 text-sm truncate max-w-[250px]">{product.nome}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">{product.un}</span>
+                            <span className="text-[9px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">
+                              {product.un.toUpperCase()}
+                            </span>
                             {product.fracionado && <Badge variant="outline" className="text-[8px] h-3.5 px-1 border-indigo-200 text-indigo-600 bg-indigo-50">FRAC.</Badge>}
                           </div>
                         </div>
@@ -208,8 +210,17 @@ const Inventory = () => {
                           <Button 
                             variant="ghost" 
                             size="icon" 
+                            className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                            title="Salvar alterações"
+                          >
+                            <Save size={14} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
                             className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                             onClick={() => handleEdit(product)}
+                            title="Editar completo"
                           >
                             <Edit size={14} />
                           </Button>
@@ -218,6 +229,7 @@ const Inventory = () => {
                             size="icon" 
                             className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                             onClick={() => handleDelete(product.cd_produto)}
+                            title="Excluir produto"
                           >
                             <Trash2 size={14} />
                           </Button>

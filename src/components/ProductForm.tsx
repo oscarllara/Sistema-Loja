@@ -60,7 +60,6 @@ interface ProductFormProps {
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const allProducts = db.produtos.getAll().filter(p => p.cd_produto !== product?.cd_produto);
 
-  // Formatação de Moeda (R$ 0,00)
   const formatCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
@@ -109,7 +108,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const isKit = watch("is_kit");
   const isFracionado = watch("fracionado");
 
-  // Efeito para calcular preço à vista automaticamente quando venda ou desconto mudam
   React.useEffect(() => {
     const venda = parseCurrencyToNumber(vendaStr);
     const descValor = parseFloat(descValorStr || "0");
@@ -135,6 +133,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         ...data,
         cd_produto: product?.cd_produto || Date.now(),
         nome: data.nome.toUpperCase(),
+        un: data.un.toUpperCase(),
+        un_fracionada: data.un_fracionada?.toUpperCase(),
         compra: parseCurrencyToNumber(data.compra || ""),
         venda: parseCurrencyToNumber(data.venda),
         venda_vista: parseCurrencyToNumber(data.venda_vista || ""),
@@ -271,7 +271,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Unidade Principal</Label>
-              <Input {...register("un")} placeholder="Ex: SACO" />
+              <Input 
+                {...register("un")} 
+                placeholder="Ex: SACO" 
+                className="uppercase"
+                onChange={(e) => setValue("un", e.target.value.toUpperCase())}
+              />
             </div>
             <div className="space-y-2">
               <Label>Estoque Atual</Label>
@@ -300,7 +305,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                 <div className="space-y-2">
                   <Label>Unidade de Venda (Fracionada)</Label>
-                  <Input {...register("un_fracionada")} placeholder="Ex: KG" />
+                  <Input 
+                    {...register("un_fracionada")} 
+                    placeholder="Ex: KG" 
+                    className="uppercase"
+                    onChange={(e) => setValue("un_fracionada", e.target.value.toUpperCase())}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Fator de Conversão (1 {watch("un_fracionada")} = ? {watch("un")})</Label>
