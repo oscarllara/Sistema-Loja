@@ -159,8 +159,10 @@ export interface VendaItem {
   cd_produto: number;
   nome_produto: string;
   valor: number;
+  custo: number;
   qtde: number;
   subtotal: number;
+  un: string;
 }
 
 export interface Venda {
