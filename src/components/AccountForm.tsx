@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
+import { ContaBancaria } from '@/types/database';
 
 const accountSchema = z.object({
   nome: z.string().min(3, "Nome da conta obrigatório"),
@@ -21,15 +22,12 @@ const accountSchema = z.object({
 
 type AccountFormValues = z.infer<typeof accountSchema>;
 
-const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<AccountFormValues>({
-    resolver: zodResolver(accountSchema),
-    defaultValues: {
-      tipo: 'Banco',
-      saldo: "0,00"
-    }
-  });
+interface AccountFormProps {
+  account?: ContaBancaria;
+  onSuccess: () => void;
+}
 
+const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
   const formatCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
@@ -40,24 +38,45 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
     }).format(number);
   };
 
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<AccountFormValues>({
+    resolver: zodResolver(accountSchema),
+    defaultValues: account ? {
+      nome: account.nome,
+      banco_numero: account.banco_numero || "",
+      agencia: account.agencia || "",
+      conta_numero: account.conta_numero || "",
+      tipo: account.tipo,
+      saldo: formatCurrency((account.saldo * 100).toString())
+    } : {
+      tipo: 'Banco',
+      saldo: "0,00"
+    }
+  });
+
   const onSubmit = (data: AccountFormValues) => {
     try {
       const saldoNum = parseFloat(data.saldo.replace(/\./g, "").replace(",", "."));
       
-      db.contas.add({
+      const payload = {
         nome: data.nome.toUpperCase(),
         banco_numero: data.banco_numero,
         agencia: data.agencia,
         conta_numero: data.conta_numero,
         tipo: data.tipo,
         saldo: saldoNum
-      });
+      };
 
-      showSuccess("Conta cadastrada com sucesso!");
+      if (account) {
+        db.contas.update(account.cd_conta, payload);
+        showSuccess("Conta atualizada com sucesso!");
+      } else {
+        db.contas.add(payload);
+        showSuccess("Conta cadastrada com sucesso!");
+      }
       onSuccess();
     } catch (err: any) {
-      console.error("Erro ao cadastrar conta:", err);
-      showError(err.message || "Erro ao cadastrar conta.");
+      console.error("Erro ao salvar conta:", err);
+      showError(err.message || "Erro ao salvar conta.");
     }
   };
 
@@ -100,7 +119,7 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
           </select>
         </div>
         <div className="space-y-2">
-          <Label>Saldo Inicial (R$)</Label>
+          <Label>Saldo (R$)</Label>
           <Input 
             {...register("saldo")} 
             onChange={(e) => setValue("saldo", formatCurrency(e.target.value))}
@@ -110,7 +129,7 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
       </div>
 
       <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold">
-        Cadastrar Conta
+        {account ? "Salvar Alterações" : "Cadastrar Conta"}
       </Button>
     </form>
   );

@@ -15,7 +15,9 @@ import {
   Home,
   Edit3,
   Save,
-  X
+  X,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,7 @@ const Financial = () => {
   const [editValue, setEditValue] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = React.useState(false);
+  const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
   const [isPatrimonyModalOpen, setIsPatrimonyModalOpen] = React.useState(false);
   const user = db.auth.getUser();
 
@@ -98,6 +101,19 @@ const Financial = () => {
     }
     db.financeiro.baixar(id, contas[0].cd_conta);
     loadData();
+  };
+
+  const handleEditAccount = (account: ContaBancaria) => {
+    setEditingAccount(account);
+    setIsAccountModalOpen(true);
+  };
+
+  const handleDeleteAccount = (id: number) => {
+    if (confirm("Tem certeza que deseja excluir esta conta?")) {
+      db.contas.delete(id);
+      loadData();
+      showSuccess("Conta excluída.");
+    }
   };
 
   return (
@@ -172,11 +188,21 @@ const Financial = () => {
           <TabsContent value="accounts">
             <div className="grid gap-4 md:grid-cols-3">
               {contas.map((account) => (
-                <Card key={account.cd_conta} className="border-none shadow-sm">
+                <Card key={account.cd_conta} className="border-none shadow-sm group relative">
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-2 bg-slate-100 rounded-lg"><Wallet className="text-slate-600" size={20} /></div>
-                      <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => handleEditAccount(account)}>
+                            <Edit size={12} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-rose-600" onClick={() => handleDeleteAccount(account.cd_conta)}>
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                     <h3 className="font-bold text-slate-900">{account.nome}</h3>
                     <p className="text-2xl font-bold text-indigo-600 mt-2">
@@ -186,7 +212,7 @@ const Financial = () => {
                 </Card>
               ))}
               
-              <Dialog open={isAccountModalOpen} onOpenChange={setIsAccountModalOpen}>
+              <Dialog open={isAccountModalOpen} onOpenChange={(open) => { setIsAccountModalOpen(open); if(!open) setEditingAccount(undefined); }}>
                 <DialogTrigger asChild>
                   <Card className="border-dashed border-2 border-slate-200 flex items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors">
                     <div className="text-center text-slate-400">
@@ -197,9 +223,9 @@ const Financial = () => {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Cadastrar Nova Conta</DialogTitle>
+                    <DialogTitle>{editingAccount ? "Editar Conta" : "Cadastrar Nova Conta"}</DialogTitle>
                   </DialogHeader>
-                  <AccountForm onSuccess={() => { setIsAccountModalOpen(false); loadData(); }} />
+                  <AccountForm account={editingAccount} onSuccess={() => { setIsAccountModalOpen(false); setEditingAccount(undefined); loadData(); }} />
                 </DialogContent>
               </Dialog>
             </div>

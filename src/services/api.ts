@@ -47,7 +47,6 @@ const getDB = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
   } else {
     database = JSON.parse(data);
-    // Garantir que todas as tabelas existam para evitar erros de 'undefined'
     if (!database.transferencias) database.transferencias = [];
     if (!database.patrimonio) database.patrimonio = [];
     if (!database.contas) {
@@ -152,6 +151,19 @@ export const db = {
       const database = getDB();
       if (!database.contas) database.contas = [];
       database.contas.push({ ...conta, cd_conta: Date.now() });
+      saveDB(database);
+    },
+    update: (id: number, data: Partial<ContaBancaria>) => {
+      const database = getDB();
+      const idx = database.contas.findIndex((c: any) => c.cd_conta === id);
+      if (idx !== -1) {
+        database.contas[idx] = { ...database.contas[idx], ...data };
+        saveDB(database);
+      }
+    },
+    delete: (id: number) => {
+      const database = getDB();
+      database.contas = database.contas.filter((c: any) => c.cd_conta !== id);
       saveDB(database);
     }
   },
