@@ -20,7 +20,8 @@ import {
   Trash2,
   Search,
   Calendar,
-  FileText
+  FileText,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,15 +52,15 @@ import AccountForm from '@/components/AccountForm';
 import PatrimonyForm from '@/components/PatrimonyForm';
 import AccountDetails from '@/components/AccountDetails';
 import ClientDetails from '@/components/ClientDetails';
+import TransferForm from '@/components/TransferForm';
 import { cn } from '@/lib/utils';
 
 const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
-  const [editingId, setEditingId] = React.useState<number | null>(null);
-  const [editValue, setEditValue] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isTransferOpen, setIsTransferOpen] = React.useState(false);
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
   
@@ -67,8 +68,6 @@ const Financial = () => {
   const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = React.useState("");
-
-  const user = db.auth.getUser();
 
   const loadData = React.useCallback(() => {
     setLancamentos(db.financeiro.getAll() || []);
@@ -123,6 +122,18 @@ const Financial = () => {
             <p className="text-slate-500">Controle global de Contas a Receber e Contas a Pagar.</p>
           </div>
           <div className="flex gap-2">
+            <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl gap-2">
+                  <ArrowRightLeft size={20} /> Transferir
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader><DialogTitle>Transferência entre Contas</DialogTitle></DialogHeader>
+                <TransferForm onSuccess={() => { setIsTransferOpen(false); loadData(); }} />
+              </DialogContent>
+            </Dialog>
+
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
