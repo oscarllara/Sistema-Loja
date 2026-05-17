@@ -21,7 +21,8 @@ import {
   History,
   FileCode,
   ArrowLeftRight,
-  UserCircle
+  UserCircle,
+  Scale
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,6 @@ const POS = () => {
   const [selectedSellerId, setSelectedSellerId] = React.useState<number>(1);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
-  const [isClientDetailsOpen, setIsClientDetailsOpen] = React.useState(false);
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState("venda");
 
@@ -110,30 +110,52 @@ const POS = () => {
           item.cd_produto === product.cd_produto ? { ...item, quantity: (item.quantity || 1) + 1 } : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      // Inicializa com a unidade principal
+      return [...prev, { ...product, quantity: 1, selectedUnit: product.un }];
     });
+  };
+
+  const toggleUnit = (id: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.cd_produto === id && item.fracionado && item.un_fracionada) {
+        const newUnit = item.selectedUnit === item.un ? item.un_fracionada : item.un;
+        return { ...item, selectedUnit: newUnit };
+      }
+      return item;
+    }));
   };
 
   const removeFromCart = (id: number) => {
     setCart(prev => prev.filter(item => item.cd_produto !== id));
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: number, value: number | string) => {
     setCart(prev => prev.map(item => {
       if (item.cd_produto === id) {
-        const newQty = Math.max(1, (item.quantity || 1) + delta);
-        return { ...item, quantity: newQty };
+        let newQty = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : (item.quantity || 1) + value;
+        if (isNaN(newQty)) newQty = 0;
+        return { ...item, quantity: Math.max(0, newQty) };
       }
       return item;
     }));
   };
 
+  const getItemPrice = (item: any) => {
+    const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
+    const precoPrazo = item.venda || 0;
+    let precoBase = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+
+    // Se a unidade selecionada for a fracionada, aplica o fator de conversão
+    if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
+      return precoBase * item.fator_conversao;
+    }
+    return precoBase;
+  };
+
   const total = React.useMemo(() => {
     return cart.reduce((acc, item) => {
       if (!item) return acc;
-      const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
-      const precoPrazo = item.venda || 0;
-      const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+      const preco = getItemPrice(item);
       return acc + (preco * (item.quantity || 0));
     }, 0);
   }, [cart, paymentMethod]);
@@ -149,19 +171,17 @@ const POS = () => {
         data: new Date().toISOString(),
         total: total,
         custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
-        cd_clientes: 1, // Por padrão, consumidor final no PDV rápido
+        cd_clientes: 1,
         nome_cliente: 'CONSUMIDOR FINAL',
         cd_func: selectedSellerId,
         nome_vendedor: vendedor?.nome || 'ADMINISTRADOR',
         tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
         meio_pagamento: paymentMethod,
         itens: cart.map(item => {
-          const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
-          const precoPrazo = item.venda || 0;
-          const precoFinal = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+          const precoFinal = getItemPrice(item);
           return {
             cd_produto: item.cd_produto,
-            nome_produto: item.nome || 'Produto',
+            nome_produto: `${item.nome || 'Produto'} (${item.selectedUnit})`,
             valor: precoFinal,
             qtde: item.quantity || 0,
             subtotal: precoFinal * (item.quantity || 0)
@@ -191,10 +211,16 @@ const POS = () => {
           cd_venda: id
         });
 
+        // Baixa de estoque considerando conversão
         cart.forEach(item => {
           const prod = products.find(p => p.cd_produto === item.cd_produto);
           if (prod) {
-            db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - (item.quantity || 0) });
+            let qtdeBaixa = item.quantity || 0;
+            // Se vendeu na unidade fracionada, converte para a unidade principal para baixar o estoque
+            if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
+              qtdeBaixa = (item.quantity || 0) * item.fator_conversao;
+            }
+            db.produtos.update(prod.cd_produto, { estoque: (prod.estoque || 0) - qtdeBaixa });
           }
         });
 
@@ -220,7 +246,8 @@ const POS = () => {
           quantity: item.qtde, 
           nome: item.nome_produto, 
           cd_produto: item.cd_produto,
-          venda: item.valor 
+          venda: item.valor,
+          selectedUnit: item.nome_produto.includes('(') ? item.nome_produto.split('(')[1].replace(')', '') : (prod?.un || 'UN')
         };
       }));
       setSelectedSellerId(orc.cd_func || 1);
@@ -299,7 +326,7 @@ const POS = () => {
                       <TableRow>
                         <TableHead className="w-20">Cód.</TableHead>
                         <TableHead>Produto</TableHead>
-                        <TableHead className="w-16 text-center">UN</TableHead>
+                        <TableHead className="w-24 text-center">UN</TableHead>
                         <TableHead className="text-right">Unitário</TableHead>
                         <TableHead className="text-center w-32">Quantidade</TableHead>
                         <TableHead className="text-right">Subtotal</TableHead>
@@ -316,9 +343,7 @@ const POS = () => {
                         </TableRow>
                       ) : (
                         cart.map((item) => {
-                          const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
-                          const precoPrazo = item.venda || 0;
-                          const preco = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+                          const preco = getItemPrice(item);
                           return (
                             <TableRow key={item.cd_produto} className="hover:bg-slate-50">
                               <TableCell className="font-mono text-xs">{item.id_manual || '-'}</TableCell>
@@ -326,15 +351,30 @@ const POS = () => {
                                 <p className="font-bold text-slate-900 uppercase text-xs">{item.nome || 'Produto'}</p>
                               </TableCell>
                               <TableCell className="text-center">
-                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase">
-                                  {item.un || 'UN'}
-                                </span>
+                                <button 
+                                  onClick={() => toggleUnit(item.cd_produto)}
+                                  disabled={!item.fracionado}
+                                  className={cn(
+                                    "text-[10px] font-bold px-2 py-1 rounded uppercase transition-all",
+                                    item.fracionado 
+                                      ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer border border-indigo-200" 
+                                      : "bg-slate-100 text-slate-500"
+                                  )}
+                                  title={item.fracionado ? "Clique para alternar unidade" : ""}
+                                >
+                                  {item.selectedUnit || item.un || 'UN'}
+                                  {item.fracionado && <Scale size={10} className="inline ml-1" />}
+                                </button>
                               </TableCell>
                               <TableCell className="text-right font-medium">R$ {preco.toFixed(2)}</TableCell>
                               <TableCell>
-                                <div className="flex items-center justify-center gap-2">
+                                <div className="flex items-center justify-center gap-1">
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.cd_produto, -1)}><Minus size={12} /></Button>
-                                  <span className="text-sm font-bold w-8 text-center">{item.quantity}</span>
+                                  <Input 
+                                    className="h-8 w-16 text-center text-xs font-bold p-0"
+                                    value={item.quantity}
+                                    onChange={(e) => updateQuantity(item.cd_produto, e.target.value)}
+                                  />
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.cd_produto, 1)}><Plus size={12} /></Button>
                                 </div>
                               </TableCell>
