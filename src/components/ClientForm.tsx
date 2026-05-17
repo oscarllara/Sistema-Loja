@@ -31,7 +31,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const clientSchema = z.object({
-  tipo_entidade: z.enum(['C', 'F', 'A']),
+  tipo_entidade: z.enum(['C', 'F', 'A', 'FU']),
   tipo_pessoa: z.enum(['F', 'J']),
   nome: z.string().min(3, "Nome/Razão Social obrigatório"),
   apelido_fantasia: z.string().optional(),
@@ -60,13 +60,13 @@ const clientSchema = z.object({
   conjuge_nascimento: z.string().optional(),
   conjuge_empresa: z.string().optional(),
   conjuge_telefone: z.string().optional(),
-  conjuge_salario: z.coerce.number().optional(),
+  conjuge_salario: z.string().optional(),
   
   // Profissional
   local_trabalho: z.string().optional(),
   cargo: z.string().optional(),
   data_admissao: z.string().optional(),
-  salario: z.coerce.number().optional(),
+  salario: z.string().optional(),
   
   // Endereço
   cep: z.string().optional(),
@@ -97,10 +97,10 @@ const clientSchema = z.object({
   })).optional(),
   
   // Financeiro
-  limite: z.coerce.number().optional(),
-  despesa_fixa: z.coerce.number().optional(),
-  despesa_alimentacao: z.coerce.number().optional(),
-  despesa_aluguel: z.coerce.number().optional(),
+  limite: z.string().optional(),
+  despesa_fixa: z.string().optional(),
+  despesa_alimentacao: z.string().optional(),
+  despesa_aluguel: z.string().optional(),
   obs1: z.string().optional(),
 });
 
@@ -116,7 +116,14 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
-    defaultValues: client || {
+    defaultValues: client ? {
+      ...client,
+      salario: client.salario ? formatCurrency(client.salario.toString()) : "",
+      limite: client.limite ? formatCurrency(client.limite.toString()) : "",
+      despesa_fixa: client.despesa_fixa ? formatCurrency(client.despesa_fixa.toString()) : "",
+      despesa_alimentacao: client.despesa_alimentacao ? formatCurrency(client.despesa_alimentacao.toString()) : "",
+      despesa_aluguel: client.despesa_aluguel ? formatCurrency(client.despesa_aluguel.toString()) : "",
+    } : {
       tipo_entidade: 'C',
       tipo_pessoa: 'F',
       nome: "",
@@ -137,6 +144,23 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
+  const salarioValue = watch("salario");
+
+  // Formatação de Moeda (R$ 0,00)
+  function formatCurrency(value: string) {
+    const digits = value.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "";
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(number);
+  }
+
+  function parseCurrencyToNumber(value: string) {
+    if (!value) return 0;
+    return parseFloat(value.replace(/[^\d,]/g, "").replace(",", ".")) || 0;
+  }
 
   // Máscara de CPF (xxx.xxx.xxx-xx)
   const maskCPF = (value: string) => {
@@ -148,7 +172,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
-  // Máscara de Telefone (+55 (xx) xxxxx-xxxx ou +55 (xx) xxxx-xxxx)
+  // Máscara de Telefone (+55 (xx) xxxxx-xxxx)
   const maskPhone = (value: string) => {
     let v = value.replace(/\D/g, "");
     if (v.startsWith("55")) v = v.slice(2);
@@ -180,7 +204,18 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     setValue(fieldName, maskFn(e.target.value));
   };
 
-  // Função para preencher o link inicial e focar
+  const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues) => {
+    const formatted = formatCurrency(e.target.value);
+    setValue(fieldName, formatted);
+
+    // Lógica de 30% do salário para o limite
+    if (fieldName === "salario") {
+      const salaryNum = parseCurrencyToNumber(formatted);
+      const limitSuggestion = salaryNum * 0.3;
+      setValue("limite", formatCurrency((limitSuggestion * 100).toFixed(0)));
+    }
+  };
+
   const handleSocialFocus = (field: keyof ClientFormValues, baseUrl: string) => {
     const current = watch(field);
     if (!current || current === "") {
@@ -214,7 +249,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       ...data,
       cd_clientes: client?.cd_clientes || Date.now(),
       data: client?.data || new Date().toISOString(),
-    } as Cliente;
+      salario: parseCurrencyToNumber(data.salario || ""),
+      limite: parseCurrencyToNumber(data.limite || ""),
+      despesa_fixa: parseCurrencyToNumber(data.despesa_fixa || ""),
+      despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao || ""),
+      despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel || ""),
+    } as any;
 
     if (client) {
       db.clientes.update(client.cd_clientes, payload);
@@ -248,6 +288,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="A" id="ent-a" />
                 <Label htmlFor="ent-a" className="text-sm">Ambos</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="FU" id="ent-fu" />
+                <Label htmlFor="ent-fu" className="text-sm">Funcionário</Label>
               </div>
             </RadioGroup>
           </div>
@@ -669,7 +713,11 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Salário Mensal</Label>
-                    <Input type="number" step="0.01" {...register("salario")} />
+                    <Input 
+                      {...register("salario")} 
+                      onChange={(e) => handleCurrencyChange(e, "salario")}
+                      placeholder="R$ 0,00"
+                    />
                   </div>
                 </>
               ) : (
@@ -692,19 +740,36 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Limite de Crédito</Label>
-              <Input type="number" step="0.01" {...register("limite")} className="text-indigo-600 font-bold" />
+              <Input 
+                {...register("limite")} 
+                onChange={(e) => handleCurrencyChange(e, "limite")}
+                className="text-indigo-600 font-bold" 
+                placeholder="R$ 0,00"
+              />
             </div>
             <div className="space-y-2">
               <Label>Despesa Fixa (Água/Luz)</Label>
-              <Input type="number" step="0.01" {...register("despesa_fixa")} />
+              <Input 
+                {...register("despesa_fixa")} 
+                onChange={(e) => handleCurrencyChange(e, "despesa_fixa")}
+                placeholder="R$ 0,00"
+              />
             </div>
             <div className="space-y-2">
               <Label>Despesa Alimentação</Label>
-              <Input type="number" step="0.01" {...register("despesa_alimentacao")} />
+              <Input 
+                {...register("despesa_alimentacao")} 
+                onChange={(e) => handleCurrencyChange(e, "despesa_alimentacao")}
+                placeholder="R$ 0,00"
+              />
             </div>
             <div className="space-y-2">
               <Label>Despesa Aluguel</Label>
-              <Input type="number" step="0.01" {...register("despesa_aluguel")} />
+              <Input 
+                {...register("despesa_aluguel")} 
+                onChange={(e) => handleCurrencyChange(e, "despesa_aluguel")}
+                placeholder="R$ 0,00"
+              />
             </div>
           </div>
 

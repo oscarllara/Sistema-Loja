@@ -1,7 +1,7 @@
 "use client";
 
 export type TipoPessoa = 'F' | 'J';
-export type TipoEntidade = 'C' | 'F' | 'A';
+export type TipoEntidade = 'C' | 'F' | 'A' | 'FU'; // C: Cliente, F: Fornecedor, A: Ambos, FU: Funcionário
 
 export interface EnderecoAdicional {
   tipo: 'Entrega' | 'Cobrança' | 'Trabalho';
