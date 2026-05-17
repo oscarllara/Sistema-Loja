@@ -1,6 +1,6 @@
 "use client";
 
-import { Cliente, Produto, Compra, Venda, LancamentoFinanceiro, ContaBancaria, Permissoes } from '../types/database';
+import { Cliente, Produto, Compra, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
 const AUTH_KEY = 'dyaderp_auth';
@@ -36,20 +36,21 @@ const getDB = () => {
       vendas: [],
       compras: [],
       financeiro: [],
+      transferencias: [],
+      patrimonio: [],
       contas: [
         { cd_conta: 1, nome: 'Caixa Loja', saldo: 0, tipo: 'Caixa' },
-        { cd_conta: 2, nome: 'Banco do Brasil', saldo: 0, tipo: 'Banco' }
+        { cd_conta: 2, nome: 'Banco do Brasil', saldo: 0, tipo: 'Banco' },
+        { cd_conta: 3, nome: 'Retaguarda (Cofre)', saldo: 0, tipo: 'Retaguarda' }
       ],
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
   } else {
     database = JSON.parse(data);
-    
-    // Garante que o admin existe se a lista estiver vazia ou se o admin não for encontrado
-    if (!database.clientes || database.clientes.length === 0 || !database.clientes.find((c: any) => c.usuario === 'admin')) {
-      if (!database.clientes) database.clientes = [];
+    if (!database.transferencias) database.transferencias = [];
+    if (!database.patrimonio) database.patrimonio = [];
+    if (!database.clientes?.find((c: any) => c.usuario === 'admin')) {
       database.clientes.push(adminUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
     }
   }
   return database;
@@ -70,114 +71,128 @@ export const db = {
       }
       return null;
     },
-    logout: () => {
-      localStorage.removeItem(AUTH_KEY);
-    },
+    logout: () => localStorage.removeItem(AUTH_KEY),
     getUser: (): Cliente | null => {
       const data = localStorage.getItem(AUTH_KEY);
       return data ? JSON.parse(data) : null;
     }
   },
-  clientes: {
-    getAll: (): Cliente[] => getDB().clientes,
-    add: (cliente: Cliente) => {
-      const database = getDB();
-      database.clientes.push(cliente);
-      saveDB(database);
-    },
-    update: (id: number, data: Partial<Cliente>) => {
-      const database = getDB();
-      const index = database.clientes.findIndex((c: Cliente) => c.cd_clientes === id);
-      if (index !== -1) {
-        database.clientes[index] = { ...database.clientes[index], ...data };
-        saveDB(database);
-        
-        const currentUser = db.auth.getUser();
-        if (currentUser && currentUser.cd_clientes === id) {
-          localStorage.setItem(AUTH_KEY, JSON.stringify(database.clientes[index]));
-        }
-      }
-    },
-    delete: (id: number) => {
-      const database = getDB();
-      database.clientes = database.clientes.filter((c: Cliente) => c.cd_clientes !== id);
-      saveDB(database);
-    }
-  },
-  produtos: {
-    getAll: (): Produto[] => getDB().produtos,
-    add: (produto: Omit<Produto, 'data_atualizacao'>) => {
-      const database = getDB();
-      let finalIdManual = produto.id_manual;
-      if (!finalIdManual || finalIdManual.trim() === "") {
-        const numericIds = database.produtos.map((p: Produto) => parseInt(p.id_manual)).filter((id: number) => !isNaN(id));
-        const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
-        finalIdManual = (maxId + 1).toString();
-      }
-      const novoProduto = { ...produto, id_manual: finalIdManual, nome: produto.nome.toUpperCase(), data_atualizacao: new Date().toISOString() };
-      database.produtos.push(novoProduto);
-      saveDB(database);
-    },
-    update: (id: number, data: Partial<Produto>) => {
-      const database = getDB();
-      const index = database.produtos.findIndex((p: Produto) => p.cd_produto === id);
-      if (index !== -1) {
-        database.produtos[index] = { ...database.produtos[index], ...data, data_atualizacao: new Date().toISOString() };
-        saveDB(database);
-      }
-    },
-    delete: (id: number) => {
-      const database = getDB();
-      database.produtos = database.produtos.filter((p: Produto) => p.cd_produto !== id);
-      saveDB(database);
-    }
-  },
-  compras: {
-    getAll: (): Compra[] => getDB().compras,
-    create: (compra: Compra, itens: any[]) => {
-      const database = getDB();
-      database.compras.push(compra);
-      itens.forEach(item => {
-        const pIdx = database.produtos.findIndex((p: Produto) => p.cd_produto === item.cd_produto);
-        if (pIdx !== -1) {
-          database.produtos[pIdx].estoque += Number(item.qtde);
-          database.produtos[pIdx].data_atualizacao = new Date().toISOString();
-        }
-      });
-      const fornecedor = database.clientes.find((c: Cliente) => c.cd_clientes === compra.cd_fornecedores);
-      const lancamento: LancamentoFinanceiro = {
-        cd_lancamento: Date.now(),
-        tipo: 'P',
-        descricao: `Compra NF ${compra.nota_fiscal || 'S/N'}`,
-        valor: compra.total,
-        data_vencimento: new Date().toISOString(),
-        status: 'Pendente',
-        cd_entidade: compra.cd_fornecedores,
-        nome_entidade: fornecedor?.nome || `Fornecedor #${compra.cd_fornecedores}`,
-        categoria: 'Compras'
-      };
-      database.financeiro.push(lancamento);
-      saveDB(database);
-    }
-  },
   financeiro: {
     getAll: (): LancamentoFinanceiro[] => getDB().financeiro,
+    add: (lancamento: Omit<LancamentoFinanceiro, 'cd_lancamento'>) => {
+      const database = getDB();
+      const novo = { ...lancamento, cd_lancamento: Date.now() };
+      database.financeiro.push(novo);
+      if (novo.status === 'Pago' && novo.cd_conta) {
+        const cIdx = database.contas.findIndex((c: any) => c.cd_conta === novo.cd_conta);
+        if (cIdx !== -1) {
+          if (novo.tipo === 'R') database.contas[cIdx].saldo += novo.valor;
+          else database.contas[cIdx].saldo -= novo.valor;
+        }
+      }
+      saveDB(database);
+    },
+    updateManual: (id: number, novoValor: number) => {
+      const database = getDB();
+      const index = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
+      if (index !== -1) {
+        const lanc = database.financeiro[index];
+        // Se já estava pago, precisamos ajustar o saldo da conta
+        if (lanc.status === 'Pago' && lanc.cd_conta) {
+          const cIdx = database.contas.findIndex((c: any) => c.cd_conta === lanc.cd_conta);
+          if (cIdx !== -1) {
+            const diff = novoValor - lanc.valor;
+            if (lanc.tipo === 'R') database.contas[cIdx].saldo += diff;
+            else database.contas[cIdx].saldo -= diff;
+          }
+        }
+        lanc.valor = novoValor;
+        saveDB(database);
+      }
+    },
     baixar: (id: number, cd_conta: number) => {
       const database = getDB();
-      const index = database.financeiro.findIndex((l: LancamentoFinanceiro) => l.cd_lancamento === id);
-      const cIdx = database.contas.findIndex((c: ContaBancaria) => c.cd_conta === cd_conta);
+      const index = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
+      const cIdx = database.contas.findIndex((c: any) => c.cd_conta === cd_conta);
       if (index !== -1 && cIdx !== -1) {
         const lanc = database.financeiro[index];
         if (lanc.status === 'Pago') return;
         lanc.status = 'Pago';
+        lanc.cd_conta = cd_conta;
         lanc.data_pagamento = new Date().toISOString();
         if (lanc.tipo === 'R') database.contas[cIdx].saldo += lanc.valor;
         else database.contas[cIdx].saldo -= lanc.valor;
         saveDB(database);
       }
+    },
+    transferir: (transf: Omit<Transferencia, 'cd_transferencia'>) => {
+      const database = getDB();
+      const oIdx = database.contas.findIndex((c: any) => c.cd_conta === transf.cd_conta_origem);
+      const dIdx = database.contas.findIndex((c: any) => c.cd_conta === transf.cd_conta_destino);
+      
+      if (oIdx !== -1 && dIdx !== -1) {
+        database.contas[oIdx].saldo -= transf.valor;
+        database.contas[dIdx].saldo += transf.valor;
+        database.transferencias.push({ ...transf, cd_transferencia: Date.now() });
+        saveDB(database);
+      }
     }
   },
   contas: {
-    getAll: (): ContaBancaria[] => getDB().contas
+    getAll: (): ContaBancaria[] => getDB().contas,
+    add: (conta: Omit<ContaBancaria, 'cd_conta'>) => {
+      const database = getDB();
+      database.contas.push({ ...conta, cd_conta: Date.now() });
+      saveDB(database);
+    }
+  },
+  patrimonio: {
+    getAll: (): Patrimonio[] => getDB().patrimonio,
+    add: (item: Omit<Patrimonio, 'cd_patrimonio'>) => {
+      const database = getDB();
+      database.patrimonio.push({ ...item, cd_patrimonio: Date.now() });
+      saveDB(database);
+    }
+  },
+  clientes: {
+    getAll: (): Cliente[] => getDB().clientes,
+    add: (c: Cliente) => { const db = getDB(); db.clientes.push(c); saveDB(db); },
+    update: (id: number, data: any) => {
+      const db = getDB();
+      const idx = db.clientes.findIndex((c: any) => c.cd_clientes === id);
+      if (idx !== -1) { db.clientes[idx] = { ...db.clientes[idx], ...data }; saveDB(db); }
+    },
+    delete: (id: number) => {
+      const db = getDB();
+      db.clientes = db.clientes.filter((c: any) => c.cd_clientes !== id);
+      saveDB(db);
+    }
+  },
+  produtos: {
+    getAll: (): Produto[] => getDB().produtos,
+    add: (p: any) => {
+      const db = getDB();
+      const id = (db.produtos.length + 1).toString();
+      db.produtos.push({ ...p, id_manual: id, cd_produto: Date.now(), data_atualizacao: new Date().toISOString() });
+      saveDB(db);
+    },
+    update: (id: number, data: any) => {
+      const db = getDB();
+      const idx = db.produtos.findIndex((p: any) => p.cd_produto === id);
+      if (idx !== -1) { db.produtos[idx] = { ...db.produtos[idx], ...data }; saveDB(db); }
+    },
+    delete: (id: number) => {
+      const db = getDB();
+      db.produtos = db.produtos.filter((p: any) => p.cd_produto !== id);
+      saveDB(db);
+    }
+  },
+  vendas: {
+    getAll: (): Venda[] => getDB().vendas,
+    add: (v: Venda) => {
+      const db = getDB();
+      db.vendas.push(v);
+      saveDB(db);
+    }
   }
 };

@@ -63,15 +63,9 @@ export interface Cliente {
   despesa_alimentacao?: number;
   despesa_aluguel?: number;
   obs1?: string;
-  // Campos de Autenticação (apenas para funcionários)
   usuario?: string;
   senha?: string;
   permissoes?: Permissoes;
-}
-
-export interface ItemComposicao {
-  cd_produto_filho: number;
-  qtde: number;
 }
 
 export interface Produto {
@@ -94,40 +88,12 @@ export interface Produto {
   ncm?: string;
   fracionado?: boolean;
   is_kit?: boolean;
-  itens_kit?: ItemComposicao[];
+  itens_kit?: any[];
   data_atualizacao: string;
 }
 
-export interface Venda {
-  cd_venda: number;
-  data: string;
-  total: number;
-  pago: number;
-  cd_clientes: number;
-  cd_func: number;
-}
-
-export interface ItemVenda {
-  cd_desc_venda: number;
-  cd_venda: number;
-  cd_produto: number;
-  nome_prod: string;
-  valor: number;
-  qtde: number;
-  sub: number;
-}
-
-export interface Compra {
-  cd_compra: number;
-  data: string;
-  nota_fiscal?: string;
-  total: number;
-  cd_fornecedores: number;
-  cd_func: number;
-  confirmada: boolean;
-}
-
-export type TipoFinanceiro = 'R' | 'P';
+export type TipoFinanceiro = 'R' | 'P'; // Receita | Pagamento
+export type MeioPagamento = 'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Cheque' | 'Boleto' | 'Transferência';
 
 export interface LancamentoFinanceiro {
   cd_lancamento: number;
@@ -139,13 +105,44 @@ export interface LancamentoFinanceiro {
   status: 'Pendente' | 'Pago' | 'Cancelado';
   cd_entidade?: number;
   nome_entidade?: string;
-  categoria?: string;
-  forma_pagamento?: string;
+  categoria: string; // 'Venda', 'Compra', 'Salário', 'Aluguel', 'Imposto', 'Vale', 'Comissão', 'Pro-labore', etc.
+  meio_pagamento?: MeioPagamento;
+  bandeira_cartao?: string;
+  cd_conta?: number; // Conta onde o dinheiro entrou/saiu
+  is_fixa?: boolean;
 }
 
 export interface ContaBancaria {
   cd_conta: number;
   nome: string;
   saldo: number;
-  tipo: 'Caixa' | 'Banco' | 'Digital';
+  tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
+}
+
+export interface Transferencia {
+  cd_transferencia: number;
+  data: string;
+  valor: number;
+  cd_conta_origem: number;
+  cd_conta_destino: number;
+  obs?: string;
+}
+
+export interface Patrimonio {
+  cd_patrimonio: number;
+  descricao: string;
+  valor: number;
+  tipo: 'Imóvel' | 'Veículo' | 'Equipamento' | 'Outros';
+  proprietário: 'Empresa' | 'Sócio A' | 'Sócio B';
+}
+
+export interface Venda {
+  cd_venda: number;
+  data: string;
+  total: number;
+  custo_total: number; // Para cálculo de margem
+  cd_clientes: number;
+  cd_func: number;
+  tipo_venda: 'Vista' | 'Prazo';
+  meio_pagamento: MeioPagamento;
 }
