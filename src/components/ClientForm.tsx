@@ -22,7 +22,9 @@ import {
   Building2,
   Users,
   Contact2,
-  Truck
+  Truck,
+  Lock,
+  Shield
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Cliente, TipoPessoa, TipoEntidade } from '@/types/database';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Cliente, TipoPessoa, TipoEntidade, Permissoes } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
@@ -93,6 +96,19 @@ const clientSchema = z.object({
   despesa_alimentacao: z.string().optional(),
   despesa_aluguel: z.string().optional(),
   obs1: z.string().optional(),
+  // Autenticação
+  usuario: z.string().optional(),
+  senha: z.string().optional(),
+  permissoes: z.object({
+    dashboard: z.boolean().default(true),
+    pos: z.boolean().default(true),
+    registrations: z.boolean().default(false),
+    inventory: z.boolean().default(false),
+    purchases: z.boolean().default(false),
+    financial: z.boolean().default(false),
+    reports: z.boolean().default(false),
+    settings: z.boolean().default(false),
+  }).optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -115,6 +131,16 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       despesa_alimentacao: client.despesa_alimentacao ? formatCurrency(client.despesa_alimentacao.toString()) : "",
       despesa_aluguel: client.despesa_aluguel ? formatCurrency(client.despesa_aluguel.toString()) : "",
       dia_pagamento: client.dia_pagamento?.toString() || "",
+      permissoes: client.permissoes || {
+        dashboard: true,
+        pos: true,
+        registrations: false,
+        inventory: false,
+        purchases: false,
+        financial: false,
+        reports: false,
+        settings: false,
+      }
     } : {
       tipo_entidade: 'C',
       is_funcionario: false,
@@ -122,6 +148,16 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       nome: "",
       contatos_responsaveis: [],
       quadro_societario: [],
+      permissoes: {
+        dashboard: true,
+        pos: true,
+        registrations: false,
+        inventory: false,
+        purchases: false,
+        financial: false,
+        reports: false,
+        settings: false,
+      }
     }
   });
 
@@ -138,6 +174,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
   const isFuncionario = watch("is_funcionario");
+  const permissoes = watch("permissoes");
 
   function formatCurrency(value: string) {
     const digits = value.replace(/\D/g, "");
@@ -155,22 +192,11 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   }
 
   const maskCPF = (value: string) => {
-    return value
-      .replace(/\D/g, "")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-      .replace(/(-\d{2})\d+?$/, "$1");
+    return value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
   };
 
   const maskCNPJ = (value: string) => {
-    return value
-      .replace(/\D/g, "")
-      .replace(/(\d{2})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1/$2")
-      .replace(/(\d{4})(\d)/, "$1-$2")
-      .replace(/(-\d{2})\d+?$/, "$1");
+    return value.replace(/\D/g, "").replace(/(\d{2})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1/$2").replace(/(\d{4})(\d)/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
   };
 
   const maskPhone = (value: string) => {
@@ -204,16 +230,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues) => {
     const formatted = formatCurrency(e.target.value);
     setValue(fieldName, formatted);
-    if (fieldName === "salario") {
-      const salaryNum = parseCurrencyToNumber(formatted);
-      const limitSuggestion = salaryNum * 0.3;
-      setValue("limite", formatCurrency((limitSuggestion * 100).toFixed(0)));
-    }
-  };
-
-  const handleSocialFocus = (field: keyof ClientFormValues, baseUrl: string) => {
-    const current = watch(field);
-    if (!current || current === "") setValue(field, baseUrl as any);
   };
 
   const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -221,7 +237,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     if (cep.length !== 8) return;
     setIsSearchingCep(true);
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const response = await fetch(`https://viacep.br/ws/${cep}/json/`);
       const data = await response.json();
       if (!data.erro) {
         setValue("endereco", formatTitleCase(data.logradouro));
@@ -259,6 +275,17 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     onSuccess();
   };
 
+  const permissionLabels: Record<keyof Permissoes, string> = {
+    dashboard: "Dashboard / Resumo",
+    pos: "Frente de Caixa (PDV)",
+    registrations: "Cadastros Gerais",
+    inventory: "Estoque / Produtos",
+    purchases: "Compras / XML",
+    financial: "Financeiro / Caixas",
+    reports: "Relatórios / Gráficos",
+    settings: "Configurações do Sistema"
+  };
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -266,548 +293,123 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Função Base</Label>
             <div className="flex gap-2">
-              <Button 
-                type="button"
-                variant={tipoEntidade === 'C' ? 'default' : 'outline'}
-                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'C' && "bg-indigo-600")}
-                onClick={() => setValue("tipo_entidade", 'C')}
-              >
-                <UserCheck size={16} /> Cliente
-              </Button>
-              <Button 
-                type="button"
-                variant={tipoEntidade === 'F' ? 'default' : 'outline'}
-                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'F' && "bg-indigo-600")}
-                onClick={() => setValue("tipo_entidade", 'F')}
-              >
-                <Building2 size={16} /> Fornecedor
-              </Button>
-              <Button 
-                type="button"
-                variant={tipoEntidade === 'T' ? 'default' : 'outline'}
-                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'T' && "bg-indigo-600")}
-                onClick={() => setValue("tipo_entidade", 'T')}
-              >
-                <Truck size={16} /> Transportadora
-              </Button>
-              <Button 
-                type="button"
-                variant={tipoEntidade === 'A' ? 'default' : 'outline'}
-                className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'A' && "bg-indigo-600")}
-                onClick={() => setValue("tipo_entidade", 'A')}
-              >
-                <Users size={16} /> Ambos
-              </Button>
+              <Button type="button" variant={tipoEntidade === 'C' ? 'default' : 'outline'} className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'C' && "bg-indigo-600")} onClick={() => setValue("tipo_entidade", 'C')}><UserCheck size={16} /> Cliente</Button>
+              <Button type="button" variant={tipoEntidade === 'F' ? 'default' : 'outline'} className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'F' && "bg-indigo-600")} onClick={() => setValue("tipo_entidade", 'F')}><Building2 size={16} /> Fornecedor</Button>
+              <Button type="button" variant={tipoEntidade === 'T' ? 'default' : 'outline'} className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'T' && "bg-indigo-600")} onClick={() => setValue("tipo_entidade", 'T')}><Truck size={16} /> Transportadora</Button>
+              <Button type="button" variant={tipoEntidade === 'A' ? 'default' : 'outline'} className={cn("gap-2 rounded-lg h-10", tipoEntidade === 'A' && "bg-indigo-600")} onClick={() => setValue("tipo_entidade", 'A')}><Users size={16} /> Ambos</Button>
             </div>
           </div>
-
           <div className="w-px h-12 bg-slate-200" />
-
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Vínculo Interno</Label>
-            <Button 
-              type="button"
-              variant={isFuncionario ? 'default' : 'outline'}
-              className={cn("gap-2 rounded-lg h-10", isFuncionario && "bg-emerald-600 hover:bg-emerald-700")}
-              onClick={() => setValue("is_funcionario", !isFuncionario)}
-            >
-              <Contact2 size={16} /> Funcionário
-            </Button>
+            <Button type="button" variant={isFuncionario ? 'default' : 'outline'} className={cn("gap-2 rounded-lg h-10", isFuncionario && "bg-emerald-600 hover:bg-emerald-700")} onClick={() => setValue("is_funcionario", !isFuncionario)}><Contact2 size={16} /> Funcionário</Button>
           </div>
-
           <div className="w-px h-12 bg-slate-200" />
-
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Pessoa</Label>
-            <RadioGroup 
-              defaultValue={tipoPessoa} 
-              onValueChange={(v) => {
-                setValue("tipo_pessoa", v as TipoPessoa);
-                setValue("cpf_cnpj", "");
-              }}
-              className="flex gap-4 h-10 items-center"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="F" id="p-f" />
-                <Label htmlFor="p-f" className="text-sm">Física</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="J" id="p-j" />
-                <Label htmlFor="p-j" className="text-sm">Jurídica</Label>
-              </div>
+            <RadioGroup defaultValue={tipoPessoa} onValueChange={(v) => { setValue("tipo_pessoa", v as TipoPessoa); setValue("cpf_cnpj", ""); }} className="flex gap-4 h-10 items-center">
+              <div className="flex items-center space-x-2"><RadioGroupItem value="F" id="p-f" /><Label htmlFor="p-f" className="text-sm">Física</Label></div>
+              <div className="flex items-center space-x-2"><RadioGroupItem value="J" id="p-j" /><Label htmlFor="p-j" className="text-sm">Jurídica</Label></div>
             </RadioGroup>
           </div>
         </div>
-        
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl shadow-lg shadow-indigo-100">
-          Salvar Cadastro
-        </Button>
+        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl shadow-lg shadow-indigo-100">Salvar Cadastro</Button>
       </div>
 
       <Tabs defaultValue="geral" className="w-full">
-        <TabsList className={cn(
-          "grid w-full bg-slate-100 p-1 rounded-xl",
-          (tipoEntidade === 'F' || tipoEntidade === 'T') ? "grid-cols-3" : "grid-cols-4"
-        )}>
+        <TabsList className={cn("grid w-full bg-slate-100 p-1 rounded-xl", isFuncionario ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
           <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
           <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> {tipoPessoa === 'F' ? 'Pessoal/Prof.' : 'Empresa/Sócios'}</TabsTrigger>
-          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && (
-            <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>
-          )}
+          {isFuncionario && <TabsTrigger value="acesso" className="gap-2"><Lock size={16} /> Acesso</TabsTrigger>}
+          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="geral" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>{tipoPessoa === 'F' ? 'Nome Completo *' : 'Razão Social *'}</Label>
-              <Input 
-                {...register("nome")} 
-                onChange={(e) => handleTitleCaseChange(e, "nome")}
-                placeholder={tipoPessoa === 'F' ? "Nome do cliente" : "Razão social da empresa"} 
-              />
-              {errors.nome && <p className="text-xs text-red-500">{errors.nome.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label>{tipoPessoa === 'F' ? 'Apelido' : 'Nome Fantasia'}</Label>
-              <Input 
-                {...register("apelido_fantasia")} 
-                onChange={(e) => handleTitleCaseChange(e, "apelido_fantasia")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label>
-              <Input 
-                {...register("cpf_cnpj")} 
-                onChange={(e) => handleMaskChange(e, "cpf_cnpj", tipoPessoa === 'F' ? maskCPF : maskCNPJ)}
-                placeholder={tipoPessoa === 'F' ? "000.000.000-00" : "00.000.000/0000-00"} 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{tipoPessoa === 'F' ? 'RG / Identidade' : 'Inscrição Estadual'}</Label>
-              <Input {...register("rg_ie")} />
-            </div>
-            {tipoPessoa === 'J' && (
-              <div className="space-y-2">
-                <Label>Inscrição Municipal</Label>
-                <Input {...register("inscricao_municipal")} />
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>E-mail Principal</Label>
-              <Input type="email" {...register("email")} />
-            </div>
-            {tipoPessoa === 'J' && (
-              <div className="space-y-2">
-                <Label>Site / URL</Label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <Input {...register("site")} className="pl-10" placeholder="www.empresa.com.br" />
-                </div>
-              </div>
-            )}
+            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'Nome Completo *' : 'Razão Social *'}</Label><Input {...register("nome")} onChange={(e) => handleTitleCaseChange(e, "nome")} /></div>
+            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'Apelido' : 'Nome Fantasia'}</Label><Input {...register("apelido_fantasia")} onChange={(e) => handleTitleCaseChange(e, "apelido_fantasia")} /></div>
+            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label><Input {...register("cpf_cnpj")} onChange={(e) => handleMaskChange(e, "cpf_cnpj", tipoPessoa === 'F' ? maskCPF : maskCNPJ)} /></div>
+            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'RG / Identidade' : 'Inscrição Estadual'}</Label><Input {...register("rg_ie")} /></div>
+            <div className="space-y-2"><Label>E-mail Principal</Label><Input type="email" {...register("email")} /></div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>Celular</Label>
-                <Input 
-                  {...register("cel")} 
-                  onChange={(e) => handleMaskChange(e, "cel", maskPhone)}
-                  placeholder="+55 (00) 00000-0000" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Telefone Fixo</Label>
-                <Input 
-                  {...register("tel1")} 
-                  onChange={(e) => handleMaskChange(e, "tel1", maskPhone)}
-                  placeholder="+55 (00) 0000-0000" 
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Globe size={16} /> Redes Sociais
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialFocus("facebook", "https://facebook.com/")}>
-                  <Facebook size={14} /> Facebook
-                </Label>
-                <Input 
-                  {...register("facebook")} 
-                  onFocus={() => handleSocialFocus("facebook", "https://facebook.com/")}
-                  placeholder="https://facebook.com/usuario" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialFocus("instagram", "https://instagram.com/")}>
-                  <Instagram size={14} /> Instagram
-                </Label>
-                <Input 
-                  {...register("instagram")} 
-                  onFocus={() => handleSocialFocus("instagram", "https://instagram.com/")}
-                  placeholder="https://instagram.com/usuario" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialFocus("linkedin", "https://linkedin.com/in/")}>
-                  <Linkedin size={14} /> LinkedIn
-                </Label>
-                <Input 
-                  {...register("linkedin")} 
-                  onFocus={() => handleSocialFocus("linkedin", "https://linkedin.com/in/")}
-                  placeholder="https://linkedin.com/in/usuario" 
-                />
-              </div>
+              <div className="space-y-2"><Label>Celular</Label><Input {...register("cel")} onChange={(e) => handleMaskChange(e, "cel", maskPhone)} /></div>
+              <div className="space-y-2"><Label>Telefone Fixo</Label><Input {...register("tel1")} onChange={(e) => handleMaskChange(e, "tel1", maskPhone)} /></div>
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="endereco" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                CEP {isSearchingCep && <Search size={12} className="animate-spin" />}
-              </Label>
-              <Input {...register("cep")} onBlur={handleCepBlur} placeholder="00000-000" />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label>Endereço</Label>
-              <Input 
-                {...register("endereco")} 
-                onChange={(e) => handleTitleCaseChange(e, "endereco")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Número</Label>
-              <Input {...register("numero")} />
-            </div>
-            <div className="space-y-2">
-              <Label>Bairro</Label>
-              <Input 
-                {...register("bairro")} 
-                onChange={(e) => handleTitleCaseChange(e, "bairro")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Complemento</Label>
-              <Input 
-                {...register("complemento")} 
-                onChange={(e) => handleTitleCaseChange(e, "complemento")}
-              />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label>Cidade</Label>
-              <Input 
-                {...register("cidade")} 
-                onChange={(e) => handleTitleCaseChange(e, "cidade")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>UF</Label>
-              <Input {...register("uf")} maxLength={2} />
-            </div>
-            <div className="md:col-span-3 space-y-2">
-              <Label>Referência de Proximidade</Label>
-              <Input 
-                {...register("referencia")} 
-                onChange={(e) => handleTitleCaseChange(e, "referencia")}
-                placeholder="Ex: Próximo ao mercado..." 
-              />
-            </div>
+            <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} onBlur={handleCepBlur} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} onChange={(e) => handleTitleCaseChange(e, "endereco")} /></div>
+            <div className="space-y-2"><Label>Número</Label><Input {...register("numero")} /></div>
+            <div className="space-y-2"><Label>Bairro</Label><Input {...register("bairro")} onChange={(e) => handleTitleCaseChange(e, "bairro")} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Cidade</Label><Input {...register("cidade")} onChange={(e) => handleTitleCaseChange(e, "cidade")} /></div>
+            <div className="space-y-2"><Label>UF</Label><Input {...register("uf")} maxLength={2} /></div>
           </div>
         </TabsContent>
 
         <TabsContent value="pessoal" className="mt-6 space-y-6">
           {isFuncionario && (
             <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
-              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
-                <Contact2 size={16} /> Dados de Funcionário
-              </h4>
+              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2"><Contact2 size={16} /> Dados de Funcionário</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Data de Admissão</Label>
-                  <Input type="date" {...register("data_admissao")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Salário Mensal</Label>
-                  <Input 
-                    {...register("salario")} 
-                    onChange={(e) => handleCurrencyChange(e, "salario")}
-                    placeholder="R$ 0,00"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Dia de Pagamento</Label>
-                  <Input 
-                    type="number" 
-                    min="1" 
-                    max="31" 
-                    {...register("dia_pagamento")} 
-                    placeholder="Ex: 5"
-                  />
-                </div>
+                <div className="space-y-2"><Label>Data de Admissão</Label><Input type="date" {...register("data_admissao")} /></div>
+                <div className="space-y-2"><Label>Salário Mensal</Label><Input {...register("salario")} onChange={(e) => handleCurrencyChange(e, "salario")} /></div>
+                <div className="space-y-2"><Label>Dia de Pagamento</Label><Input type="number" min="1" max="31" {...register("dia_pagamento")} /></div>
               </div>
             </div>
           )}
-
-          {tipoPessoa === 'F' ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Data de Nascimento</Label>
-                  <Input type="date" {...register("data_nascimento")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Sexo</Label>
-                  <select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" {...register("sexo")}>
-                    <option value="">Selecione</option>
-                    <option value="M">Masculino</option>
-                    <option value="F">Feminino</option>
-                    <option value="O">Outro</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Estado Civil</Label>
-                  <Input 
-                    {...register("estado_civil")} 
-                    onChange={(e) => handleTitleCaseChange(e, "estado_civil")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Naturalidade</Label>
-                  <Input 
-                    {...register("naturalidade")} 
-                    onChange={(e) => handleTitleCaseChange(e, "naturalidade")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Filiação (Pai)</Label>
-                  <Input 
-                    {...register("filiacao_pai")} 
-                    onChange={(e) => handleTitleCaseChange(e, "filiacao_pai")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Filiação (Mãe)</Label>
-                  <Input 
-                    {...register("filiacao_mae")} 
-                    onChange={(e) => handleTitleCaseChange(e, "filiacao_mae")}
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4">
-                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-                  <User size={16} /> Dados do Cônjuge
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Nome do Cônjuge</Label>
-                    <Input 
-                      {...register("conjuge_nome")} 
-                      onChange={(e) => handleTitleCaseChange(e, "conjuge_nome")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>CPF do Cônjuge</Label>
-                    <Input 
-                      {...register("conjuge_cpf")} 
-                      onChange={(e) => handleMaskChange(e, "conjuge_cpf", maskCPF)}
-                      placeholder="000.000.000-00" 
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-2">
-                      <Label>Nascimento</Label>
-                      <Input type="date" {...register("conjuge_nascimento")} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Telefone</Label>
-                      <Input 
-                        {...register("conjuge_telefone")} 
-                        onChange={(e) => handleMaskChange(e, "conjuge_telefone", maskPhone)}
-                        placeholder="+55 (00) 00000-0000"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <Users2 size={16} /> Quadro Societário
-                  </h4>
-                  <Button type="button" variant="outline" size="sm" onClick={() => appendSocio({ nome: "", cpf: "" })} className="gap-2">
-                    <Plus size={14} /> Adicionar Sócio
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  {socioFields.map((field, index) => (
-                    <div key={field.id} className="flex gap-3 items-end bg-white p-3 rounded-lg border border-slate-100">
-                      <div className="flex-1 space-y-1">
-                        <Label className="text-[10px]">Nome do Sócio</Label>
-                        <Input 
-                          {...register(`quadro_societario.${index}.nome` as const)} 
-                          onChange={(e) => {
-                            const formatted = formatTitleCase(e.target.value);
-                            setValue(`quadro_societario.${index}.nome` as any, formatted);
-                          }}
-                        />
-                      </div>
-                      <div className="w-48 space-y-1">
-                        <Label className="text-[10px]">CPF</Label>
-                        <Input 
-                          {...register(`quadro_societario.${index}.cpf` as const)} 
-                          onChange={(e) => {
-                            const masked = maskCPF(e.target.value);
-                            setValue(`quadro_societario.${index}.cpf` as any, masked);
-                          }}
-                          placeholder="000.000.000-00"
-                        />
-                      </div>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeSocio(index)} className="text-rose-500">
-                        <Trash2 size={18} />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-                    <User size={16} /> Contatos Responsáveis
-                  </h4>
-                  <Button type="button" variant="outline" size="sm" onClick={() => appendContact({ nome: "", cargo: "" })} className="gap-2">
-                    <Plus size={14} /> Adicionar Contato
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  {contactFields.map((field, index) => (
-                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-indigo-50">
-                      <div className="space-y-1">
-                        <Label className="text-[10px]">Nome</Label>
-                        <Input 
-                          {...register(`contatos_responsaveis.${index}.nome` as const)} 
-                          onChange={(e) => {
-                            const formatted = formatTitleCase(e.target.value);
-                            setValue(`contatos_responsaveis.${index}.nome` as any, formatted);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px]">Cargo/Setor</Label>
-                        <Input 
-                          {...register(`contatos_responsaveis.${index}.cargo` as const)} 
-                          onChange={(e) => {
-                            const formatted = formatTitleCase(e.target.value);
-                            setValue(`contatos_responsaveis.${index}.cargo` as any, formatted);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px]">Telefone</Label>
-                        <Input 
-                          {...register(`contatos_responsaveis.${index}.telefone` as const)} 
-                          onChange={(e) => {
-                            const masked = maskPhone(e.target.value);
-                            setValue(`contatos_responsaveis.${index}.telefone` as any, masked);
-                          }}
-                          placeholder="+55 (00) 00000-0000"
-                        />
-                      </div>
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1 space-y-1">
-                          <Label className="text-[10px]">E-mail</Label>
-                          <Input {...register(`contatos_responsaveis.${index}.email` as const)} />
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeContact(index)} className="text-rose-500">
-                          <Trash2 size={18} />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Briefcase size={16} /> {tipoPessoa === 'F' ? 'Dados Profissionais' : 'Dados Adicionais'}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {tipoPessoa === 'F' ? (
-                <>
-                  <div className="space-y-2">
-                    <Label>Profissão</Label>
-                    <Input {...register("profissao")} onChange={(e) => handleTitleCaseChange(e, "profissao")} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Local de Trabalho</Label>
-                    <Input {...register("local_trabalho")} onChange={(e) => handleTitleCaseChange(e, "local_trabalho")} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Cargo</Label>
-                    <Input {...register("cargo")} onChange={(e) => handleTitleCaseChange(e, "cargo")} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label>Data de Fundação</Label>
-                    <Input type="date" {...register("data_nascimento")} />
-                  </div>
-                </>
-              )}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" {...register("data_nascimento")} /></div>
+            <div className="space-y-2"><Label>Sexo</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" {...register("sexo")}><option value="">Selecione</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
+            <div className="space-y-2"><Label>Estado Civil</Label><Input {...register("estado_civil")} /></div>
           </div>
         </TabsContent>
+
+        {isFuncionario && (
+          <TabsContent value="acesso" className="mt-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Lock size={16} /> Credenciais de Acesso</h4>
+                <div className="space-y-2">
+                  <Label>Nome de Usuário (Login)</Label>
+                  <Input {...register("usuario")} placeholder="Ex: joao.silva" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Senha de Acesso</Label>
+                  <Input type="password" {...register("senha")} placeholder="Digite a senha" />
+                </div>
+              </div>
+
+              <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-4">
+                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões do Usuário</h4>
+                <div className="grid grid-cols-1 gap-3">
+                  {(Object.keys(permissionLabels) as Array<key-of Permissoes>).map((key) => (
+                    <div key={key} className="flex items-center space-x-3 bg-white p-2 rounded-lg border border-indigo-50">
+                      <Checkbox 
+                        id={`perm-${key}`} 
+                        checked={permissoes?.[key]} 
+                        onCheckedChange={(checked) => setValue(`permissoes.${key}`, !!checked)}
+                      />
+                      <Label htmlFor={`perm-${key}`} className="text-sm font-medium cursor-pointer flex-1">{permissionLabels[key]}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        )}
 
         {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && (
           <TabsContent value="financeiro" className="mt-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Limite de Crédito</Label>
-                <Input 
-                  {...register("limite")} 
-                  onChange={(e) => handleCurrencyChange(e, "limite")}
-                  className="text-indigo-600 font-bold" 
-                  placeholder="R$ 0,00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Despesa Fixa (Água/Luz)</Label>
-                <Input {...register("despesa_fixa")} onChange={(e) => handleCurrencyChange(e, "despesa_fixa")} placeholder="R$ 0,00" />
-              </div>
-              <div className="space-y-2">
-                <Label>Despesa Alimentação</Label>
-                <Input {...register("despesa_alimentacao")} onChange={(e) => handleCurrencyChange(e, "despesa_alimentacao")} placeholder="R$ 0,00" />
-              </div>
-              <div className="space-y-2">
-                <Label>Despesa Aluguel</Label>
-                <Input {...register("despesa_aluguel")} onChange={(e) => handleCurrencyChange(e, "despesa_aluguel")} placeholder="R$ 0,00" />
-              </div>
+              <div className="space-y-2"><Label>Limite de Crédito</Label><Input {...register("limite")} onChange={(e) => handleCurrencyChange(e, "limite")} /></div>
             </div>
-
             <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-4">
-              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
-                <ShieldCheck size={16} /> Pessoas Autorizadas a Comprar
-              </h4>
-              <div className="space-y-2">
-                <Textarea 
-                  placeholder="Digite os nomes das pessoas autorizadas, um por linha..." 
-                  className="min-h-[100px]"
-                  {...register("obs1")} 
-                />
-                <p className="text-[10px] text-emerald-600">Estas pessoas serão consultadas no momento da venda.</p>
-              </div>
+              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={16} /> Pessoas Autorizadas a Comprar</h4>
+              <Textarea placeholder="Digite os nomes das pessoas autorizadas..." className="min-h-[100px]" {...register("obs1")} />
             </div>
           </TabsContent>
         )}

@@ -1,14 +1,35 @@
 "use client";
 
-import { Cliente, Produto, Compra, Venda, LancamentoFinanceiro, ContaBancaria } from '../types/database';
+import { Cliente, Produto, Compra, Venda, LancamentoFinanceiro, ContaBancaria, Permissoes } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
+const AUTH_KEY = 'dyaderp_auth';
 
 const getDB = () => {
   const data = localStorage.getItem(STORAGE_KEY);
   if (!data) {
     const initialDB = {
-      clientes: [],
+      clientes: [
+        {
+          cd_clientes: 1,
+          tipo_entidade: 'A',
+          is_funcionario: true,
+          nome: 'ADMINISTRADOR',
+          usuario: 'admin',
+          senha: 'Senha@123',
+          data: new Date().toISOString(),
+          permissoes: {
+            dashboard: true,
+            pos: true,
+            registrations: true,
+            inventory: true,
+            purchases: true,
+            financial: true,
+            reports: true,
+            settings: true
+          }
+        }
+      ],
       produtos: [],
       vendas: [],
       compras: [],
@@ -25,13 +46,28 @@ const getDB = () => {
 };
 
 const saveDB = (db: any) => {
-  if (db.produtos) {
-    db.produtos.sort((a: Produto, b: Produto) => a.nome.localeCompare(b.nome));
-  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 };
 
 export const db = {
+  auth: {
+    login: (usuario: string, senha: string) => {
+      const database = getDB();
+      const user = database.clientes.find((c: Cliente) => c.usuario === usuario && c.senha === senha);
+      if (user) {
+        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+        return user;
+      }
+      return null;
+    },
+    logout: () => {
+      localStorage.removeItem(AUTH_KEY);
+    },
+    getUser: (): Cliente | null => {
+      const data = localStorage.getItem(AUTH_KEY);
+      return data ? JSON.parse(data) : null;
+    }
+  },
   clientes: {
     getAll: (): Cliente[] => getDB().clientes,
     add: (cliente: Cliente) => {
@@ -45,6 +81,12 @@ export const db = {
       if (index !== -1) {
         database.clientes[index] = { ...database.clientes[index], ...data };
         saveDB(database);
+        
+        // Se for o usuário logado, atualiza a sessão
+        const currentUser = db.auth.getUser();
+        if (currentUser && currentUser.cd_clientes === id) {
+          localStorage.setItem(AUTH_KEY, JSON.stringify(database.clientes[index]));
+        }
       }
     },
     delete: (id: number) => {
@@ -57,27 +99,13 @@ export const db = {
     getAll: (): Produto[] => getDB().produtos,
     add: (produto: Omit<Produto, 'data_atualizacao'>) => {
       const database = getDB();
-      
       let finalIdManual = produto.id_manual;
-
       if (!finalIdManual || finalIdManual.trim() === "") {
-        const numericIds = database.produtos
-          .map((p: Produto) => parseInt(p.id_manual))
-          .filter((id: number) => !isNaN(id));
-        
+        const numericIds = database.produtos.map((p: Produto) => parseInt(p.id_manual)).filter((id: number) => !isNaN(id));
         const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
         finalIdManual = (maxId + 1).toString();
-      } else {
-        const exists = database.produtos.some((p: Produto) => p.id_manual === finalIdManual);
-        if (exists) throw new Error(`O código ${finalIdManual} já está em uso.`);
       }
-
-      const novoProduto = {
-        ...produto,
-        id_manual: finalIdManual,
-        nome: produto.nome.toUpperCase(),
-        data_atualizacao: new Date().toISOString()
-      };
+      const novoProduto = { ...produto, id_manual: finalIdManual, nome: produto.nome.toUpperCase(), data_atualizacao: new Date().toISOString() };
       database.produtos.push(novoProduto);
       saveDB(database);
     },
@@ -85,17 +113,7 @@ export const db = {
       const database = getDB();
       const index = database.produtos.findIndex((p: Produto) => p.cd_produto === id);
       if (index !== -1) {
-        if (data.id_manual && data.id_manual !== database.produtos[index].id_manual) {
-          const exists = database.produtos.some((p: Produto) => p.id_manual === data.id_manual);
-          if (exists) throw new Error(`O código ${data.id_manual} já está em uso.`);
-        }
-
-        database.produtos[index] = { 
-          ...database.produtos[index], 
-          ...data, 
-          nome: data.nome ? data.nome.toUpperCase() : database.produtos[index].nome,
-          data_atualizacao: new Date().toISOString()
-        };
+        database.produtos[index] = { ...database.produtos[index], ...data, data_atualizacao: new Date().toISOString() };
         saveDB(database);
       }
     },
@@ -110,8 +128,6 @@ export const db = {
     create: (compra: Compra, itens: any[]) => {
       const database = getDB();
       database.compras.push(compra);
-      
-      // Atualiza estoque
       itens.forEach(item => {
         const pIdx = database.produtos.findIndex((p: Produto) => p.cd_produto === item.cd_produto);
         if (pIdx !== -1) {
@@ -119,8 +135,6 @@ export const db = {
           database.produtos[pIdx].data_atualizacao = new Date().toISOString();
         }
       });
-
-      // Gera conta a pagar
       const fornecedor = database.clientes.find((c: Cliente) => c.cd_clientes === compra.cd_fornecedores);
       const lancamento: LancamentoFinanceiro = {
         cd_lancamento: Date.now(),
@@ -134,49 +148,27 @@ export const db = {
         categoria: 'Compras'
       };
       database.financeiro.push(lancamento);
-      
       saveDB(database);
     }
   },
   financeiro: {
     getAll: (): LancamentoFinanceiro[] => getDB().financeiro,
-    add: (lancamento: LancamentoFinanceiro) => {
-      const database = getDB();
-      database.financeiro.push(lancamento);
-      saveDB(database);
-    },
     baixar: (id: number, cd_conta: number) => {
       const database = getDB();
       const index = database.financeiro.findIndex((l: LancamentoFinanceiro) => l.cd_lancamento === id);
       const cIdx = database.contas.findIndex((c: ContaBancaria) => c.cd_conta === cd_conta);
-      
       if (index !== -1 && cIdx !== -1) {
         const lanc = database.financeiro[index];
         if (lanc.status === 'Pago') return;
-
         lanc.status = 'Pago';
         lanc.data_pagamento = new Date().toISOString();
-        
-        // Atualiza saldo da conta
-        if (lanc.tipo === 'R') {
-          database.contas[cIdx].saldo += lanc.valor;
-        } else {
-          database.contas[cIdx].saldo -= lanc.valor;
-        }
-        
+        if (lanc.tipo === 'R') database.contas[cIdx].saldo += lanc.valor;
+        else database.contas[cIdx].saldo -= lanc.valor;
         saveDB(database);
       }
     }
   },
   contas: {
-    getAll: (): ContaBancaria[] => getDB().contas,
-    updateSaldo: (id: number, valor: number) => {
-      const database = getDB();
-      const index = database.contas.findIndex((c: ContaBancaria) => c.cd_conta === id);
-      if (index !== -1) {
-        database.contas[index].saldo += valor;
-        saveDB(database);
-      }
-    }
+    getAll: (): ContaBancaria[] => getDB().contas
   }
 };

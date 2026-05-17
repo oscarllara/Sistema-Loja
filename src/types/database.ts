@@ -3,6 +3,17 @@
 export type TipoPessoa = 'F' | 'J';
 export type TipoEntidade = 'C' | 'F' | 'A' | 'T';
 
+export interface Permissoes {
+  dashboard: boolean;
+  pos: boolean;
+  registrations: boolean;
+  inventory: boolean;
+  purchases: boolean;
+  financial: boolean;
+  reports: boolean;
+  settings: boolean;
+}
+
 export interface Cliente {
   cd_clientes: number;
   tipo_entidade: TipoEntidade;
@@ -52,6 +63,10 @@ export interface Cliente {
   despesa_alimentacao?: number;
   despesa_aluguel?: number;
   obs1?: string;
+  // Campos de Autenticação (apenas para funcionários)
+  usuario?: string;
+  senha?: string;
+  permissoes?: Permissoes;
 }
 
 export interface ItemComposicao {
@@ -112,7 +127,7 @@ export interface Compra {
   confirmada: boolean;
 }
 
-export type TipoFinanceiro = 'R' | 'P'; // R: Receber, P: Pagar
+export type TipoFinanceiro = 'R' | 'P';
 
 export interface LancamentoFinanceiro {
   cd_lancamento: number;
@@ -122,7 +137,7 @@ export interface LancamentoFinanceiro {
   data_vencimento: string;
   data_pagamento?: string;
   status: 'Pendente' | 'Pago' | 'Cancelado';
-  cd_entidade?: number; // Cliente ou Fornecedor
+  cd_entidade?: number;
   nome_entidade?: string;
   categoria?: string;
   forma_pagamento?: string;
