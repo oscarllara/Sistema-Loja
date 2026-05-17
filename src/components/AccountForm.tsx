@@ -12,6 +12,8 @@ import { showSuccess, showError } from '@/utils/toast';
 
 const accountSchema = z.object({
   nome: z.string().min(3, "Nome da conta obrigatório"),
+  agencia: z.string().optional(),
+  conta_numero: z.string().optional(),
   tipo: z.enum(['Caixa', 'Banco', 'Retaguarda', 'Digital']),
   saldo: z.string().default("0"),
 });
@@ -43,6 +45,8 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
       
       db.contas.add({
         nome: data.nome.toUpperCase(),
+        agencia: data.agencia,
+        conta_numero: data.conta_numero,
         tipo: data.tipo,
         saldo: saldoNum
       });
@@ -59,6 +63,17 @@ const AccountForm = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="space-y-2">
         <Label>Nome da Conta / Banco</Label>
         <Input {...register("nome")} placeholder="Ex: Itaú Empresa, Caixa Principal..." />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Agência</Label>
+          <Input {...register("agencia")} placeholder="Ex: 0001" />
+        </div>
+        <div className="space-y-2">
+          <Label>Número da Conta</Label>
+          <Input {...register("conta_numero")} placeholder="Ex: 12345-6" />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

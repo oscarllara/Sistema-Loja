@@ -115,6 +115,8 @@ export interface LancamentoFinanceiro {
 export interface ContaBancaria {
   cd_conta: number;
   nome: string;
+  agencia?: string;
+  conta_numero?: string;
   saldo: number;
   tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
 }
