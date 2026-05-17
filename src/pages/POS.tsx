@@ -73,7 +73,8 @@ const POS = () => {
 
   const config = db.config.get();
   const products = db.produtos.getAll() || [];
-  const vendedores = (db.clientes.getAll() || []).filter(c => c.is_funcionario);
+  // Filtra apenas funcionários ou admin para a lista de usuários
+  const usuarios = (db.clientes.getAll() || []).filter(c => c.is_funcionario || c.usuario === 'admin');
   const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
   const fornecedores = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
 
@@ -84,11 +85,20 @@ const POS = () => {
     if (key === 'F3') { if(confirm("Zerar operação atual?")) setCart([]); }
     if (key === 'F10') {
       if (cart.length === 0) return showError("Carrinho vazio!");
-      if (!selectedSellerId) return showError("Selecione o Vendedor/Usuário primeiro!");
+      if (!selectedSellerId) return showError("Selecione o Usuário primeiro!");
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
-    if (key === 'ESC') setIsAdminAuthOpen(true);
+    
+    if (key === 'ESC') {
+      // Se houver qualquer modal aberto, o ESC do Dialog já cuida de fechar.
+      // Mas nossa lógica global precisa saber se deve abrir o modal de Admin.
+      const anyModalOpen = isSearchOpen || isPrintOpen || isCheckoutOpen || isAddEntityOpen;
+      
+      if (!anyModalOpen) {
+        setIsAdminAuthOpen(true);
+      }
+    }
   };
 
   React.useEffect(() => {
@@ -97,11 +107,14 @@ const POS = () => {
       if (e.key === 'F3') { e.preventDefault(); handleShortcut('F3'); }
       if (e.key === 'F10') { e.preventDefault(); handleShortcut('F10'); }
       if (e.key === 'F4') { e.preventDefault(); handleShortcut('F4'); }
-      if (e.key === 'Escape') { e.preventDefault(); handleShortcut('ESC'); }
+      if (e.key === 'Escape') { 
+        // Não damos preventDefault aqui para permitir que o Radix UI feche os modais
+        handleShortcut('ESC'); 
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, selectedSellerId]);
+  }, [cart, selectedSellerId, isSearchOpen, isPrintOpen, isCheckoutOpen, isAddEntityOpen]);
 
   const handleAdminAuth = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -118,7 +131,7 @@ const POS = () => {
 
   const addToCart = (product: any) => {
     if (!selectedSellerId) {
-      showError("Selecione o Vendedor/Usuário antes de iniciar!");
+      showError("Selecione o Usuário antes de iniciar!");
       return;
     }
     if (!product) return;
@@ -255,14 +268,14 @@ const POS = () => {
             <span className="text-[10px] font-bold text-slate-400 uppercase">{mode} / PDV</span>
           </div>
           <div className="space-y-1">
-            <label className="text-[8px] font-bold text-slate-500 uppercase">Vendedor / Usuário *</label>
+            <label className="text-[8px] font-bold text-slate-500 uppercase">Usuário do Sistema *</label>
             <select 
               className={cn("w-full border-none text-[10px] font-bold h-8 rounded px-2", mode === 'VENDA' ? "bg-slate-800" : "bg-emerald-800")}
               value={selectedSellerId}
               onChange={(e) => setSelectedSellerId(e.target.value ? Number(e.target.value) : "")}
             >
-              <option value="">SELECIONE O VENDEDOR...</option>
-              {vendedores.map(v => <option key={v.cd_clientes} value={v.cd_clientes}>{v.nome}</option>)}
+              <option value="">SELECIONE O USUÁRIO...</option>
+              {usuarios.map(v => <option key={v.cd_clientes} value={v.cd_clientes}>{v.nome}</option>)}
             </select>
           </div>
         </div>
