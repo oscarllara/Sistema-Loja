@@ -180,6 +180,17 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
+  // Máscara de CNPJ (xx.xxx.xxx/xxxx-xx)
+  const maskCNPJ = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/(\d{2})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1/$2")
+      .replace(/(\d{4})(\d)/, "$1-$2")
+      .replace(/(-\d{2})\d+?$/, "$1");
+  };
+
   // Máscara de Telefone (+55 (xx) xxxxx-xxxx)
   const maskPhone = (value: string) => {
     let v = value.replace(/\D/g, "");
@@ -331,7 +342,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Pessoa</Label>
             <RadioGroup 
               defaultValue={tipoPessoa} 
-              onValueChange={(v) => setValue("tipo_pessoa", v as TipoPessoa)}
+              onValueChange={(v) => {
+                setValue("tipo_pessoa", v as TipoPessoa);
+                setValue("cpf_cnpj", ""); // Limpa o campo ao trocar o tipo
+              }}
               className="flex gap-4 h-10 items-center"
             >
               <div className="flex items-center space-x-2">
@@ -381,7 +395,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               <Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label>
               <Input 
                 {...register("cpf_cnpj")} 
-                onChange={(e) => handleMaskChange(e, "cpf_cnpj", maskCPF)}
+                onChange={(e) => handleMaskChange(e, "cpf_cnpj", tipoPessoa === 'F' ? maskCPF : maskCNPJ)}
                 placeholder={tipoPessoa === 'F' ? "000.000.000-00" : "00.000.000/0000-00"} 
               />
             </div>
