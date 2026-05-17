@@ -114,7 +114,7 @@ const POS = () => {
       setSearchInitialTerm("");
       setIsSearchOpen(true);
     }
-    if (key === 'F3') { if(confirm("Zerar operação atual?")) setCart([]); }
+    if (key === 'F3') { if(confirm("Deseja realmente cancelar esta venda e limpar o carrinho?")) setCart([]); }
     if (key === 'F10') {
       if (cart.length === 0) {
         showError("Carrinho vazio!");
@@ -136,7 +136,6 @@ const POS = () => {
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Previne comportamentos padrão do navegador para teclas de função
       if (['F1', 'F3', 'F4', 'F10'].includes(e.key)) {
         e.preventDefault();
         e.stopPropagation();
@@ -149,7 +148,7 @@ const POS = () => {
       }
     };
     
-    window.addEventListener('keydown', handleKeyDown, true); // Use capture para garantir que pegamos antes de outros elementos
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [handleShortcut]);
 
@@ -179,7 +178,6 @@ const POS = () => {
     }
   };
 
-  // Inicia o fluxo de inserção
   const startInsertion = (product: any) => {
     if (!selectedSellerId) {
       showError("Selecione o Usuário antes de iniciar!");
@@ -191,7 +189,6 @@ const POS = () => {
     setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
-  // Confirma a inserção no carrinho
   const commitToCart = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!pendingProduct) return;
@@ -216,7 +213,6 @@ const POS = () => {
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
     
-    // Se for a unidade fracionada, usa o preço fracionado
     if (product.fracionado && unit === product.un_fracionada) {
       return product.venda_fracionada || product.venda;
     }
@@ -226,7 +222,6 @@ const POS = () => {
     return currentPriceMode === 'VISTA' ? precoVista : precoPrazo;
   };
 
-  // Atualiza os preços do carrinho quando o modo de preço muda
   const togglePriceMode = () => {
     const newMode = priceMode === 'PRAZO' ? 'VISTA' : 'PRAZO';
     setPriceMode(newMode);
@@ -253,15 +248,7 @@ const POS = () => {
         const isSwitchingToFractional = item.selectedUnit === product.un;
         const newUnit = isSwitchingToFractional ? product.un_fracionada : product.un;
         
-        // Atualiza Quantidade baseada no fator de conversão
-        if (product.fator_conversao) {
-          if (isSwitchingToFractional) {
-            item.quantity = item.quantity * product.fator_conversao;
-          } else {
-            item.quantity = item.quantity / product.fator_conversao;
-          }
-        }
-        
+        // Mantém a quantidade original conforme solicitado pelo usuário
         item.selectedUnit = newUnit;
         item.finalPrice = getProductPrice(product, newUnit, priceMode);
         newCart[index] = item;
@@ -271,15 +258,19 @@ const POS = () => {
     });
   };
 
+  const removeItem = (index: number) => {
+    setCart(prev => prev.filter((_, i) => i !== index));
+    showSuccess("Item removido do carrinho.");
+  };
+
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputCode(val);
 
-    // Se começar a digitar letras (nome), abre a pesquisa automaticamente
     if (val.length >= 2 && /[a-zA-Z]/.test(val)) {
       setSearchInitialTerm(val);
       setIsSearchOpen(true);
-      setInputCode(""); // Limpa o campo para não atrapalhar a volta
+      setInputCode("");
     }
   };
 
@@ -287,13 +278,11 @@ const POS = () => {
     e.preventDefault();
     if (!inputCode.trim()) return;
 
-    // Tenta encontrar por código exato primeiro
     const product = products.find(p => p.id_manual === inputCode || p.cod_barras === inputCode);
     
     if (product) {
       startInsertion(product);
     } else {
-      // Se não for código, abre a pesquisa com o que foi digitado
       setSearchInitialTerm(inputCode);
       setIsSearchOpen(true);
     }
@@ -460,12 +449,22 @@ const POS = () => {
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Teclas de Atalho</h3>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Controles do Carrinho</h3>
               <div className="space-y-2">
-                <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
-                <ShortcutItem key="F4" label="Novo Cliente" onClick={() => handleShortcut('F4')} />
-                <ShortcutItem key="Ctrl + L" label="Editar Item" onClick={() => handleShortcut('CtrlL')} />
-                <ShortcutItem key="F10" label="Concluir Operação" onClick={() => handleShortcut('F10')} />
+                <Button 
+                  variant="outline" 
+                  className="w-full h-12 justify-start gap-3 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold"
+                  onClick={() => handleShortcut('CtrlL')}
+                >
+                  <Edit3 size={18} /> EDITAR ITEM (CTRL+L)
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-12 justify-start gap-3 border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl font-bold"
+                  onClick={() => handleShortcut('F3')}
+                >
+                  <Trash2 size={18} /> ZERAR OPERAÇÃO (F3)
+                </Button>
               </div>
             </div>
           </div>
@@ -493,18 +492,27 @@ const POS = () => {
             <div className="h-10 w-px bg-white/10" />
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Cliente Selecionado</p>
-              <select 
-                className="bg-transparent border-none text-sm font-bold focus:ring-0 p-0 h-auto min-w-[200px]"
-                value={selectedEntityId}
-                onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}
-              >
-                <option value="" className="text-slate-900">CONSUMIDOR FINAL</option>
-                {entities.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
-              </select>
+              <div className="flex items-center gap-2">
+                <select 
+                  className="bg-transparent border-none text-sm font-bold focus:ring-0 p-0 h-auto min-w-[200px]"
+                  value={selectedEntityId}
+                  onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="" className="text-slate-900">CONSUMIDOR FINAL</option>
+                  {entities.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
+                </select>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 text-indigo-400 hover:text-white hover:bg-white/10"
+                  onClick={() => setIsAddEntityOpen(true)}
+                >
+                  <UserPlus size={16} />
+                </Button>
+              </div>
             </div>
             <div className="h-10 w-px bg-white/10" />
             
-            {/* Botão de Alternância de Preço */}
             <div className="flex flex-col gap-1">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Modo de Preço</p>
               <Button 
@@ -540,7 +548,8 @@ const POS = () => {
                 <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-right w-32">VALOR UNIT.</TableHead>
                 <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-center w-24">QTDE</TableHead>
                 <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-center w-20">UN</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 text-right w-32">SUB TOTAL</TableHead>
+                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-right w-32">SUB TOTAL</TableHead>
+                <TableHead className="text-white font-bold text-[11px] h-8 text-center w-16">AÇÕES</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -553,7 +562,9 @@ const POS = () => {
                   <TableCell className="py-0 text-xs font-mono border-r border-slate-200">{item.id_manual}</TableCell>
                   <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">{item.nome}</TableCell>
                   <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item.finalPrice.toFixed(2)}</TableCell>
-                  <TableCell className="py-0 text-xs text-center border-r border-slate-200">{item.quantity}</TableCell>
+                  <TableCell className="py-0 text-xs text-center border-r border-slate-200">
+                    {Number(item.quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                  </TableCell>
                   <TableCell 
                     className="py-0 text-xs text-center border-r border-slate-200 font-bold cursor-pointer hover:bg-indigo-100 transition-colors"
                     onClick={(e) => {
@@ -563,7 +574,20 @@ const POS = () => {
                   >
                     {item.selectedUnit}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right font-bold">{(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
+                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
+                  <TableCell className="py-0 text-center">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-rose-500 hover:bg-rose-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeItem(idx);
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
