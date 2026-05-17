@@ -20,7 +20,8 @@ import {
   Save,
   History,
   FileCode,
-  ArrowLeftRight
+  ArrowLeftRight,
+  UserCircle
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -69,7 +70,7 @@ const POS = () => {
   const navigate = useNavigate();
   const [cart, setCart] = React.useState<any[]>([]);
   const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Dinheiro');
-  const [selectedClientId, setSelectedClientId] = React.useState<number>(1);
+  const [selectedSellerId, setSelectedSellerId] = React.useState<number>(1);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
   const [isClientDetailsOpen, setIsClientDetailsOpen] = React.useState(false);
@@ -77,17 +78,17 @@ const POS = () => {
   const [activeTab, setActiveTab] = React.useState("venda");
 
   const products = React.useMemo(() => db.produtos.getAll() || [], []);
-  const clientes = React.useMemo(() => db.clientes.getAll() || [], []);
+  const vendedores = React.useMemo(() => (db.clientes.getAll() || []).filter(c => c.is_funcionario), []);
   const orcamentos = React.useMemo(() => (db.orcamentos.getAll() || []).filter(o => o && o.status === 'Aberto'), []);
 
   React.useEffect(() => {
-    if (clientes.length > 0) {
-      const exists = clientes.some(c => c.cd_clientes === selectedClientId);
+    if (vendedores.length > 0) {
+      const exists = vendedores.some(v => v.cd_clientes === selectedSellerId);
       if (!exists) {
-        setSelectedClientId(clientes[0].cd_clientes);
+        setSelectedSellerId(vendedores[0].cd_clientes);
       }
     }
-  }, [clientes, selectedClientId]);
+  }, [vendedores, selectedSellerId]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -141,16 +142,17 @@ const POS = () => {
     if (cart.length === 0) return;
 
     try {
-      const cliente = clientes.find(c => c.cd_clientes === selectedClientId) || clientes[0];
+      const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
       const id = Date.now();
 
       const payload = {
         data: new Date().toISOString(),
         total: total,
         custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
-        cd_clientes: selectedClientId,
-        nome_cliente: cliente?.nome || 'CONSUMIDOR FINAL',
-        cd_func: 1,
+        cd_clientes: 1, // Por padrão, consumidor final no PDV rápido
+        nome_cliente: 'CONSUMIDOR FINAL',
+        cd_func: selectedSellerId,
+        nome_vendedor: vendedor?.nome || 'ADMINISTRADOR',
         tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
         meio_pagamento: paymentMethod,
         itens: cart.map(item => {
@@ -183,8 +185,8 @@ const POS = () => {
           status: paymentMethod === 'Crediário' ? 'Pendente' : 'Pago',
           categoria: 'Venda',
           meio_pagamento: paymentMethod,
-          cd_entidade: selectedClientId,
-          nome_entidade: cliente?.nome || 'CONSUMIDOR FINAL',
+          cd_entidade: 1,
+          nome_entidade: 'CONSUMIDOR FINAL',
           cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
           cd_venda: id
         });
@@ -221,7 +223,7 @@ const POS = () => {
           venda: item.valor 
         };
       }));
-      setSelectedClientId(orc.cd_clientes);
+      setSelectedSellerId(orc.cd_func || 1);
       setPaymentMethod(orc.meio_pagamento || 'Dinheiro');
       setActiveTab("venda");
       showSuccess("Orçamento carregado!");
@@ -229,8 +231,6 @@ const POS = () => {
       showError("Erro ao carregar orçamento.");
     }
   };
-
-  const selectedClient = clientes.find(c => c.cd_clientes === selectedClientId);
 
   return (
     <Layout>
@@ -259,15 +259,6 @@ const POS = () => {
               >
                 <ArrowLeftRight size={16} /> Contas a Receber
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-2 border-slate-200 text-slate-600 hover:bg-slate-50"
-                onClick={() => setIsClientDetailsOpen(true)}
-                disabled={!selectedClient}
-              >
-                <FileText size={16} /> Ficha do Cliente
-              </Button>
             </div>
           </div>
 
@@ -277,14 +268,15 @@ const POS = () => {
                 <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <div className="relative w-64">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <select 
-                        className="w-full h-10 pl-10 rounded-lg border-none bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500"
-                        value={selectedClientId}
-                        onChange={(e) => setSelectedClientId(Number(e.target.value))}
+                        className="w-full h-10 pl-10 rounded-lg border-none bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                        value={selectedSellerId}
+                        onChange={(e) => setSelectedSellerId(Number(e.target.value))}
+                        title="Selecione o Vendedor"
                       >
-                        {clientes.map(c => (
-                          <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
+                        {vendedores.map(v => (
+                          <option key={v.cd_clientes} value={v.cd_clientes}>{v.nome}</option>
                         ))}
                       </select>
                     </div>
@@ -399,7 +391,7 @@ const POS = () => {
                 <TableHeader className="bg-slate-50">
                   <TableRow>
                     <TableHead>Data</TableHead>
-                    <TableHead>Cliente</TableHead>
+                    <TableHead>Vendedor</TableHead>
                     <TableHead>Itens</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -412,7 +404,7 @@ const POS = () => {
                     orcamentos.map((orc) => (
                       <TableRow key={orc.cd_orcamento}>
                         <TableCell className="text-xs">{new Date(orc.data).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-bold text-slate-900">{orc.nome_cliente}</TableCell>
+                        <TableCell className="font-bold text-slate-900">{orc.nome_vendedor || 'ADMINISTRADOR'}</TableCell>
                         <TableCell className="text-xs text-slate-500">{(orc.itens || []).length} itens</TableCell>
                         <TableCell className="text-right font-bold">R$ {(orc.total || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right">
@@ -446,15 +438,6 @@ const POS = () => {
           data={lastActionData}
           type={lastActionData?.type || 'Venda'}
         />
-
-        <Dialog open={isClientDetailsOpen} onOpenChange={setIsClientDetailsOpen}>
-          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Ficha do Cliente</DialogTitle>
-            </DialogHeader>
-            {selectedClient && <ClientDetails client={selectedClient} />}
-          </DialogContent>
-        </Dialog>
       </div>
     </Layout>
   );
