@@ -131,17 +131,18 @@ const Inventory = () => {
                 <TableRow>
                   <TableHead className="font-bold w-20">Cód.</TableHead>
                   <TableHead className="font-bold min-w-[200px]">Produto</TableHead>
-                  <TableHead className="font-bold w-28">Estoque</TableHead>
-                  <TableHead className="font-bold w-32">Custo (R$)</TableHead>
-                  <TableHead className="font-bold w-32">À Vista (R$)</TableHead>
-                  <TableHead className="font-bold w-32">A Prazo (R$)</TableHead>
+                  <TableHead className="font-bold w-24">Estoque</TableHead>
+                  <TableHead className="font-bold w-28">À Vista (R$)</TableHead>
+                  <TableHead className="font-bold w-28">A Prazo (R$)</TableHead>
+                  <TableHead className="font-bold w-24">UN Frac.</TableHead>
+                  <TableHead className="font-bold w-28">Vlr Frac.</TableHead>
                   <TableHead className="text-right font-bold w-28">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-slate-400">
+                    <TableCell colSpan={8} className="text-center py-12 text-slate-400">
                       <div className="flex flex-col items-center gap-2">
                         <Package size={32} className="opacity-20" />
                         <p>Nenhum produto encontrado.</p>
@@ -156,7 +157,7 @@ const Inventory = () => {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-bold text-slate-900 text-sm truncate max-w-[250px]">{product.nome}</p>
+                          <p className="font-bold text-slate-900 text-sm truncate max-w-[200px]">{product.nome}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[9px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">
                               {product.un.toUpperCase()}
@@ -184,14 +185,6 @@ const Inventory = () => {
                       <TableCell>
                         <Input 
                           type="text"
-                          defaultValue={product.compra?.toFixed(2).replace('.', ',')}
-                          onBlur={(e) => handleQuickUpdate(product.cd_produto, 'compra', e.target.value)}
-                          className="h-8 text-xs text-center border-transparent hover:border-slate-200 focus:border-indigo-500 bg-transparent focus:bg-white transition-all text-slate-600"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input 
-                          type="text"
                           defaultValue={product.venda_vista?.toFixed(2).replace('.', ',')}
                           onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda_vista', e.target.value)}
                           className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-emerald-500 bg-transparent focus:bg-white transition-all text-emerald-600"
@@ -205,16 +198,22 @@ const Inventory = () => {
                           className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-indigo-500 bg-transparent focus:bg-white transition-all text-slate-900"
                         />
                       </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase">
+                          {product.un_fracionada || "-"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Input 
+                          type="text"
+                          disabled={!product.fracionado}
+                          defaultValue={product.venda_fracionada?.toFixed(2).replace('.', ',')}
+                          onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda_fracionada', e.target.value)}
+                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-indigo-500 bg-transparent focus:bg-white transition-all text-indigo-600 disabled:opacity-30"
+                        />
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                            title="Salvar alterações"
-                          >
-                            <Save size={14} />
-                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 

@@ -110,7 +110,6 @@ const POS = () => {
           item.cd_produto === product.cd_produto ? { ...item, quantity: (item.quantity || 1) + 1 } : item
         );
       }
-      // Inicializa com a unidade principal
       return [...prev, { ...product, quantity: 1, selectedUnit: product.un }];
     });
   };
@@ -141,11 +140,16 @@ const POS = () => {
   };
 
   const getItemPrice = (item: any) => {
+    // Se a unidade selecionada for a fracionada e houver um preço manual definido
+    if (item.selectedUnit === item.un_fracionada && item.venda_fracionada > 0) {
+      return item.venda_fracionada;
+    }
+
     const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
     const precoPrazo = item.venda || 0;
     let precoBase = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
 
-    // Se a unidade selecionada for a fracionada, aplica o fator de conversão
+    // Se a unidade selecionada for a fracionada mas não houver preço manual, usa o fator de conversão
     if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
       return precoBase * item.fator_conversao;
     }
@@ -211,12 +215,10 @@ const POS = () => {
           cd_venda: id
         });
 
-        // Baixa de estoque considerando conversão
         cart.forEach(item => {
           const prod = products.find(p => p.cd_produto === item.cd_produto);
           if (prod) {
             let qtdeBaixa = item.quantity || 0;
-            // Se vendeu na unidade fracionada, converte para a unidade principal para baixar o estoque
             if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
               qtdeBaixa = (item.quantity || 0) * item.fator_conversao;
             }

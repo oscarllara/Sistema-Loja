@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Produto } from '@/types/database';
 import { db } from '@/services/api';
@@ -35,6 +35,7 @@ const productSchema = z.object({
   compra: z.string().optional(),
   venda: z.string().min(1, "Preço de venda obrigatório"),
   venda_vista: z.string().optional(),
+  venda_fracionada: z.string().optional(),
   desconto_vista_tipo: z.enum(['P', 'V']).default('P'),
   desconto_vista_valor: z.string().default("0"),
   estoque: z.string().default("0"),
@@ -61,9 +62,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const allProducts = db.produtos.getAll().filter(p => p.cd_produto !== product?.cd_produto);
 
   const formatCurrency = (value: string) => {
+    if (!value) return "0,00";
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
-    if (isNaN(number)) return "";
+    if (isNaN(number)) return "0,00";
     return new Intl.NumberFormat("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -72,16 +74,19 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const parseCurrencyToNumber = (value: string) => {
     if (!value) return 0;
-    return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
+    // Remove pontos de milhar e troca vírgula por ponto
+    const cleanValue = value.replace(/\./g, "").replace(",", ".");
+    return parseFloat(cleanValue) || 0;
   };
 
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
-      compra: formatCurrency((product.compra || 0 * 100).toString()),
-      venda: formatCurrency((product.venda * 100).toString()),
-      venda_vista: formatCurrency((product.venda_vista || 0 * 100).toString()),
+      compra: formatCurrency((product.compra || 0).toFixed(2).replace('.', '')),
+      venda: formatCurrency((product.venda || 0).toFixed(2).replace('.', '')),
+      venda_vista: formatCurrency((product.venda_vista || 0).toFixed(2).replace('.', '')),
+      venda_fracionada: formatCurrency((product.venda_fracionada || 0).toFixed(2).replace('.', '')),
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
       estoque: product.estoque.toString(),
       minimo: product.minimo?.toString() || "0",
@@ -107,7 +112,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const descValorStr = watch("desconto_vista_valor");
   const isKit = watch("is_kit");
   const isFracionado = watch("fracionado");
+  const unFracionada = watch("un_fracionada");
+  const fatorConversao = watch("fator_conversao");
 
+  // Cálculo automático do preço à vista
   React.useEffect(() => {
     const venda = parseCurrencyToNumber(vendaStr);
     const descValor = parseFloat(descValorStr || "0");
@@ -119,8 +127,23 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       calculado = venda - descValor;
     }
     
-    setValue("venda_vista", formatCurrency((calculado * 100).toFixed(0)));
+    setValue("venda_vista", formatCurrency(calculado.toFixed(2).replace('.', '')));
   }, [vendaStr, descTipo, descValorStr, setValue]);
+
+  // Cálculo automático do preço fracionado (sugestão)
+  React.useEffect(() => {
+    if (isFracionado && fatorConversao) {
+      const venda = parseCurrencyToNumber(vendaStr);
+      const fator = parseFloat(fatorConversao.replace(',', '.'));
+      if (!isNaN(fator) && fator > 0) {
+        const sugerido = venda * fator;
+        // Só atualiza se o campo estiver vazio ou for a primeira vez
+        if (!watch("venda_fracionada") || watch("venda_fracionada") === "0,00") {
+          setValue("venda_fracionada", formatCurrency(sugerido.toFixed(2).replace('.', '')));
+        }
+      }
+    }
+  }, [vendaStr, isFracionado, fatorConversao, setValue]);
 
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
     const formatted = formatCurrency(e.target.value);
@@ -138,10 +161,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         compra: parseCurrencyToNumber(data.compra || ""),
         venda: parseCurrencyToNumber(data.venda),
         venda_vista: parseCurrencyToNumber(data.venda_vista || ""),
+        venda_fracionada: parseCurrencyToNumber(data.venda_fracionada || ""),
         desconto_vista_valor: parseFloat(data.desconto_vista_valor),
         estoque: parseFloat(data.estoque),
         minimo: parseFloat(data.minimo || "0"),
-        fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao) : undefined,
+        fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : undefined,
       } as any;
 
       if (product) {
@@ -162,8 +186,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className="grid w-full grid-cols-4 bg-slate-100 p-1 rounded-xl">
           <TabsTrigger value="geral">Geral</TabsTrigger>
-          <TabsTrigger value="precos">Preços</TabsTrigger>
           <TabsTrigger value="estoque">Estoque/Unid.</TabsTrigger>
+          <TabsTrigger value="precos">Preços</TabsTrigger>
           <TabsTrigger value="kit">Composição/Kit</TabsTrigger>
         </TabsList>
 
@@ -196,73 +220,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             <div className="space-y-2">
               <Label>NCM</Label>
               <Input {...register("ncm")} />
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="precos" className="mt-4 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-              <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                <DollarSign size={16} /> Preço Padrão (A Prazo)
-              </h4>
-              <div className="space-y-2">
-                <Label>Valor de Venda</Label>
-                <Input 
-                  {...register("venda")} 
-                  onChange={(e) => handleCurrencyChange(e, "venda")}
-                  className="text-lg font-bold" 
-                  placeholder="0,00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Preço de Custo</Label>
-                <Input 
-                  {...register("compra")} 
-                  onChange={(e) => handleCurrencyChange(e, "compra")}
-                  placeholder="0,00"
-                />
-              </div>
-            </div>
-
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
-              <h4 className="font-bold text-emerald-900 flex items-center gap-2">
-                <Percent size={16} /> Configuração À Vista
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <Label>Tipo de Desconto</Label>
-                  <RadioGroup 
-                    defaultValue={descTipo} 
-                    onValueChange={(v) => setValue("desconto_vista_tipo", v as 'P' | 'V')}
-                    className="flex flex-col gap-2"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="P" id="desc-p" />
-                      <Label htmlFor="desc-p">Percentual (%)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="V" id="desc-v" />
-                      <Label htmlFor="desc-v">Valor Fixo (R$)</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor do Desconto</Label>
-                  <Input {...register("desconto_vista_valor")} placeholder="Ex: 15" />
-                </div>
-              </div>
-              
-              <div className="pt-4 border-t border-emerald-200 space-y-2">
-                <Label className="text-emerald-700 font-bold">Preço Final à Vista (Editável)</Label>
-                <Input 
-                  {...register("venda_vista")} 
-                  onChange={(e) => handleCurrencyChange(e, "venda_vista")}
-                  className="text-2xl font-black text-emerald-700 bg-white border-emerald-300" 
-                  placeholder="0,00"
-                />
-                <p className="text-[10px] text-emerald-600">Você pode ajustar o valor final manualmente se desejar.</p>
-              </div>
             </div>
           </div>
         </TabsContent>
@@ -313,12 +270,92 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Fator de Conversão (1 {watch("un_fracionada")} = ? {watch("un")})</Label>
-                  <Input type="number" step="0.00001" {...register("fator_conversao")} placeholder="Ex: 0.02" />
-                  <p className="text-[10px] text-indigo-600">Ex: Se 1 saco tem 50kg, 1kg equivale a 0.02 sacos.</p>
+                  <Label>Fator de Conversão (1 {unFracionada || 'UN'} = ? {watch("un")})</Label>
+                  <Input {...register("fator_conversao")} placeholder="Ex: 0,02" />
+                  <p className="text-[10px] text-indigo-600">Ex: Se 1 saco tem 50kg, 1kg equivale a 0,02 sacos.</p>
                 </div>
               </div>
             )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="precos" className="mt-4 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+              <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                <DollarSign size={16} /> Preço Padrão (A Prazo)
+              </h4>
+              <div className="space-y-2">
+                <Label>Valor de Venda ({watch("un")})</Label>
+                <Input 
+                  {...register("venda")} 
+                  onChange={(e) => handleCurrencyChange(e, "venda")}
+                  className="text-lg font-bold" 
+                  placeholder="0,00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Preço de Custo</Label>
+                <Input 
+                  {...register("compra")} 
+                  onChange={(e) => handleCurrencyChange(e, "compra")}
+                  placeholder="0,00"
+                />
+              </div>
+
+              {isFracionado && (
+                <div className="pt-4 border-t border-slate-200 space-y-2 animate-in fade-in">
+                  <Label className="text-indigo-700 font-bold">Preço de Venda Fracionado ({unFracionada})</Label>
+                  <Input 
+                    {...register("venda_fracionada")} 
+                    onChange={(e) => handleCurrencyChange(e, "venda_fracionada")}
+                    className="text-lg font-bold border-indigo-200 bg-indigo-50/30" 
+                    placeholder="0,00"
+                  />
+                  <p className="text-[10px] text-slate-500">Defina o preço manual para a unidade fracionada.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
+              <h4 className="font-bold text-emerald-900 flex items-center gap-2">
+                <Percent size={16} /> Configuração À Vista
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <Label>Tipo de Desconto</Label>
+                  <RadioGroup 
+                    defaultValue={descTipo} 
+                    onValueChange={(v) => setValue("desconto_vista_tipo", v as 'P' | 'V')}
+                    className="flex flex-col gap-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="P" id="desc-p" />
+                      <Label htmlFor="desc-p">Percentual (%)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="V" id="desc-v" />
+                      <Label htmlFor="desc-v">Valor Fixo (R$)</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor do Desconto</Label>
+                  <Input {...register("desconto_vista_valor")} placeholder="Ex: 15" />
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t border-emerald-200 space-y-2">
+                <Label className="text-emerald-700 font-bold">Preço Final à Vista (Editável)</Label>
+                <Input 
+                  {...register("venda_vista")} 
+                  onChange={(e) => handleCurrencyChange(e, "venda_vista")}
+                  className="text-2xl font-black text-emerald-700 bg-white border-emerald-300" 
+                  placeholder="0,00"
+                />
+                <p className="text-[10px] text-emerald-600">Você pode ajustar o valor final manualmente se desejar.</p>
+              </div>
+            </div>
           </div>
         </TabsContent>
 

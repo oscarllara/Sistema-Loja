@@ -80,6 +80,7 @@ export interface Produto {
   compra?: number;
   venda: number;
   venda_vista?: number;
+  venda_fracionada?: number;
   desconto_vista_tipo?: 'P' | 'V';
   desconto_vista_valor?: number;
   estoque: number;
