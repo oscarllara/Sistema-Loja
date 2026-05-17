@@ -50,13 +50,13 @@ const Registrations = () => {
   const [editingEntity, setEditingEntity] = React.useState<Cliente | undefined>(undefined);
   const [selectedEntity, setSelectedEntity] = React.useState<Cliente | undefined>(undefined);
 
-  const loadData = () => {
-    setEntities(db.clientes.getAll());
-  };
+  const loadData = React.useCallback(() => {
+    setEntities(db.clientes.getAll() || []);
+  }, []);
 
   React.useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const filteredEntities = entities.filter(e => {
     const matchesSearch = e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -245,7 +245,6 @@ const Registrations = () => {
           </Card>
         </Tabs>
 
-        {/* Modal de Ficha do Cliente */}
         <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
           <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>

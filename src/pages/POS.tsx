@@ -12,7 +12,8 @@ import {
   QrCode, 
   Package, 
   ShoppingCart,
-  User
+  User,
+  Wallet
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,11 +27,11 @@ const POS = () => {
   const [cart, setCart] = React.useState<any[]>([]);
   const [search, setSearch] = React.useState("");
   const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Dinheiro');
-  const [selectedClientId, setSelectedClientId] = React.useState<number>(1); // Padrão: Consumidor Final
+  const [selectedClientId, setSelectedClientId] = React.useState<number>(1);
 
-  const products = db.produtos.getAll();
-  const contas = db.contas.getAll();
-  const clientes = db.clientes.getAll();
+  const products = db.produtos.getAll() || [];
+  const contas = db.contas.getAll() || [];
+  const clientes = db.clientes.getAll() || [];
 
   const addToCart = (product: any) => {
     const existing = cart.find(item => item.cd_produto === product.cd_produto);

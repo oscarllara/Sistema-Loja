@@ -10,13 +10,12 @@ import {
   Printer,
   CheckCircle2,
   Clock,
-  ArrowUpCircle,
   Package,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -44,18 +43,19 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
   const [startDate, setStartDate] = React.useState("");
   const [endDate, setEndDate] = React.useState("");
 
-  const loadData = () => {
-    setVendas(db.vendas.getByCliente(client.cd_clientes));
-    setFinanceiro(db.financeiro.getByEntidade(client.cd_clientes));
-  };
+  const loadData = React.useCallback(() => {
+    if (!client?.cd_clientes) return;
+    setVendas(db.vendas.getByCliente(client.cd_clientes) || []);
+    setFinanceiro(db.financeiro.getByEntidade(client.cd_clientes) || []);
+  }, [client]);
 
   React.useEffect(() => {
     loadData();
-  }, [client]);
+  }, [loadData]);
 
-  const totalComprado = vendas.reduce((acc, v) => acc + v.total, 0);
-  const totalPago = financeiro.filter(l => l.status === 'Pago' && l.tipo === 'R').reduce((acc, l) => acc + l.valor, 0);
-  const saldoDevedor = financeiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').reduce((acc, l) => acc + l.valor, 0);
+  const totalComprado = vendas.reduce((acc, v) => acc + (v.total || 0), 0);
+  const totalPago = financeiro.filter(l => l.status === 'Pago' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
+  const saldoDevedor = financeiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
 
   const handleBaixa = (id: number) => {
     const contas = db.contas.getAll();
@@ -68,9 +68,10 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
     loadData();
   };
 
+  if (!client) return null;
+
   return (
     <div className="space-y-6">
-      {/* Cabeçalho com Resumo Financeiro */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-slate-900 text-white border-none">
           <CardContent className="p-4">
@@ -106,7 +107,6 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           <TabsTrigger value="consolidado" className="gap-2"><Calendar size={16} /> Histórico de Contas</TabsTrigger>
         </TabsList>
 
-        {/* Aba: Histórico de Compras */}
         <TabsContent value="vendas" className="mt-4 space-y-4">
           <div className="border rounded-xl overflow-hidden bg-white">
             <Table>
@@ -176,7 +176,6 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           </div>
         </TabsContent>
 
-        {/* Aba: Contas a Pagar (Crediário) */}
         <TabsContent value="crediario" className="mt-4 space-y-4">
           <div className="border rounded-xl overflow-hidden bg-white">
             <Table>
@@ -216,7 +215,6 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           </div>
         </TabsContent>
 
-        {/* Aba: Histórico de Pagamentos */}
         <TabsContent value="pagamentos" className="mt-4 space-y-4">
           <div className="border rounded-xl overflow-hidden bg-white">
             <Table>
@@ -244,7 +242,6 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           </div>
         </TabsContent>
 
-        {/* Aba: Histórico Consolidado */}
         <TabsContent value="consolidado" className="mt-4 space-y-4">
           <div className="flex items-end gap-4 bg-slate-50 p-4 rounded-xl border">
             <div className="space-y-1">
