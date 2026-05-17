@@ -12,12 +12,13 @@ import {
   Clock,
   Package,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Filter
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/tabs";
+import { Card, CardContent } from "@/card";
+import { Button } from "@/button";
+import { Input } from "@/input";
 import { 
   Table, 
   TableBody, 
@@ -25,8 +26,8 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+} from "@/table";
+import { Badge } from "@/badge";
 import { db } from '@/services/api';
 import { Cliente, Venda, LancamentoFinanceiro } from '@/types/database';
 import { cn } from '@/lib/utils';
@@ -40,8 +41,10 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
   const [vendas, setVendas] = React.useState<Venda[]>([]);
   const [financeiro, setFinanceiro] = React.useState<LancamentoFinanceiro[]>([]);
   const [expandedVenda, setExpandedVenda] = React.useState<number | null>(null);
-  const [startDate, setStartDate] = React.useState("");
-  const [endDate, setEndDate] = React.useState("");
+  
+  // Filtros de Período
+  const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = React.useState(new Date().toISOString().split('T')[0]);
 
   const loadData = React.useCallback(() => {
     if (!client?.cd_clientes) return;
@@ -53,9 +56,19 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
     loadData();
   }, [loadData]);
 
-  const totalComprado = vendas.reduce((acc, v) => acc + (v.total || 0), 0);
-  const totalPago = financeiro.filter(l => l.status === 'Pago' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
-  const saldoDevedor = financeiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
+  // Lógica de Filtragem por Data
+  const filterByDate = (dateStr: string) => {
+    if (!startDate || !endDate) return true;
+    const date = dateStr.split('T')[0];
+    return date >= startDate && date <= endDate;
+  };
+
+  const filteredVendas = vendas.filter(v => filterByDate(v.data));
+  const filteredFinanceiro = financeiro.filter(l => filterByDate(l.data_vencimento || l.data_pagamento || ""));
+
+  const totalComprado = filteredVendas.reduce((acc, v) => acc + (v.total || 0), 0);
+  const totalPago = filteredFinanceiro.filter(l => l.status === 'Pago' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
+  const saldoDevedor = filteredFinanceiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
 
   const handleBaixa = (id: number) => {
     const contas = db.contas.getAll();
@@ -68,47 +81,72 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
     loadData();
   };
 
+  const FilterBar = () => (
+    <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+      <div className="space-y-1">
+        <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Data Inicial</label>
+        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 bg-white w-44" />
+      </div>
+      <div className="space-y-1">
+        <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Data Final</label>
+        <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 bg-white w-44" />
+      </div>
+      <Button variant="outline" className="h-10 gap-2 bg-white border-slate-200 hover:bg-indigo-50 hover:text-indigo-600">
+        <Filter size={16} /> Filtrar
+      </Button>
+      <Button variant="outline" className="h-10 gap-2 bg-white border-slate-200 hover:bg-slate-100" onClick={() => window.print()}>
+        <Printer size={16} /> Imprimir Listagem
+      </Button>
+    </div>
+  );
+
   if (!client) return null;
 
   return (
     <div className="space-y-6">
+      {/* Cards de Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-slate-900 text-white border-none">
+        <Card className="bg-slate-900 text-white border-none shadow-lg">
           <CardContent className="p-4">
             <p className="text-[10px] font-bold uppercase text-slate-400">Total em Compras</p>
             <p className="text-xl font-black">R$ {totalComprado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-[8px] text-slate-500 mt-1">No período selecionado</p>
           </CardContent>
         </Card>
-        <Card className="bg-emerald-600 text-white border-none">
+        <Card className="bg-emerald-600 text-white border-none shadow-lg">
           <CardContent className="p-4">
             <p className="text-[10px] font-bold uppercase text-emerald-100">Total Pago</p>
             <p className="text-xl font-black">R$ {totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-[8px] text-emerald-500 mt-1">No período selecionado</p>
           </CardContent>
         </Card>
-        <Card className="bg-rose-600 text-white border-none">
+        <Card className="bg-rose-600 text-white border-none shadow-lg">
           <CardContent className="p-4">
             <p className="text-[10px] font-bold uppercase text-rose-100">Saldo Devedor</p>
             <p className="text-xl font-black">R$ {saldoDevedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-[8px] text-rose-400 mt-1">Total pendente no período</p>
           </CardContent>
         </Card>
-        <Card className="bg-indigo-600 text-white border-none">
+        <Card className="bg-indigo-600 text-white border-none shadow-lg">
           <CardContent className="p-4">
             <p className="text-[10px] font-bold uppercase text-indigo-100">Limite Disponível</p>
             <p className="text-xl font-black">R$ {((client.limite || 0) - saldoDevedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-[8px] text-indigo-300 mt-1">Baseado no limite de R$ {client.limite?.toFixed(2)}</p>
           </CardContent>
         </Card>
       </div>
 
       <Tabs defaultValue="vendas" className="w-full">
-        <TabsList className="bg-slate-100 p-1 rounded-xl w-full justify-start h-auto flex-wrap">
+        <TabsList className="bg-slate-100 p-1 rounded-xl w-full justify-start h-auto flex-wrap mb-4">
           <TabsTrigger value="vendas" className="gap-2"><ShoppingCart size={16} /> Histórico de Compras</TabsTrigger>
           <TabsTrigger value="crediario" className="gap-2"><Wallet size={16} /> Contas a Pagar (Crediário)</TabsTrigger>
           <TabsTrigger value="pagamentos" className="gap-2"><History size={16} /> Histórico de Pagamentos</TabsTrigger>
           <TabsTrigger value="consolidado" className="gap-2"><Calendar size={16} /> Histórico de Contas</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="vendas" className="mt-4 space-y-4">
-          <div className="border rounded-xl overflow-hidden bg-white">
+        <TabsContent value="vendas" className="space-y-4">
+          <FilterBar />
+          <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -121,10 +159,10 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {vendas.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-slate-400">Nenhuma compra registrada.</TableCell></TableRow>
+                {filteredVendas.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-slate-400">Nenhuma compra no período.</TableCell></TableRow>
                 ) : (
-                  vendas.map((v) => (
+                  filteredVendas.map((v) => (
                     <React.Fragment key={v.cd_venda}>
                       <TableRow 
                         className="cursor-pointer hover:bg-slate-50"
@@ -176,8 +214,9 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           </div>
         </TabsContent>
 
-        <TabsContent value="crediario" className="mt-4 space-y-4">
-          <div className="border rounded-xl overflow-hidden bg-white">
+        <TabsContent value="crediario" className="space-y-4">
+          <FilterBar />
+          <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -189,10 +228,10 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {financeiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-10 text-slate-400">Nenhuma conta pendente.</TableCell></TableRow>
+                {filteredFinanceiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-10 text-slate-400">Nenhuma conta pendente no período.</TableCell></TableRow>
                 ) : (
-                  financeiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').map((l) => (
+                  filteredFinanceiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').map((l) => (
                     <TableRow key={l.cd_lancamento}>
                       <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
                       <TableCell className="text-xs font-medium">{l.descricao}</TableCell>
@@ -215,8 +254,9 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           </div>
         </TabsContent>
 
-        <TabsContent value="pagamentos" className="mt-4 space-y-4">
-          <div className="border rounded-xl overflow-hidden bg-white">
+        <TabsContent value="pagamentos" className="space-y-4">
+          <FilterBar />
+          <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -226,10 +266,10 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {financeiro.filter(l => l.status === 'Pago' && l.tipo === 'R').length === 0 ? (
-                  <TableRow><TableCell colSpan={3} className="text-center py-10 text-slate-400">Nenhum pagamento registrado.</TableCell></TableRow>
+                {filteredFinanceiro.filter(l => l.status === 'Pago' && l.tipo === 'R').length === 0 ? (
+                  <TableRow><TableCell colSpan={3} className="text-center py-10 text-slate-400">Nenhum pagamento no período.</TableCell></TableRow>
                 ) : (
-                  financeiro.filter(l => l.status === 'Pago' && l.tipo === 'R').map((l) => (
+                  filteredFinanceiro.filter(l => l.status === 'Pago' && l.tipo === 'R').map((l) => (
                     <TableRow key={l.cd_lancamento}>
                       <TableCell className="text-xs">{new Date(l.data_pagamento || "").toLocaleDateString()}</TableCell>
                       <TableCell className="text-xs">Pagamento de {l.descricao}</TableCell>
@@ -242,21 +282,9 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
           </div>
         </TabsContent>
 
-        <TabsContent value="consolidado" className="mt-4 space-y-4">
-          <div className="flex items-end gap-4 bg-slate-50 p-4 rounded-xl border">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Data Inicial</label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 bg-white" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-500">Data Final</label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 bg-white" />
-            </div>
-            <Button variant="outline" className="h-9 gap-2 bg-white"><Search size={16} /> Filtrar</Button>
-            <Button variant="outline" className="h-9 gap-2 bg-white"><Printer size={16} /> Imprimir Listagem</Button>
-          </div>
-
-          <div className="border rounded-xl overflow-hidden bg-white">
+        <TabsContent value="consolidado" className="space-y-4">
+          <FilterBar />
+          <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -269,16 +297,20 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {financeiro.filter(l => l.tipo === 'R').map((l) => (
-                  <TableRow key={l.cd_lancamento} className={cn(l.status === 'Pendente' ? "bg-rose-50/30" : "bg-emerald-50/30")}>
-                    <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-xs">{l.descricao}</TableCell>
-                    <TableCell className="text-xs">R$ {l.valor.toFixed(2)}</TableCell>
-                    <TableCell className="text-xs">{l.status === 'Pago' ? `R$ ${l.valor.toFixed(2)}` : 'R$ 0,00'}</TableCell>
-                    <TableCell className="text-xs">{l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString() : '-'}</TableCell>
-                    <TableCell className="text-xs font-bold text-rose-600">{l.status === 'Pendente' ? `R$ ${l.valor.toFixed(2)}` : 'R$ 0,00'}</TableCell>
-                  </TableRow>
-                ))}
+                {filteredFinanceiro.filter(l => l.tipo === 'R').length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-slate-400">Nenhum registro no período.</TableCell></TableRow>
+                ) : (
+                  filteredFinanceiro.filter(l => l.tipo === 'R').map((l) => (
+                    <TableRow key={l.cd_lancamento} className={cn(l.status === 'Pendente' ? "bg-rose-50/30" : "bg-emerald-50/30")}>
+                      <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-xs">{l.descricao}</TableCell>
+                      <TableCell className="text-xs">R$ {l.valor.toFixed(2)}</TableCell>
+                      <TableCell className="text-xs">{l.status === 'Pago' ? `R$ ${l.valor.toFixed(2)}` : 'R$ 0,00'}</TableCell>
+                      <TableCell className="text-xs">{l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString() : '-'}</TableCell>
+                      <TableCell className="text-xs font-bold text-rose-600">{l.status === 'Pendente' ? `R$ ${l.valor.toFixed(2)}` : 'R$ 0,00'}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
