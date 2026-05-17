@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Produto } from '@/types/database';
 import { db } from '@/services/api';
@@ -74,7 +74,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const parseCurrencyToNumber = (value: string) => {
     if (!value) return 0;
-    // Remove pontos de milhar e troca vírgula por ponto
     const cleanValue = value.replace(/\./g, "").replace(",", ".");
     return parseFloat(cleanValue) || 0;
   };
@@ -115,7 +114,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const unFracionada = watch("un_fracionada");
   const fatorConversao = watch("fator_conversao");
 
-  // Cálculo automático do preço à vista
   React.useEffect(() => {
     const venda = parseCurrencyToNumber(vendaStr);
     const descValor = parseFloat(descValorStr || "0");
@@ -130,14 +128,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     setValue("venda_vista", formatCurrency(calculado.toFixed(2).replace('.', '')));
   }, [vendaStr, descTipo, descValorStr, setValue]);
 
-  // Cálculo automático do preço fracionado (sugestão)
   React.useEffect(() => {
     if (isFracionado && fatorConversao) {
       const venda = parseCurrencyToNumber(vendaStr);
       const fator = parseFloat(fatorConversao.replace(',', '.'));
       if (!isNaN(fator) && fator > 0) {
         const sugerido = venda * fator;
-        // Só atualiza se o campo estiver vazio ou for a primeira vez
         if (!watch("venda_fracionada") || watch("venda_fracionada") === "0,00") {
           setValue("venda_fracionada", formatCurrency(sugerido.toFixed(2).replace('.', '')));
         }
