@@ -73,7 +73,13 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect }: ProductSearchModalPro
               onKeyDown={handleKeyDown}
               className="h-10 bg-white border-slate-400 rounded-none focus-visible:ring-0 focus-visible:border-indigo-500"
             />
-            <button type="button" className="px-8 bg-slate-200 border border-slate-400 font-bold text-sm hover:bg-slate-300">OK</button>
+            <button 
+              type="button" 
+              onClick={() => { if(filtered[selectedIndex]) { onSelect(filtered[selectedIndex]); onClose(); } }}
+              className="px-8 bg-slate-200 border border-slate-400 font-bold text-sm hover:bg-slate-300"
+            >
+              OK
+            </button>
           </div>
         </div>
 

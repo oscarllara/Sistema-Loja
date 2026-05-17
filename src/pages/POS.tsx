@@ -49,7 +49,6 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 
-// Componente de botão de pagamento movido para fora para evitar problemas de hoisting
 const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
   <button 
     type="button"
@@ -77,12 +76,10 @@ const POS = () => {
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState("venda");
 
-  // Dados com fallback agressivo
   const products = React.useMemo(() => db.produtos.getAll() || [], []);
   const clientes = React.useMemo(() => db.clientes.getAll() || [], []);
   const orcamentos = React.useMemo(() => (db.orcamentos.getAll() || []).filter(o => o && o.status === 'Aberto'), []);
 
-  // Garantir que o cliente selecionado existe
   React.useEffect(() => {
     if (clientes.length > 0) {
       const exists = clientes.some(c => c.cd_clientes === selectedClientId);
@@ -92,7 +89,6 @@ const POS = () => {
     }
   }, [clientes, selectedClientId]);
 
-  // Atalho F1
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F1') {
@@ -131,7 +127,6 @@ const POS = () => {
     }));
   };
 
-  // Cálculo do total ultra-seguro
   const total = React.useMemo(() => {
     return cart.reduce((acc, item) => {
       if (!item) return acc;
@@ -194,7 +189,6 @@ const POS = () => {
           cd_venda: id
         });
 
-        // Atualizar estoque
         cart.forEach(item => {
           const prod = products.find(p => p.cd_produto === item.cd_produto);
           if (prod) {
@@ -294,9 +288,12 @@ const POS = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-center gap-2 bg-amber-50/10 text-amber-400 px-3 py-1.5 rounded-lg border border-amber-400/20 text-xs font-bold">
-                      <span className="bg-amber-400 text-slate-900 px-1.5 rounded">F1</span> Pesquisar Produtos
-                    </div>
+                    <button 
+                      onClick={() => setIsSearchOpen(true)}
+                      className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                    >
+                      <span className="bg-slate-900 text-white px-1.5 rounded">F1</span> Pesquisar Produtos
+                    </button>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Total do Carrinho</p>
@@ -310,6 +307,7 @@ const POS = () => {
                       <TableRow>
                         <TableHead className="w-20">Cód.</TableHead>
                         <TableHead>Produto</TableHead>
+                        <TableHead className="w-16 text-center">UN</TableHead>
                         <TableHead className="text-right">Unitário</TableHead>
                         <TableHead className="text-center w-32">Quantidade</TableHead>
                         <TableHead className="text-right">Subtotal</TableHead>
@@ -319,7 +317,7 @@ const POS = () => {
                     <TableBody>
                       {cart.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-20 text-slate-400">
+                          <TableCell colSpan={7} className="text-center py-20 text-slate-400">
                             <ShoppingCart size={48} className="mx-auto mb-4 opacity-10" />
                             <p>Pressione <span className="font-bold text-slate-600">F1</span> para buscar produtos</p>
                           </TableCell>
@@ -334,7 +332,11 @@ const POS = () => {
                               <TableCell className="font-mono text-xs">{item.id_manual || '-'}</TableCell>
                               <TableCell>
                                 <p className="font-bold text-slate-900 uppercase text-xs">{item.nome || 'Produto'}</p>
-                                <p className="text-[10px] text-slate-500">{item.un || 'UN'}</p>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase">
+                                  {item.un || 'UN'}
+                                </span>
                               </TableCell>
                               <TableCell className="text-right font-medium">R$ {preco.toFixed(2)}</TableCell>
                               <TableCell>
