@@ -23,14 +23,19 @@ const financialSchema = z.object({
 
 type FinancialFormValues = z.infer<typeof financialSchema>;
 
-const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
+interface FinancialFormProps {
+  onSuccess: () => void;
+  defaultType?: 'R' | 'P';
+}
+
+const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => {
   const contas = db.contas.getAll() || [];
   
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FinancialFormValues>({
     resolver: zodResolver(financialSchema),
     defaultValues: {
-      tipo: 'P',
-      status: 'Pendente',
+      tipo: defaultType,
+      status: 'Pago', // No caixa diário, geralmente já é algo pago/recebido
       data_vencimento: new Date().toISOString().split('T')[0],
       categoria: 'Outros',
       valor: "0,00"
@@ -44,14 +49,12 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
     ? ['Venda', 'Serviço', 'Rendimento', 'Aporte', 'Outros']
     : ['Salário', 'Aluguel', 'Pro-labore', 'Imposto', 'Fornecedor', 'Energia', 'Água', 'Internet', 'Vale', 'Comissão', 'Outros'];
 
-  // Função para transformar em Title Case (Primeira letra de cada palavra maiúscula)
   const toTitleCase = (str: string) => {
     return str.replace(/\w\S*/g, (txt) => {
       return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
     });
   };
 
-  // Máscara de Moeda (0,00)
   const formatCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
@@ -84,9 +87,11 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
         descricao: data.descricao,
         valor: valorNum,
         data_vencimento: data.data_vencimento,
+        data_pagamento: data.status === 'Pago' ? new Date().toISOString() : undefined,
         status: data.status,
         categoria: data.categoria,
         cd_conta: data.status === 'Pago' ? Number(data.cd_conta) : undefined,
+        meio_pagamento: 'Dinheiro' // Padrão para caixa diário
       });
 
       showSuccess("Lançamento realizado com sucesso!");
@@ -147,46 +152,26 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
           />
         </div>
         <div className="space-y-2">
-          <Label>Data de Vencimento</Label>
+          <Label>Data</Label>
           <Input type="date" {...register("data_vencimento")} />
         </div>
       </div>
 
       <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="font-semibold">Já está pago/recebido?</Label>
-          <RadioGroup 
-            value={status}
-            onValueChange={(v) => setValue("status", v as 'Pendente' | 'Pago')}
-            className="flex gap-4"
+        <div className="space-y-2">
+          <Label>Conta / Caixa de Destino</Label>
+          <select 
+            {...register("cd_conta")}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="Pendente" id="st-pen" />
-              <Label htmlFor="st-pen" className="cursor-pointer">Não</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="Pago" id="st-pago" />
-              <Label htmlFor="st-pago" className="cursor-pointer">Sim</Label>
-            </div>
-          </RadioGroup>
+            <option value="">Selecione a conta...</option>
+            {contas.map(c => (
+              <option key={c.cd_conta} value={c.cd_conta}>
+                {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+              </option>
+            ))}
+          </select>
         </div>
-
-        {status === 'Pago' && (
-          <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-            <Label>Conta de Destino/Origem</Label>
-            <select 
-              {...register("cd_conta")}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Selecione a conta...</option>
-              {contas.map(c => (
-                <option key={c.cd_conta} value={c.cd_conta}>
-                  {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100">

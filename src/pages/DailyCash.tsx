@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   Table, 
   TableBody, 
@@ -26,25 +27,37 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
 import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
+import FinancialForm from '@/components/FinancialForm';
+import { showSuccess } from '@/utils/toast';
 
 const DailyCash = () => {
   const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
+  const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
+  const [isTransferOpen, setIsTransferOpen] = React.useState(false);
+
   const lancamentos = db.financeiro.getAll() || [];
+  const contas = db.contas.getAll() || [];
   
-  // Filtrar lançamentos do dia selecionado que estão pagos
   const movDia = lancamentos.filter(l => 
     l.status === 'Pago' && 
     (l.data_pagamento?.startsWith(selectedDate) || l.data_vencimento.startsWith(selectedDate))
   );
 
-  // Calcular Saldo Anterior (Tudo pago antes da data selecionada)
   const saldoAnterior = lancamentos
     .filter(l => l.status === 'Pago' && (l.data_pagamento || l.data_vencimento) < selectedDate)
     .reduce((acc, l) => l.tipo === 'R' ? acc + l.valor : acc - l.valor, 0);
 
-  // Agrupamentos solicitados
   const resumo = {
     vendasVista: movDia.filter(l => l.categoria === 'Venda' && l.meio_pagamento === 'Dinheiro').reduce((acc, l) => acc + l.valor, 0),
     recebimentos: movDia.filter(l => l.categoria === 'Recebimento' || l.categoria === 'Serviço').reduce((acc, l) => acc + l.valor, 0),
@@ -62,7 +75,6 @@ const DailyCash = () => {
   const saldoDia = totalEntradas - totalSaidas;
   const saldoFinal = saldoAnterior + saldoDia;
 
-  // Gerar extrato com saldo progressivo
   let runningBalance = saldoAnterior;
   const extrato = movDia.map(l => {
     const anterior = runningBalance;
@@ -71,11 +83,30 @@ const DailyCash = () => {
     return { ...l, anterior, atual: runningBalance };
   });
 
+  const handleTransfer = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    db.financeiro.transferir({
+      data: new Date().toISOString(),
+      valor: parseFloat(formData.get('valor') as string),
+      cd_conta_origem: parseInt(formData.get('origem') as string),
+      cd_conta_destino: parseInt(formData.get('destino') as string),
+      obs: formData.get('obs') as string
+    });
+    showSuccess("Transferência realizada!");
+    setIsTransferOpen(false);
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-6 print:p-0">
         {/* Header e Controles */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm print:hidden">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-indigo-600 rounded-xl text-white">
               <History size={24} />
@@ -95,16 +126,69 @@ const DailyCash = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-              <Plus size={18} /> Entrada
-            </Button>
-            <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50">
-              <Minus size={18} /> Saída
-            </Button>
-            <Button variant="outline" className="gap-2 border-slate-200">
-              <ArrowLeftRight size={18} /> Transferência
-            </Button>
-            <Button className="bg-slate-900 gap-2">
+            <Dialog open={isEntradaOpen} onOpenChange={setIsEntradaOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                  <Plus size={18} /> Entrada
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Nova Entrada de Caixa</DialogTitle></DialogHeader>
+                <FinancialForm defaultType="R" onSuccess={() => { setIsEntradaOpen(false); setRefreshKey(k => k+1); }} />
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isSaidaOpen} onOpenChange={setIsSaidaOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50">
+                  <Minus size={18} /> Saída
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Nova Saída de Caixa</DialogTitle></DialogHeader>
+                <FinancialForm defaultType="P" onSuccess={() => { setIsSaidaOpen(false); setRefreshKey(k => k+1); }} />
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 border-slate-200">
+                  <ArrowLeftRight size={18} /> Transferência
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Nova Transferência entre Contas</DialogTitle></DialogHeader>
+                <form onSubmit={handleTransfer} className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Origem</Label>
+                      <select name="origem" className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                        <option value="">Selecione...</option>
+                        {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome} (R$ {c.saldo.toFixed(2)})</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Destino</Label>
+                      <select name="destino" className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                        <option value="">Selecione...</option>
+                        {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor (R$)</Label>
+                    <Input name="valor" type="number" step="0.01" placeholder="0,00" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Observação</Label>
+                    <Input name="obs" placeholder="Ex: Depósito bancário" />
+                  </div>
+                  <Button type="submit" className="w-full bg-indigo-600">Confirmar Transferência</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Button className="bg-slate-900 gap-2" onClick={handlePrint}>
               <Printer size={18} /> Imprimir
             </Button>
           </div>
@@ -175,7 +259,7 @@ const DailyCash = () => {
           </Card>
 
           {/* Agrupamentos e Resumos (Lado Direito) */}
-          <div className="space-y-6">
+          <div className="space-y-6 print:hidden">
             <Card className="border-none shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-bold uppercase text-slate-500">Resumo Agrupado</CardTitle>
