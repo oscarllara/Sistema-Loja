@@ -21,7 +21,9 @@ import {
   ShoppingBag,
   UserPlus,
   Upload,
-  CheckCircle2
+  CheckCircle2,
+  LogOut,
+  Lock
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -38,7 +40,8 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle 
+  DialogTitle,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { showSuccess, showError } from '@/utils/toast';
 import { db } from '@/services/api';
@@ -63,6 +66,8 @@ const POS = () => {
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [isAddEntityOpen, setIsAddEntityOpen] = React.useState(false);
+  const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
+  const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
 
   const config = db.config.get();
@@ -82,6 +87,7 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
+    if (key === 'ESC') setIsAdminAuthOpen(true);
   };
 
   React.useEffect(() => {
@@ -90,10 +96,25 @@ const POS = () => {
       if (e.key === 'F3') { e.preventDefault(); handleShortcut('F3'); }
       if (e.key === 'F10') { e.preventDefault(); handleShortcut('F10'); }
       if (e.key === 'F4') { e.preventDefault(); handleShortcut('F4'); }
+      if (e.key === 'Escape') { e.preventDefault(); handleShortcut('ESC'); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cart, selectedSellerId]);
+
+  const handleAdminAuth = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    // Verifica contra o usuário admin padrão ou qualquer usuário com permissão de configurações
+    const admin = db.clientes.getAll().find(c => c.usuario === 'admin' && c.senha === adminPassword);
+    
+    if (admin) {
+      showSuccess("Acesso autorizado!");
+      navigate("/");
+    } else {
+      showError("Senha de administrador incorreta.");
+      setAdminPassword("");
+    }
+  };
 
   const addToCart = (product: any) => {
     if (!selectedSellerId) {
@@ -181,7 +202,6 @@ const POS = () => {
           if (prod) db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
         });
       } else {
-        // Lógica de Compra Simplificada no PDV
         db.compras.save({
           cd_compra: id,
           data: new Date().toISOString(),
@@ -255,12 +275,12 @@ const POS = () => {
               <ShortcutItem key="F3" label="Zerar Operação" onClick={() => handleShortcut('F3')} />
               <ShortcutItem key="F4" label={mode === 'VENDA' ? "Novo Cliente" : "Novo Fornecedor"} onClick={() => handleShortcut('F4')} />
               <ShortcutItem key="F10" label="Concluir Operação" onClick={() => handleShortcut('F10')} />
-              <ShortcutItem key="Ctrl+P" label="Último Comprovante" onClick={() => setIsPrintOpen(true)} />
+              <ShortcutItem key="ESC" label="Sair para o ERP" onClick={() => handleShortcut('ESC')} />
             </div>
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className="p-4 border-t border-slate-100 space-y-2">
           <div className="flex gap-2">
             <Button 
               variant={mode === 'VENDA' ? 'default' : 'outline'} 
@@ -277,6 +297,13 @@ const POS = () => {
               <ShoppingBag size={14} /> COMPRAS
             </Button>
           </div>
+          <Button 
+            variant="ghost" 
+            className="w-full h-10 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs"
+            onClick={() => handleShortcut('ESC')}
+          >
+            <LogOut size={14} /> SAIR DO PDV (ESC)
+          </Button>
         </div>
       </aside>
 
@@ -437,6 +464,36 @@ const POS = () => {
               showSuccess("Cadastro realizado!");
             }} 
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Autenticação Admin para Sair */}
+      <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="text-rose-600" />
+              Acesso Restrito ao ERP
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdminAuth} className="space-y-4 py-4">
+            <p className="text-sm text-slate-500">Informe a senha do administrador para sair do PDV e acessar o painel de gestão.</p>
+            <div className="space-y-2">
+              <Label>Senha do Administrador</Label>
+              <Input 
+                type="password" 
+                autoFocus
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Digite a senha..."
+                className="h-12 text-center text-lg"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)} className="flex-1">Cancelar</Button>
+              <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700">Acessar ERP</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
