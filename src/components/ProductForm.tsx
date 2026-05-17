@@ -12,7 +12,8 @@ import {
   Truck, 
   Tag,
   Scale,
-  FileText
+  FileText,
+  Hash
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import { showSuccess } from '@/utils/toast';
 
 const productSchema = z.object({
   nome: z.string().min(2, "Nome do produto obrigatório"),
+  id_importado: z.string().optional(),
   un: z.string().default("UN"),
   cod_barras: z.string().optional(),
   compra: z.string().optional(),
@@ -32,7 +34,7 @@ const productSchema = z.object({
   minimo: z.string().default("0"),
   cd_fornecedores: z.string().optional(),
   ncm: z.string().optional(),
-  pesavel: z.boolean().default(false),
+  fracionado: z.boolean().default(false),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -43,7 +45,7 @@ interface ProductFormProps {
 }
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<ProductFormValues>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
@@ -56,7 +58,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       un: "UN",
       estoque: "0",
       minimo: "0",
-      pesavel: false,
+      fracionado: false,
     }
   });
 
@@ -64,6 +66,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const payload = {
       ...data,
       cd_produto: product?.cd_produto || Date.now(),
+      nome: data.nome.toUpperCase(),
       compra: parseFloat(data.compra || "0"),
       venda: parseFloat(data.venda),
       estoque: parseFloat(data.estoque),
@@ -86,8 +89,18 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2 space-y-2">
           <Label className="flex items-center gap-2"><Package size={14} /> Nome do Produto *</Label>
-          <Input {...register("nome")} placeholder="Ex: Coca-Cola 2L" />
+          <Input 
+            {...register("nome")} 
+            placeholder="EX: CIMENTO TUPI 50KG" 
+            className="uppercase"
+            onChange={(e) => setValue("nome", e.target.value.toUpperCase())}
+          />
           {errors.nome && <p className="text-xs text-red-500">{errors.nome.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2"><Hash size={14} /> ID Importado (Antigo)</Label>
+          <Input {...register("id_importado")} placeholder="Ex: 5797" />
         </div>
 
         <div className="space-y-2">
@@ -113,12 +126,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
         <div className="space-y-2">
           <Label className="flex items-center gap-2"><Layers size={14} /> Estoque Atual</Label>
-          <Input type="number" {...register("estoque")} />
+          <Input type="number" step="0.001" {...register("estoque")} />
         </div>
 
         <div className="space-y-2">
           <Label className="flex items-center gap-2"><Layers size={14} /> Estoque Mínimo</Label>
-          <Input type="number" {...register("minimo")} />
+          <Input type="number" step="0.001" {...register("minimo")} />
         </div>
 
         <div className="space-y-2">
@@ -126,25 +139,23 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <Input {...register("ncm")} placeholder="0000.00.00" />
         </div>
 
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2"><Truck size={14} /> Fornecedor (ID)</Label>
-          <Input type="number" {...register("cd_fornecedores")} />
-        </div>
-
-        <div className="md:col-span-2 flex items-center space-x-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+        <div className="md:col-span-2 flex items-center space-x-2 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
           <Checkbox 
-            id="pesavel" 
-            onCheckedChange={(checked) => setValue("pesavel", checked as boolean)}
-            defaultChecked={product?.pesavel}
+            id="fracionado" 
+            onCheckedChange={(checked) => setValue("fracionado", checked as boolean)}
+            defaultChecked={product?.fracionado}
           />
-          <Label htmlFor="pesavel" className="flex items-center gap-2 cursor-pointer">
-            <Scale size={14} /> Produto Pesável (Balança)
-          </Label>
+          <div className="grid gap-1.5 leading-none">
+            <Label htmlFor="fracionado" className="flex items-center gap-2 cursor-pointer font-bold text-indigo-900">
+              <Scale size={16} /> Venda Fracionada / Pesável
+            </Label>
+            <p className="text-xs text-indigo-600">Permite vender quantidades decimais (ex: 0,500 kg).</p>
+          </div>
         </div>
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8">
+        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8 h-11 rounded-xl">
           Salvar Produto
         </Button>
       </div>

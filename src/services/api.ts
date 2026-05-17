@@ -1,38 +1,18 @@
 "use client";
 
-import { 
-  Cliente, 
-  Produto, 
-  Venda, 
-  ItemVenda, 
-  ContaPagar, 
-  Receber, 
-  Caixa, 
-  Funcionario, 
-  OS, 
-  Compra,
-  CentroCusto,
-  Cheque
-} from '../types/database';
+import { Cliente, Produto, Compra, Venda, ItemVenda } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
+const START_ID_NOVO = 5000;
 
 const getDB = () => {
   const data = localStorage.getItem(STORAGE_KEY);
   if (!data) {
     const initialDB = {
       clientes: [],
-      funcionarios: [],
       produtos: [],
       vendas: [],
-      itensVenda: [],
-      contasPagar: [],
-      receber: [],
-      caixa: [],
-      os: [],
       compras: [],
-      centroCustos: [],
-      cheques: []
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initialDB));
     return initialDB;
@@ -41,19 +21,24 @@ const getDB = () => {
 };
 
 const saveDB = (db: any) => {
+  // Antes de salvar, sempre re-sequenciamos os produtos por nome
+  if (db.produtos && db.produtos.length > 0) {
+    db.produtos.sort((a: Produto, b: Produto) => a.nome.localeCompare(b.nome));
+    db.produtos = db.produtos.map((p: Produto, index: number) => ({
+      ...p,
+      id_novo: START_ID_NOVO + index
+    }));
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 };
 
 export const db = {
   clientes: {
     getAll: (): Cliente[] => getDB().clientes,
-    getById: (id: number): Cliente | undefined => 
-      getDB().clientes.find((c: Cliente) => c.cd_clientes === id),
     add: (cliente: Cliente) => {
       const database = getDB();
       database.clientes.push(cliente);
       saveDB(database);
-      return cliente;
     },
     update: (id: number, data: Partial<Cliente>) => {
       const database = getDB();
@@ -71,19 +56,26 @@ export const db = {
   },
   produtos: {
     getAll: (): Produto[] => getDB().produtos,
-    getById: (id: number): Produto | undefined => 
-      getDB().produtos.find((p: Produto) => p.cd_produto === id),
-    add: (produto: Produto) => {
+    add: (produto: Omit<Produto, 'id_novo' | 'data_atualizacao'>) => {
       const database = getDB();
-      database.produtos.push(produto);
+      const novoProduto = {
+        ...produto,
+        nome: produto.nome.toUpperCase(),
+        data_atualizacao: new Date().toISOString()
+      };
+      database.produtos.push(novoProduto);
       saveDB(database);
-      return produto;
     },
     update: (id: number, data: Partial<Produto>) => {
       const database = getDB();
       const index = database.produtos.findIndex((p: Produto) => p.cd_produto === id);
       if (index !== -1) {
-        database.produtos[index] = { ...database.produtos[index], ...data };
+        database.produtos[index] = { 
+          ...database.produtos[index], 
+          ...data, 
+          nome: data.nome ? data.nome.toUpperCase() : database.produtos[index].nome,
+          data_atualizacao: new Date().toISOString()
+        };
         saveDB(database);
       }
     },
@@ -98,14 +90,16 @@ export const db = {
     create: (compra: Compra, itens: any[]) => {
       const database = getDB();
       database.compras.push(compra);
-      saveDB(database);
-    }
-  },
-  vendas: {
-    getAll: (): Venda[] => getDB().vendas,
-    create: (venda: Venda, itens: ItemVenda[]) => {
-      const database = getDB();
-      database.vendas.push(venda);
+      
+      // Atualiza estoque e data de atualização dos produtos comprados
+      itens.forEach(item => {
+        const pIdx = database.produtos.findIndex((p: Produto) => p.cd_produto === item.cd_produto);
+        if (pIdx !== -1) {
+          database.produtos[pIdx].estoque += Number(item.qtde);
+          database.produtos[pIdx].data_atualizacao = new Date().toISOString();
+        }
+      });
+      
       saveDB(database);
     }
   }

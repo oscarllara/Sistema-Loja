@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, AlertTriangle, Package, Barcode } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, AlertTriangle, Package, Barcode, Hash, Calendar } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -43,7 +43,9 @@ const Inventory = () => {
 
   const filteredProducts = products.filter(p => 
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.cod_barras && p.cod_barras.includes(searchTerm))
+    (p.cod_barras && p.cod_barras.includes(searchTerm)) ||
+    (p.id_importado && p.id_importado.includes(searchTerm)) ||
+    (p.id_novo && p.id_novo.toString().includes(searchTerm))
   );
 
   const handleEdit = (product: Produto) => {
@@ -98,7 +100,7 @@ const Inventory = () => {
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <Input 
-                placeholder="Buscar por nome ou código de barras..." 
+                placeholder="Buscar por nome, ID ou barras..." 
                 className="pl-10 border-slate-200 h-11 rounded-lg" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -109,11 +111,11 @@ const Inventory = () => {
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
+                <TableHead className="font-bold w-24">IDs</TableHead>
                 <TableHead className="font-bold">Produto</TableHead>
-                <TableHead className="font-bold">Barras</TableHead>
                 <TableHead className="font-bold">Estoque</TableHead>
                 <TableHead className="font-bold">Preço Venda</TableHead>
-                <TableHead className="font-bold">Status</TableHead>
+                <TableHead className="font-bold">Atualização</TableHead>
                 <TableHead className="text-right font-bold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -131,15 +133,26 @@ const Inventory = () => {
                 filteredProducts.map((product) => (
                   <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors">
                     <TableCell>
-                      <div>
-                        <p className="font-medium text-slate-900">{product.nome}</p>
-                        <p className="text-[10px] text-slate-500 uppercase font-bold">{product.un || 'UN'}</p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 text-indigo-600 font-bold text-xs">
+                          <Hash size={10} /> {product.id_novo}
+                        </div>
+                        {product.id_importado && (
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            IMP: {product.id_importado}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-slate-500 font-mono text-xs">
-                      <div className="flex items-center gap-1">
-                        <Barcode size={12} />
-                        {product.cod_barras || "-"}
+                    <TableCell>
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{product.nome}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">{product.un || 'UN'}</span>
+                          {product.fracionado && (
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-indigo-200 text-indigo-600 bg-indigo-50">FRACIONADO</Badge>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -155,11 +168,10 @@ const Inventory = () => {
                     </TableCell>
                     <TableCell className="font-bold text-indigo-600">R$ {product.venda.toFixed(2)}</TableCell>
                     <TableCell>
-                      {product.estoque <= (product.minimo || 0) ? (
-                        <Badge className="bg-rose-100 text-rose-700 border-none hover:bg-rose-100">Baixo</Badge>
-                      ) : (
-                        <Badge className="bg-emerald-100 text-emerald-700 border-none hover:bg-emerald-100">Normal</Badge>
-                      )}
+                      <div className="flex items-center gap-1.5 text-slate-500 text-xs">
+                        <Calendar size={12} />
+                        {new Date(product.data_atualizacao).toLocaleDateString()}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
