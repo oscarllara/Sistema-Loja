@@ -24,7 +24,7 @@ const financialSchema = z.object({
 type FinancialFormValues = z.infer<typeof financialSchema>;
 
 const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
-  const contas = db.contas.getAll();
+  const contas = db.contas.getAll() || [];
   
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FinancialFormValues>({
     resolver: zodResolver(financialSchema),
@@ -32,24 +32,56 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
       tipo: 'P',
       status: 'Pendente',
       data_vencimento: new Date().toISOString().split('T')[0],
-      categoria: 'Outros'
+      categoria: 'Outros',
+      valor: "0,00"
     }
   });
 
   const tipo = watch("tipo");
+  const status = watch("status");
 
   const categorias = tipo === 'R' 
     ? ['Venda', 'Serviço', 'Rendimento', 'Aporte', 'Outros']
     : ['Salário', 'Aluguel', 'Pro-labore', 'Imposto', 'Fornecedor', 'Energia', 'Água', 'Internet', 'Vale', 'Comissão', 'Outros'];
 
+  // Função para transformar em Title Case (Primeira letra de cada palavra maiúscula)
+  const toTitleCase = (str: string) => {
+    return str.replace(/\w\S*/g, (txt) => {
+      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    });
+  };
+
+  // Máscara de Moeda (0,00)
+  const formatCurrency = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "0,00";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
+
+  const handleDescricaoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue("descricao", toTitleCase(e.target.value));
+  };
+
+  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue("valor", formatCurrency(e.target.value));
+  };
+
   const onSubmit = (data: FinancialFormValues) => {
     try {
-      const valorNum = parseFloat(data.valor.replace(',', '.'));
-      if (isNaN(valorNum)) throw new Error("Valor inválido");
+      const valorNum = parseFloat(data.valor.replace(/\./g, "").replace(",", "."));
+      if (isNaN(valorNum) || valorNum <= 0) throw new Error("Informe um valor válido");
+
+      if (data.status === 'Pago' && !data.cd_conta) {
+        throw new Error("Selecione uma conta para o lançamento pago");
+      }
 
       db.financeiro.add({
         tipo: data.tipo,
-        descricao: data.descricao.toUpperCase(),
+        descricao: data.descricao,
         valor: valorNum,
         data_vencimento: data.data_vencimento,
         status: data.status,
@@ -57,7 +89,7 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
         cd_conta: data.status === 'Pago' ? Number(data.cd_conta) : undefined,
       });
 
-      showSuccess("Lançamento realizado!");
+      showSuccess("Lançamento realizado com sucesso!");
       onSuccess();
     } catch (err: any) {
       showError(err.message);
@@ -69,17 +101,17 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="space-y-2">
         <Label>Tipo de Lançamento</Label>
         <RadioGroup 
-          defaultValue="P" 
+          value={tipo}
           onValueChange={(v) => setValue("tipo", v as 'R' | 'P')}
           className="flex gap-4"
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="R" id="tipo-r" />
-            <Label htmlFor="tipo-r" className="text-emerald-600 font-bold">Receita (+)</Label>
+            <Label htmlFor="tipo-r" className="text-emerald-600 font-bold cursor-pointer">Receita (+)</Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="P" id="tipo-p" />
-            <Label htmlFor="tipo-p" className="text-rose-600 font-bold">Despesa (-)</Label>
+            <Label htmlFor="tipo-p" className="text-rose-600 font-bold cursor-pointer">Despesa (-)</Label>
           </div>
         </RadioGroup>
       </div>
@@ -87,7 +119,11 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Descrição</Label>
-          <Input {...register("descricao")} placeholder="Ex: Aluguel Mensal" />
+          <Input 
+            {...register("descricao")} 
+            onChange={handleDescricaoChange}
+            placeholder="Ex: Aluguel Mensal" 
+          />
         </div>
         <div className="space-y-2">
           <Label>Categoria</Label>
@@ -103,7 +139,12 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Valor (R$)</Label>
-          <Input {...register("valor")} placeholder="0,00" />
+          <Input 
+            {...register("valor")} 
+            onChange={handleValorChange}
+            placeholder="0,00" 
+            className="font-bold text-lg"
+          />
         </div>
         <div className="space-y-2">
           <Label>Data de Vencimento</Label>
@@ -113,24 +154,24 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
 
       <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
         <div className="flex items-center justify-between">
-          <Label>Já está pago/recebido?</Label>
+          <Label className="font-semibold">Já está pago/recebido?</Label>
           <RadioGroup 
-            defaultValue="Pendente" 
+            value={status}
             onValueChange={(v) => setValue("status", v as 'Pendente' | 'Pago')}
             className="flex gap-4"
           >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="Pendente" id="st-pen" />
-              <Label htmlFor="st-pen">Não</Label>
+              <Label htmlFor="st-pen" className="cursor-pointer">Não</Label>
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="Pago" id="st-pago" />
-              <Label htmlFor="st-pago">Sim</Label>
+              <Label htmlFor="st-pago" className="cursor-pointer">Sim</Label>
             </div>
           </RadioGroup>
         </div>
 
-        {watch("status") === 'Pago' && (
+        {status === 'Pago' && (
           <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
             <Label>Conta de Destino/Origem</Label>
             <select 
@@ -138,13 +179,17 @@ const FinancialForm = ({ onSuccess }: { onSuccess: () => void }) => {
               className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">Selecione a conta...</option>
-              {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome} (Saldo: R$ {c.saldo.toFixed(2)})</option>)}
+              {contas.map(c => (
+                <option key={c.cd_conta} value={c.cd_conta}>
+                  {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                </option>
+              ))}
             </select>
           </div>
         )}
       </div>
 
-      <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold">
+      <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100">
         Salvar Lançamento
       </Button>
     </form>
