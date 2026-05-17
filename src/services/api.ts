@@ -55,7 +55,6 @@ export const db = {
       
       let finalIdManual = produto.id_manual;
 
-      // Se não digitou o código, gera o próximo sequencial numérico
       if (!finalIdManual || finalIdManual.trim() === "") {
         const numericIds = database.produtos
           .map((p: Produto) => parseInt(p.id_manual))
@@ -64,7 +63,6 @@ export const db = {
         const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
         finalIdManual = (maxId + 1).toString();
       } else {
-        // Se digitou, verifica se já existe
         const exists = database.produtos.some((p: Produto) => p.id_manual === finalIdManual);
         if (exists) throw new Error(`O código ${finalIdManual} já está em uso.`);
       }
@@ -75,7 +73,7 @@ export const db = {
         nome: produto.nome.toUpperCase(),
         data_atualizacao: new Date().toISOString()
       };
-      database.produtos.push(novoProduct);
+      database.produtos.push(novoProduto);
       saveDB(database);
     },
     update: (id: number, data: Partial<Produto>) => {

@@ -6,11 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { 
   Package, 
-  Barcode, 
   DollarSign, 
   Layers, 
   Scale,
-  FileText,
   Hash,
   Plus,
   Trash2,
@@ -29,13 +27,14 @@ import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const productSchema = z.object({
-  id_manual: z.string().optional(), // Agora é opcional
+  id_manual: z.string().optional(),
   nome: z.string().min(2, "Nome obrigatório"),
   id_importado: z.string().optional(),
   un: z.string().default("UN"),
   cod_barras: z.string().optional(),
   compra: z.string().optional(),
   venda: z.string().min(1, "Preço de venda obrigatório"),
+  venda_vista: z.string().optional(),
   desconto_vista_tipo: z.enum(['P', 'V']).default('P'),
   desconto_vista_valor: z.string().default("0"),
   estoque: z.string().default("0"),
@@ -61,12 +60,29 @@ interface ProductFormProps {
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const allProducts = db.produtos.getAll().filter(p => p.cd_produto !== product?.cd_produto);
 
+  // Formatação de Moeda (R$ 0,00)
+  const formatCurrency = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
+
+  const parseCurrencyToNumber = (value: string) => {
+    if (!value) return 0;
+    return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
+  };
+
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
-      compra: product.compra?.toString() || "",
-      venda: product.venda.toString(),
+      compra: formatCurrency((product.compra || 0 * 100).toString()),
+      venda: formatCurrency((product.venda * 100).toString()),
+      venda_vista: formatCurrency((product.venda_vista || 0 * 100).toString()),
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
       estoque: product.estoque.toString(),
       minimo: product.minimo?.toString() || "0",
@@ -87,15 +103,31 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     name: "itens_kit"
   });
 
-  const venda = parseFloat(watch("venda") || "0");
+  const vendaStr = watch("venda");
   const descTipo = watch("desconto_vista_tipo");
-  const descValor = parseFloat(watch("desconto_vista_valor") || "0");
+  const descValorStr = watch("desconto_vista_valor");
   const isKit = watch("is_kit");
   const isFracionado = watch("fracionado");
 
-  const precoVista = descTipo === 'P' 
-    ? venda * (1 - descValor / 100) 
-    : venda - descValor;
+  // Efeito para calcular preço à vista automaticamente quando venda ou desconto mudam
+  React.useEffect(() => {
+    const venda = parseCurrencyToNumber(vendaStr);
+    const descValor = parseFloat(descValorStr || "0");
+    
+    let calculado = 0;
+    if (descTipo === 'P') {
+      calculado = venda * (1 - descValor / 100);
+    } else {
+      calculado = venda - descValor;
+    }
+    
+    setValue("venda_vista", formatCurrency((calculado * 100).toFixed(0)));
+  }, [vendaStr, descTipo, descValorStr, setValue]);
+
+  const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
+    const formatted = formatCurrency(e.target.value);
+    setValue(fieldName, formatted as any);
+  };
 
   const onSubmit = (data: ProductFormValues) => {
     try {
@@ -103,9 +135,9 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         ...data,
         cd_produto: product?.cd_produto || Date.now(),
         nome: data.nome.toUpperCase(),
-        compra: parseFloat(data.compra || "0"),
-        venda: parseFloat(data.venda),
-        venda_vista: precoVista,
+        compra: parseCurrencyToNumber(data.compra || ""),
+        venda: parseCurrencyToNumber(data.venda),
+        venda_vista: parseCurrencyToNumber(data.venda_vista || ""),
         desconto_vista_valor: parseFloat(data.desconto_vista_valor),
         estoque: parseFloat(data.estoque),
         minimo: parseFloat(data.minimo || "0"),
@@ -144,7 +176,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 placeholder="Vazio para automático" 
                 className="font-bold text-indigo-600" 
               />
-              <p className="text-[10px] text-slate-400">Se deixar vazio, o sistema gera o próximo número.</p>
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label className="flex items-center gap-2"><Package size={14} /> Nome do Produto *</Label>
@@ -177,11 +208,20 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </h4>
               <div className="space-y-2">
                 <Label>Valor de Venda</Label>
-                <Input type="number" step="0.01" {...register("venda")} className="text-lg font-bold" />
+                <Input 
+                  {...register("venda")} 
+                  onChange={(e) => handleCurrencyChange(e, "venda")}
+                  className="text-lg font-bold" 
+                  placeholder="0,00"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Preço de Custo</Label>
-                <Input type="number" step="0.01" {...register("compra")} />
+                <Input 
+                  {...register("compra")} 
+                  onChange={(e) => handleCurrencyChange(e, "compra")}
+                  placeholder="0,00"
+                />
               </div>
             </div>
 
@@ -189,30 +229,39 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <h4 className="font-bold text-emerald-900 flex items-center gap-2">
                 <Percent size={16} /> Configuração À Vista
               </h4>
-              <div className="space-y-3">
-                <Label>Tipo de Desconto</Label>
-                <RadioGroup 
-                  defaultValue={descTipo} 
-                  onValueChange={(v) => setValue("desconto_vista_tipo", v as 'P' | 'V')}
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="P" id="desc-p" />
-                    <Label htmlFor="desc-p">Percentual (%)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="V" id="desc-v" />
-                    <Label htmlFor="desc-v">Valor Fixo (R$)</Label>
-                  </div>
-                </RadioGroup>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <Label>Tipo de Desconto</Label>
+                  <RadioGroup 
+                    defaultValue={descTipo} 
+                    onValueChange={(v) => setValue("desconto_vista_tipo", v as 'P' | 'V')}
+                    className="flex flex-col gap-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="P" id="desc-p" />
+                      <Label htmlFor="desc-p">Percentual (%)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="V" id="desc-v" />
+                      <Label htmlFor="desc-v">Valor Fixo (R$)</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor do Desconto</Label>
+                  <Input {...register("desconto_vista_valor")} placeholder="Ex: 15" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Valor do Desconto</Label>
-                <Input type="number" step="0.01" {...register("desconto_vista_valor")} />
-              </div>
-              <div className="pt-2 border-t border-emerald-200">
-                <p className="text-xs text-emerald-600 uppercase font-bold">Preço Final à Vista:</p>
-                <p className="text-2xl font-black text-emerald-700">R$ {precoVista.toFixed(2)}</p>
+              
+              <div className="pt-4 border-t border-emerald-200 space-y-2">
+                <Label className="text-emerald-700 font-bold">Preço Final à Vista (Editável)</Label>
+                <Input 
+                  {...register("venda_vista")} 
+                  onChange={(e) => handleCurrencyChange(e, "venda_vista")}
+                  className="text-2xl font-black text-emerald-700 bg-white border-emerald-300" 
+                  placeholder="0,00"
+                />
+                <p className="text-[10px] text-emerald-600">Você pode ajustar o valor final manualmente se desejar.</p>
               </div>
             </div>
           </div>
