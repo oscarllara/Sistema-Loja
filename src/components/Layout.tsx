@@ -19,7 +19,8 @@ import {
   Receipt,
   ChevronDown,
   ChevronRight,
-  LogOut
+  LogOut,
+  History
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       items: [
         { icon: ClipboardList, label: 'Compras / XML', path: '/purchases', perm: 'purchases' },
         { icon: Wallet, label: 'Financeiro', path: '/financial', perm: 'financial' },
+        { icon: History, label: 'Caixa Diário', path: '/daily-cash', perm: 'financial' },
       ]
     },
     {

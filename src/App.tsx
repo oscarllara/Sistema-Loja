@@ -9,6 +9,7 @@ import POS from "./pages/POS";
 import Inventory from "./pages/Inventory";
 import Registrations from "./pages/Registrations";
 import Financial from "./pages/Financial";
+import DailyCash from "./pages/DailyCash";
 import Purchases from "./pages/Purchases";
 import Reports from "./pages/Reports";
 import Login from "./pages/Login";
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/inventory" element={<ProtectedRoute permission="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/registrations" element={<ProtectedRoute permission="registrations"><Registrations /></ProtectedRoute>} />
           <Route path="/financial" element={<ProtectedRoute permission="financial"><Financial /></ProtectedRoute>} />
+          <Route path="/daily-cash" element={<ProtectedRoute permission="financial"><DailyCash /></ProtectedRoute>} />
           <Route path="/purchases" element={<ProtectedRoute permission="purchases"><Purchases /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute permission="reports"><Reports /></ProtectedRoute>} />
           
