@@ -7,17 +7,16 @@ import {
   UserSquare2, 
   Truck, 
   Building2, 
-  Briefcase,
-  Plus,
-  Search,
-  Filter,
-  Edit,
-  Trash2
+  Plus, 
+  Search, 
+  Filter, 
+  Edit, 
+  Trash2 
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/tabs";
-import { Card } from "@/card";
-import { Button } from "@/button";
-import { Input } from "@/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { 
   Table, 
   TableBody, 
@@ -25,14 +24,14 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/table";
+} from "@/components/ui/table";
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
   DialogTrigger 
-} from "@/dialog";
+} from "@/components/ui/dialog";
 import { db } from '@/services/api';
 import { Cliente } from '@/types/database';
 import ClientForm from '@/components/ClientForm';
