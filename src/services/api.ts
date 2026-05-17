@@ -1,6 +1,6 @@
 "use client";
 
-import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio, Orcamento, Configuracoes } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio, Orcamento, Configuracoes, Compra, FornecedorProdutoMap } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
 const AUTH_KEY = 'dyaderp_auth';
@@ -39,6 +39,7 @@ const getDB = () => {
       financeiro: [],
       transferencias: [],
       patrimonio: [],
+      mappings: [],
       configuracoes: {
         tipo_impressao: 'Bobina',
         largura_bobina: '79mm',
@@ -69,6 +70,7 @@ const getDB = () => {
     if (!Array.isArray(database.financeiro)) database.financeiro = [];
     if (!Array.isArray(database.transferencias)) database.transferencias = [];
     if (!Array.isArray(database.patrimonio)) database.patrimonio = [];
+    if (!Array.isArray(database.mappings)) database.mappings = [];
     
     if (!database.configuracoes) {
       database.configuracoes = {
@@ -125,11 +127,92 @@ export const db = {
       saveDB(database);
     }
   },
+  mappings: {
+    get: (cd_fornecedor: number, codigo_externo: string): number | null => {
+      const database = getDB();
+      const map = database.mappings.find((m: FornecedorProdutoMap) => 
+        m.cd_fornecedor === cd_fornecedor && m.codigo_externo === codigo_externo
+      );
+      return map ? map.cd_produto_interno : null;
+    },
+    save: (cd_fornecedor: number, codigo_externo: string, cd_produto_interno: number) => {
+      const database = getDB();
+      const idx = database.mappings.findIndex((m: FornecedorProdutoMap) => 
+        m.cd_fornecedor === cd_fornecedor && m.codigo_externo === codigo_externo
+      );
+      if (idx !== -1) {
+        database.mappings[idx].cd_produto_interno = cd_produto_interno;
+      } else {
+        database.mappings.push({ cd_fornecedor, codigo_externo, cd_produto_interno });
+      }
+      saveDB(database);
+    }
+  },
+  compras: {
+    getAll: (): Compra[] => getDB().compras || [],
+    save: (compra: Compra) => {
+      const database = getDB();
+      const idx = database.compras.findIndex((c: any) => c.cd_compra === compra.cd_compra);
+      
+      if (compra.status === 'Confirmada') {
+        // 1. Atualizar Estoque e Preços
+        compra.itens.forEach(item => {
+          if (item.cd_produto) {
+            const pIdx = database.produtos.findIndex((p: any) => p.cd_produto === item.cd_produto);
+            if (pIdx !== -1) {
+              database.produtos[pIdx].estoque += item.qtde;
+              database.produtos[pIdx].compra = item.valor_unit;
+              database.produtos[pIdx].venda = item.valor_venda;
+              database.produtos[pIdx].data_atualizacao = new Date().toISOString();
+            }
+            // Salvar mapeamento se for XML
+            if (item.codigo_fornecedor) {
+              const mIdx = database.mappings.findIndex((m: any) => 
+                m.cd_fornecedor === compra.cd_fornecedores && m.codigo_externo === item.codigo_fornecedor
+              );
+              if (mIdx === -1) {
+                database.mappings.push({
+                  cd_fornecedor: compra.cd_fornecedores,
+                  codigo_externo: item.codigo_fornecedor,
+                  cd_produto_interno: item.cd_produto
+                });
+              }
+            }
+          }
+        });
+
+        // 2. Gerar Financeiro (Contas a Pagar)
+        database.financeiro.push({
+          cd_lancamento: Date.now(),
+          tipo: 'P',
+          descricao: `Compra NF ${compra.nota_fiscal || 'S/N'}`,
+          valor: compra.total,
+          data_vencimento: new Date().toISOString(),
+          status: 'Pendente',
+          cd_entidade: compra.cd_fornecedores,
+          nome_entidade: compra.nome_fornecedor,
+          categoria: 'Fornecedor',
+          cd_compra: compra.cd_compra
+        });
+      }
+
+      if (idx !== -1) {
+        database.compras[idx] = compra;
+      } else {
+        database.compras.push(compra);
+      }
+      saveDB(database);
+    },
+    delete: (id: number) => {
+      const database = getDB();
+      database.compras = database.compras.filter((c: any) => c.cd_compra !== id);
+      saveDB(database);
+    }
+  },
   orcamentos: {
     getAll: (): Orcamento[] => getDB().orcamentos || [],
     add: (o: Omit<Orcamento, 'cd_orcamento'>) => {
       const database = getDB();
-      // Gera um ID sequencial simples baseado no tamanho da lista
       const nextId = (database.orcamentos.length > 0) 
         ? Math.max(...database.orcamentos.map((orc: any) => orc.cd_orcamento)) + 1 
         : 100;
@@ -255,8 +338,10 @@ export const db = {
     add: (p: any) => {
       const db = getDB();
       const id = (db.produtos.length + 1).toString().padStart(5, '0');
-      db.produtos.push({ ...p, id_manual: id, cd_produto: Date.now(), data_atualizacao: new Date().toISOString() });
+      const novo = { ...p, id_manual: id, cd_produto: Date.now(), data_atualizacao: new Date().toISOString() };
+      db.produtos.push(novo);
       saveDB(db);
+      return novo;
     },
     update: (id: number, data: any) => {
       const db = getDB();

@@ -1,124 +1,312 @@
 "use client";
 
 import React from 'react';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  Save, 
+  Search, 
+  PackagePlus, 
+  AlertCircle, 
+  CheckCircle2,
+  ArrowRight,
+  Percent,
+  DollarSign
+} from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
+import ProductSearchModal from './ProductSearchModal';
+import ProductForm from './ProductForm';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
+import { cn } from '@/lib/utils';
+import { Compra, CompraItem } from '@/types/database';
 
-const PurchaseForm = ({ onSuccess }: { onSuccess: () => void }) => {
-  const [items, setItems] = React.useState<any[]>([]);
-  const [nf, setNf] = React.useState("");
-  const [supplierId, setSupplierId] = React.useState(1);
-  
-  const products = db.produtos.getAll();
+interface PurchaseFormProps {
+  initialData?: Compra;
+  onSuccess: () => void;
+}
+
+const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
+  const [items, setItems] = React.useState<CompraItem[]>(initialData?.itens || []);
+  const [nf, setNf] = React.useState(initialData?.nota_fiscal || "");
+  const [supplierId, setSupplierId] = React.useState<number>(initialData?.cd_fornecedores || 0);
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [isNewProductOpen, setIsNewProductOpen] = React.useState(false);
+  const [activeItemIndex, setActiveItemIndex] = React.useState<number | null>(null);
+
+  const suppliers = db.clientes.getAll().filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
 
   const addItem = () => {
-    setItems([...items, { cd_produto: products[0]?.cd_produto, qtde: 1, valor_unit: 0 }]);
+    setItems([...items, { qtde: 1, valor_unit: 0, margem: 30, valor_venda: 0, subtotal: 0, un: 'UN' }]);
   };
 
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const updateItem = (index: number, field: string, value: any) => {
+  const updateItem = (index: number, field: keyof CompraItem, value: any) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    const item = { ...newItems[index], [field]: value };
+
+    // Lógica de Margem e Preço de Venda
+    if (field === 'valor_unit' || field === 'margem') {
+      item.valor_venda = item.valor_unit * (1 + item.margem / 100);
+    } else if (field === 'valor_venda') {
+      if (item.valor_unit > 0) {
+        item.margem = ((item.valor_venda / item.valor_unit) - 1) * 100;
+      }
+    }
+
+    item.subtotal = item.qtde * item.valor_unit;
+    newItems[index] = item;
     setItems(newItems);
   };
 
-  const total = items.reduce((acc, item) => acc + (item.qtde * item.valor_unit), 0);
+  const handleProductSelect = (product: any) => {
+    if (activeItemIndex !== null) {
+      const item = items[activeItemIndex];
+      updateItem(activeItemIndex, 'cd_produto', product.cd_produto);
+      updateItem(activeItemIndex, 'valor_venda', product.venda);
+      updateItem(activeItemIndex, 'un', product.un);
+      setActiveItemIndex(null);
+    } else {
+      setItems([...items, { 
+        cd_produto: product.cd_produto, 
+        qtde: 1, 
+        valor_unit: product.compra || 0, 
+        margem: product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 30,
+        valor_venda: product.venda,
+        subtotal: product.compra || 0,
+        un: product.un
+      }]);
+    }
+    setIsSearchOpen(false);
+  };
 
-  const handleSave = () => {
+  const total = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
+
+  const handleSave = (status: 'Rascunho' | 'Confirmada') => {
+    if (!supplierId) {
+      showError("Selecione um fornecedor.");
+      return;
+    }
     if (items.length === 0) {
       showError("Adicione pelo menos um item.");
       return;
     }
+    if (status === 'Confirmada' && items.some(i => !i.cd_produto)) {
+      showError("Todos os itens devem estar vinculados a um produto do estoque.");
+      return;
+    }
 
-    const novaCompra = {
-      cd_compra: Date.now(),
+    const supplier = suppliers.find(s => s.cd_clientes === supplierId);
+    const compra: Compra = {
+      cd_compra: initialData?.cd_compra || Date.now(),
       data: new Date().toISOString(),
       nota_fiscal: nf,
-      total: total,
       cd_fornecedores: supplierId,
-      cd_func: 1,
-      confirmada: true
+      nome_fornecedor: supplier?.nome,
+      total: total,
+      status: status,
+      itens: items
     };
 
-    db.compras.create(novaCompra, items);
-    showSuccess("Compra registrada! Estoque atualizado e conta a pagar gerada.");
+    db.compras.save(compra);
+    showSuccess(status === 'Confirmada' ? "Compra confirmada! Estoque e preços atualizados." : "Rascunho salvo com sucesso.");
     onSuccess();
   };
 
   return (
-    <div className="space-y-6 p-4 bg-white rounded-xl border border-slate-200">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
         <div className="space-y-2">
-          <Label>Número da NF</Label>
-          <Input value={nf} onChange={(e) => setNf(e.target.value)} placeholder="Ex: 123456" />
+          <Label className="text-[10px] font-bold uppercase text-slate-500">Fornecedor</Label>
+          <select 
+            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold"
+            value={supplierId}
+            onChange={(e) => setSupplierId(Number(e.target.value))}
+          >
+            <option value="0">SELECIONE O FORNECEDOR...</option>
+            {suppliers.map(s => (
+              <option key={s.cd_clientes} value={s.cd_clientes}>{s.nome}</option>
+            ))}
+          </select>
         </div>
         <div className="space-y-2">
-          <Label>Fornecedor (ID)</Label>
-          <Input type="number" value={supplierId} onChange={(e) => setSupplierId(Number(e.target.value))} />
+          <Label className="text-[10px] font-bold uppercase text-slate-500">Número da NF</Label>
+          <Input 
+            value={nf} 
+            onChange={(e) => setNf(e.target.value)} 
+            placeholder="Ex: 123456" 
+            className="h-10 font-bold"
+          />
         </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-800">Itens da Compra</h3>
-          <Button variant="outline" size="sm" onClick={addItem} className="gap-2">
-            <Plus size={16} /> Adicionar Item
+        <div className="flex items-end gap-2">
+          <Button 
+            onClick={() => setIsSearchOpen(true)} 
+            className="flex-1 h-10 bg-indigo-600 hover:bg-indigo-700 gap-2 font-bold"
+          >
+            <Search size={18} /> Pesquisar Produto (F1)
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsNewProductOpen(true)}
+            className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            title="Cadastrar Novo Produto"
+          >
+            <PackagePlus size={18} />
           </Button>
         </div>
-
-        {items.map((item, index) => (
-          <div key={index} className="flex gap-3 items-end bg-slate-50 p-3 rounded-lg">
-            <div className="flex-1 space-y-1">
-              <Label className="text-[10px]">Produto</Label>
-              <select 
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                value={item.cd_produto}
-                onChange={(e) => updateItem(index, 'cd_produto', Number(e.target.value))}
-              >
-                {products.map(p => (
-                  <option key={p.cd_produto} value={p.cd_produto}>{p.nome}</option>
-                ))}
-              </select>
-            </div>
-            <div className="w-24 space-y-1">
-              <Label className="text-[10px]">Qtde</Label>
-              <Input 
-                type="number" 
-                value={item.qtde} 
-                onChange={(e) => updateItem(index, 'qtde', Number(e.target.value))} 
-              />
-            </div>
-            <div className="w-32 space-y-1">
-              <Label className="text-[10px]">Vlr. Unit</Label>
-              <Input 
-                type="number" 
-                value={item.valor_unit} 
-                onChange={(e) => updateItem(index, 'valor_unit', Number(e.target.value))} 
-              />
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-rose-500">
-              <Trash2 size={18} />
-            </Button>
-          </div>
-        ))}
       </div>
 
-      <div className="pt-4 border-t flex items-center justify-between">
-        <div className="text-lg font-bold text-slate-900">
-          Total: <span className="text-indigo-600">R$ {total.toFixed(2)}</span>
+      <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+        <Table>
+          <TableHeader className="bg-slate-50">
+            <TableRow>
+              <TableHead className="w-12">#</TableHead>
+              <TableHead>Produto no Estoque</TableHead>
+              <TableHead className="w-24 text-center">Qtde</TableHead>
+              <TableHead className="w-32 text-right">Custo Unit.</TableHead>
+              <TableHead className="w-24 text-center">Margem %</TableHead>
+              <TableHead className="w-32 text-right">Venda Sug.</TableHead>
+              <TableHead className="w-32 text-right">Subtotal</TableHead>
+              <TableHead className="w-10"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-20 text-slate-400">
+                  Nenhum item adicionado. Use a pesquisa ou importe um XML.
+                </TableCell>
+              </TableRow>
+            ) : (
+              items.map((item, index) => {
+                const product = db.produtos.getAll().find(p => p.cd_produto === item.cd_produto);
+                return (
+                  <TableRow key={index} className={cn(!item.cd_produto && "bg-rose-50/50")}>
+                    <TableCell className="text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
+                    <TableCell>
+                      {item.cd_produto ? (
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p>
+                            <p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={14} className="text-rose-500" />
+                          <Button 
+                            variant="link" 
+                            className="p-0 h-auto text-rose-600 text-xs font-bold underline"
+                            onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}
+                          >
+                            VINCULAR PRODUTO...
+                          </Button>
+                          {item.nome_fornecedor && <span className="text-[9px] text-slate-400 italic">({item.nome_fornecedor})</span>}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Input 
+                        type="number" 
+                        value={item.qtde} 
+                        onChange={(e) => updateItem(index, 'qtde', Number(e.target.value))}
+                        className="h-8 text-center text-xs font-bold"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input 
+                        type="number" 
+                        value={item.valor_unit} 
+                        onChange={(e) => updateItem(index, 'valor_unit', Number(e.target.value))}
+                        className="h-8 text-right text-xs font-bold"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input 
+                        type="number" 
+                        value={item.margem.toFixed(1)} 
+                        onChange={(e) => updateItem(index, 'margem', Number(e.target.value))}
+                        className="h-8 text-center text-xs font-bold text-indigo-600"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input 
+                        type="number" 
+                        value={item.valor_venda.toFixed(2)} 
+                        onChange={(e) => updateItem(index, 'valor_venda', Number(e.target.value))}
+                        className="h-8 text-right text-xs font-bold text-emerald-600"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-slate-900">
+                      R$ {item.subtotal.toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeItem(index)}>
+                        <Trash2 size={16} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-4 border-t">
+        <div className="text-2xl font-black text-slate-900">
+          TOTAL DA NOTA: <span className="text-indigo-600">R$ {total.toFixed(2)}</span>
         </div>
-        <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
-          <Save size={18} /> Salvar Compra
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => handleSave('Rascunho')}
+            className="h-12 px-8 rounded-xl font-bold gap-2"
+          >
+            <Save size={20} /> Salvar Rascunho
+          </Button>
+          <Button 
+            onClick={() => handleSave('Confirmada')}
+            className="h-12 px-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black gap-2 shadow-lg shadow-emerald-100"
+          >
+            <CheckCircle2 size={20} /> CONCLUIR COMPRA
+          </Button>
+        </div>
       </div>
+
+      <ProductSearchModal 
+        isOpen={isSearchOpen} 
+        onClose={() => { setIsSearchOpen(false); setActiveItemIndex(null); }} 
+        onSelect={handleProductSelect} 
+      />
+
+      <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader>
+          <ProductForm onSuccess={() => { setIsNewProductOpen(false); }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -112,6 +112,7 @@ export interface LancamentoFinanceiro {
   cd_conta?: number; 
   is_fixa?: boolean;
   cd_venda?: number;
+  cd_compra?: number;
 }
 
 export interface ContaBancaria {
@@ -123,6 +124,35 @@ export interface ContaBancaria {
   saldo_inicial: number;
   saldo: number;
   tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
+}
+
+export interface CompraItem {
+  cd_produto?: number;
+  codigo_fornecedor?: string;
+  nome_fornecedor?: string;
+  un: string;
+  qtde: number;
+  valor_unit: number;
+  margem: number;
+  valor_venda: number;
+  subtotal: number;
+}
+
+export interface Compra {
+  cd_compra: number;
+  data: string;
+  nota_fiscal: string;
+  cd_fornecedores: number;
+  nome_fornecedor?: string;
+  total: number;
+  status: 'Rascunho' | 'Confirmada';
+  itens: CompraItem[];
+}
+
+export interface FornecedorProdutoMap {
+  cd_fornecedor: number;
+  codigo_externo: string;
+  cd_produto_interno: number;
 }
 
 export interface VendaItem {
