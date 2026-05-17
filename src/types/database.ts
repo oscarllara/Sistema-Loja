@@ -51,6 +51,7 @@ export interface Cliente {
   
   // Cônjuge
   conjuge_nome?: string;
+  conjuge_cpf?: string;
   conjuge_nascimento?: string;
   conjuge_empresa?: string;
   conjuge_telefone?: string;
@@ -62,6 +63,11 @@ export interface Cliente {
   data_admissao?: string;
   salario?: number;
   site?: string;
+  
+  // Redes Sociais
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
   
   // Listas Dinâmicas (PJ)
   contatos_responsaveis?: ContatoResponsavel[];

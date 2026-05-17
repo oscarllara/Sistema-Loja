@@ -14,7 +14,10 @@ import {
   Trash2,
   Search,
   Globe,
-  Users2
+  Users2,
+  Facebook,
+  Instagram,
+  Linkedin
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +40,11 @@ const clientSchema = z.object({
   inscricao_municipal: z.string().optional(),
   site: z.string().optional(),
   
+  // Redes Sociais
+  facebook: z.string().optional(),
+  instagram: z.string().optional(),
+  linkedin: z.string().optional(),
+  
   // Pessoal
   sexo: z.string().optional(),
   estado_civil: z.string().optional(),
@@ -48,6 +56,7 @@ const clientSchema = z.object({
   
   // Cônjuge
   conjuge_nome: z.string().optional(),
+  conjuge_cpf: z.string().optional(),
   conjuge_nascimento: z.string().optional(),
   conjuge_empresa: z.string().optional(),
   conjuge_telefone: z.string().optional(),
@@ -129,7 +138,34 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
 
-  // Função para formatar a primeira letra de cada palavra em maiúscula
+  // Máscara de CPF
+  const maskCPF = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+      .replace(/(-\d{2})\d+?$/, "$1");
+  };
+
+  // Máscara de Telefone (+55 (xx) xxxxx-xxxx)
+  const maskPhone = (value: string) => {
+    let v = value.replace(/\D/g, "");
+    if (v.startsWith("55")) v = v.slice(2);
+    if (v.length > 11) v = v.slice(0, 11);
+    
+    let r = "+55 ";
+    if (v.length > 0) r += "(" + v.slice(0, 2);
+    if (v.length > 2) {
+      const isMobile = v[2] === '9';
+      r += ") " + v.slice(2, isMobile ? 7 : 6);
+      if (v.length > (isMobile ? 7 : 6)) {
+        r += "-" + v.slice(isMobile ? 7 : 6);
+      }
+    }
+    return v.length === 0 ? "" : r;
+  };
+
   const formatTitleCase = (value: string) => {
     if (!value) return value;
     return value.replace(/(^\w|\s\w)/g, m => m.toUpperCase());
@@ -138,6 +174,20 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const handleTitleCaseChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues | string) => {
     const formatted = formatTitleCase(e.target.value);
     setValue(fieldName as any, formatted);
+  };
+
+  const handleMaskChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues, maskFn: (v: string) => string) => {
+    setValue(fieldName, maskFn(e.target.value));
+  };
+
+  const handleSocialClick = (field: keyof ClientFormValues, baseUrl: string) => {
+    const current = watch(field);
+    if (!current || typeof current !== 'string' || !current.includes(baseUrl)) {
+      setValue(field, baseUrl as any);
+    }
+    // O foco automático ajuda a colocar o cursor no final
+    const input = document.getElementsByName(field)[0] as HTMLInputElement;
+    if (input) input.focus();
   };
 
   const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -258,7 +308,11 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </div>
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label>
-              <Input {...register("cpf_cnpj")} placeholder={tipoPessoa === 'F' ? "000.000.000-00" : "00.000.000/0000-00"} />
+              <Input 
+                {...register("cpf_cnpj")} 
+                onChange={(e) => handleMaskChange(e, "cpf_cnpj", maskCPF)}
+                placeholder={tipoPessoa === 'F' ? "000.000.000-00" : "00.000.000/0000-00"} 
+              />
             </div>
             <div className="space-y-2">
               <Label>{tipoPessoa === 'F' ? 'RG / Identidade' : 'Inscrição Estadual'}</Label>
@@ -286,11 +340,45 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>Celular</Label>
-                <Input {...register("cel")} placeholder="(00) 00000-0000" />
+                <Input 
+                  {...register("cel")} 
+                  onChange={(e) => handleMaskChange(e, "cel", maskPhone)}
+                  placeholder="+55 (00) 00000-0000" 
+                />
               </div>
               <div className="space-y-2">
                 <Label>Telefone Fixo</Label>
-                <Input {...register("tel1")} />
+                <Input 
+                  {...register("tel1")} 
+                  onChange={(e) => handleMaskChange(e, "tel1", maskPhone)}
+                  placeholder="+55 (00) 0000-0000" 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Globe size={16} /> Redes Sociais
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialClick("facebook", "https://facebook.com/")}>
+                  <Facebook size={14} /> Facebook
+                </Label>
+                <Input {...register("facebook")} placeholder="https://facebook.com/usuario" />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialClick("instagram", "https://instagram.com/")}>
+                  <Instagram size={14} /> Instagram
+                </Label>
+                <Input {...register("instagram")} placeholder="https://instagram.com/usuario" />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialClick("linkedin", "https://linkedin.com/in/")}>
+                  <Linkedin size={14} /> LinkedIn
+                </Label>
+                <Input {...register("linkedin")} placeholder="https://linkedin.com/in/usuario" />
               </div>
             </div>
           </div>
@@ -410,6 +498,14 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                       onChange={(e) => handleTitleCaseChange(e, "conjuge_nome")}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>CPF do Cônjuge</Label>
+                    <Input 
+                      {...register("conjuge_cpf")} 
+                      onChange={(e) => handleMaskChange(e, "conjuge_cpf", maskCPF)}
+                      placeholder="000.000.000-00" 
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label>Nascimento</Label>
@@ -417,7 +513,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                     </div>
                     <div className="space-y-2">
                       <Label>Telefone</Label>
-                      <Input {...register("conjuge_telefone")} />
+                      <Input 
+                        {...register("conjuge_telefone")} 
+                        onChange={(e) => handleMaskChange(e, "conjuge_telefone", maskPhone)}
+                      />
                     </div>
                   </div>
                 </div>
@@ -449,7 +548,13 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                       </div>
                       <div className="w-48 space-y-1">
                         <Label className="text-[10px]">CPF</Label>
-                        <Input {...register(`quadro_societario.${index}.cpf` as const)} />
+                        <Input 
+                          {...register(`quadro_societario.${index}.cpf` as const)} 
+                          onChange={(e) => {
+                            const masked = maskCPF(e.target.value);
+                            setValue(`quadro_societario.${index}.cpf` as any, masked);
+                          }}
+                        />
                       </div>
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeSocio(index)} className="text-rose-500">
                         <Trash2 size={18} />
@@ -493,7 +598,13 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px]">Telefone</Label>
-                        <Input {...register(`contatos_responsaveis.${index}.telefone` as const)} />
+                        <Input 
+                          {...register(`contatos_responsaveis.${index}.telefone` as const)} 
+                          onChange={(e) => {
+                            const masked = maskPhone(e.target.value);
+                            setValue(`contatos_responsaveis.${index}.telefone` as any, masked);
+                          }}
+                        />
                       </div>
                       <div className="flex gap-2 items-end">
                         <div className="flex-1 space-y-1">
