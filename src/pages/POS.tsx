@@ -45,6 +45,7 @@ import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
 import ProductSearchModal from '@/components/ProductSearchModal';
 import PrintPreview from '@/components/PrintPreview';
+import CheckoutModal from '@/components/CheckoutModal';
 import { 
   Dialog, 
   DialogContent, 
@@ -72,11 +73,12 @@ const PaymentButton = ({ active, onClick, icon: Icon, label }: any) => (
 const POS = () => {
   const navigate = useNavigate();
   const [cart, setCart] = React.useState<any[]>([]);
-  const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Dinheiro');
+  const [paymentMethod, setPaymentMethod] = React.useState<'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Crediário'>('Crediário');
   const [selectedSellerId, setSelectedSellerId] = React.useState<number>(1);
   const [selectedClientId, setSelectedClientId] = React.useState<number | null>(null); 
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = React.useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = React.useState(false);
   const [budgetName, setBudgetName] = React.useState("");
@@ -97,10 +99,14 @@ const POS = () => {
         e.preventDefault();
         setIsSearchOpen(true);
       }
+      if (e.key === 'F10' && cart.length > 0) {
+        e.preventDefault();
+        handleCheckout();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [cart]);
 
   const addToCart = (product: any) => {
     if (!product) return;
@@ -144,9 +150,14 @@ const POS = () => {
     if (item.selectedUnit === item.un_fracionada && item.venda_fracionada > 0) {
       return item.venda_fracionada;
     }
+    
+    // Regra: Dinheiro, PIX e Débito usam preço À VISTA. Crédito e Crediário usam preço À PRAZO.
+    const isVista = ['Dinheiro', 'PIX', 'Cartão Débito'].includes(paymentMethod);
     const precoVista = typeof item.venda_vista === 'number' ? item.venda_vista : (item.venda || 0);
     const precoPrazo = item.venda || 0;
-    let precoBase = (paymentMethod === 'Dinheiro' || paymentMethod === 'PIX') ? precoVista : precoPrazo;
+    
+    let precoBase = isVista ? precoVista : precoPrazo;
+    
     if (item.selectedUnit === item.un_fracionada && item.fator_conversao) {
       return precoBase * item.fator_conversao;
     }
@@ -170,6 +181,10 @@ const POS = () => {
       return;
     }
 
+    setIsBudgetModalOpen(true);
+  };
+
+  const confirmSaveBudget = () => {
     try {
       const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
       const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
@@ -178,7 +193,7 @@ const POS = () => {
         data: new Date().toISOString(),
         total: total,
         custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
-        cd_clientes: selectedClientId,
+        cd_clientes: selectedClientId || 1,
         nome_cliente: budgetName || cliente?.nome || 'CONSUMIDOR FINAL',
         cd_func: selectedSellerId,
         nome_vendedor: vendedor?.nome || 'ADMINISTRADOR',
@@ -219,26 +234,32 @@ const POS = () => {
       return;
     }
 
-    if (paymentMethod === 'Crediário' && selectedClientId === 1) {
-      showError("Para vendas no Crediário, selecione um cliente cadastrado.");
-      return;
-    }
+    setIsCheckoutOpen(true);
+  };
 
+  const confirmCheckout = (payments: any[]) => {
     try {
       const vendedor = vendedores.find(v => v.cd_clientes === selectedSellerId) || vendedores[0];
       const cliente = clientes.find(c => c.cd_clientes === selectedClientId);
       const id = Date.now();
 
+      // Se houver crediário nos pagamentos, valida o cliente
+      const hasCrediario = payments.some(p => p.method === 'Crediário');
+      if (hasCrediario && selectedClientId === 1) {
+        showError("Para pagamentos no Crediário, selecione um cliente cadastrado.");
+        return;
+      }
+
       const payload = {
         data: new Date().toISOString(),
         total: total,
         custo_total: cart.reduce((acc, item) => acc + ((item.compra || 0) * (item.quantity || 0)), 0),
-        cd_clientes: selectedClientId,
+        cd_clientes: selectedClientId || 1,
         nome_cliente: cliente?.nome || 'CONSUMIDOR FINAL',
         cd_func: selectedSellerId,
         nome_vendedor: vendedor?.nome || 'ADMINISTRADOR',
-        tipo_venda: paymentMethod === 'Crediário' ? 'Prazo' : 'Vista' as any,
-        meio_pagamento: paymentMethod,
+        tipo_venda: hasCrediario ? 'Prazo' : 'Vista' as any,
+        meio_pagamento: payments.length > 1 ? 'Múltiplo' : payments[0].method,
         itens: cart.map(item => {
           const precoFinal = getItemPrice(item);
           return {
@@ -253,21 +274,25 @@ const POS = () => {
 
       db.vendas.add({ ...payload, cd_venda: id });
       
-      db.financeiro.add({
-        tipo: 'R',
-        descricao: `Venda PDV #${id}`,
-        valor: total,
-        data_vencimento: new Date().toISOString(),
-        data_pagamento: paymentMethod === 'Crediário' ? undefined : new Date().toISOString(),
-        status: paymentMethod === 'Crediário' ? 'Pendente' : 'Pago',
-        categoria: 'Venda',
-        meio_pagamento: paymentMethod,
-        cd_entidade: selectedClientId,
-        nome_entidade: cliente?.nome || 'CONSUMIDOR FINAL',
-        cd_conta: paymentMethod === 'Crediário' ? undefined : 1,
-        cd_venda: id
+      // Registra cada pagamento no financeiro
+      payments.forEach((p, idx) => {
+        db.financeiro.add({
+          tipo: 'R',
+          descricao: `Venda PDV #${id} (${idx + 1}/${payments.length})`,
+          valor: p.amount,
+          data_vencimento: new Date().toISOString(),
+          data_pagamento: p.method === 'Crediário' ? undefined : new Date().toISOString(),
+          status: p.method === 'Crediário' ? 'Pendente' : 'Pago',
+          categoria: 'Venda',
+          meio_pagamento: p.method,
+          cd_entidade: selectedClientId || 1,
+          nome_entidade: cliente?.nome || 'CONSUMIDOR FINAL',
+          cd_conta: p.method === 'Crediário' ? undefined : 1,
+          cd_venda: id
+        });
       });
 
+      // Baixa estoque
       cart.forEach(item => {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
@@ -284,10 +309,11 @@ const POS = () => {
         setConvertedOrcamentoId(null);
       }
 
-      setLastActionData({ ...payload, cd_venda: id, type: 'Venda' });
+      setLastActionData({ ...payload, cd_venda: id, type: 'Venda', payments });
       showSuccess("Venda finalizada com sucesso!");
       setCart([]);
       setSelectedClientId(null);
+      setIsCheckoutOpen(false);
       setIsPrintOpen(true);
     } catch (err) {
       showError("Erro ao processar venda.");
@@ -310,7 +336,7 @@ const POS = () => {
       }));
       setSelectedSellerId(orc.cd_func || 1);
       setSelectedClientId(orc.cd_clientes || 1);
-      setPaymentMethod(orc.meio_pagamento || 'Dinheiro');
+      setPaymentMethod(orc.meio_pagamento || 'Crediário');
       setConvertedOrcamentoId(orc.cd_orcamento);
       setActiveTab("venda");
       showSuccess(`Orçamento #${orc.cd_orcamento} carregado!`);
@@ -349,9 +375,8 @@ const POS = () => {
   const confirmClientSelection = (clientId: number) => {
     setSelectedClientId(clientId);
     setIsClientModalOpen(false);
-    // Executa a ação pendente após selecionar o cliente
     setTimeout(() => {
-      if (pendingAction === 'checkout') handleCheckout();
+      if (pendingAction === 'checkout') setIsCheckoutOpen(true);
       if (pendingAction === 'budget') setIsBudgetModalOpen(true);
       setPendingAction(null);
     }, 100);
@@ -693,7 +718,7 @@ const POS = () => {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsBudgetModalOpen(false)}>Cancelar</Button>
-              <Button className="bg-indigo-600" onClick={handleSaveBudget}>Salvar Orçamento</Button>
+              <Button className="bg-indigo-600" onClick={confirmSaveBudget}>Salvar Orçamento</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -702,6 +727,14 @@ const POS = () => {
           isOpen={isSearchOpen} 
           onClose={() => setIsSearchOpen(false)} 
           onSelect={addToCart} 
+        />
+
+        <CheckoutModal 
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+          total={total}
+          clientName={clientes.find(c => c.cd_clientes === selectedClientId)?.nome || 'CONSUMIDOR FINAL'}
+          onConfirm={confirmCheckout}
         />
 
         <PrintPreview 
