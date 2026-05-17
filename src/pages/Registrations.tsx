@@ -12,7 +12,8 @@ import {
   Building2,
   Contact2,
   Users2,
-  Truck
+  Truck,
+  FileText
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -37,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { db } from '@/services/api';
 import { Cliente } from '@/types/database';
 import ClientForm from '@/components/ClientForm';
+import ClientDetails from '@/components/ClientDetails';
 import { cn } from '@/lib/utils';
 
 const Registrations = () => {
@@ -44,7 +46,9 @@ const Registrations = () => {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
   const [editingEntity, setEditingEntity] = React.useState<Cliente | undefined>(undefined);
+  const [selectedEntity, setSelectedEntity] = React.useState<Cliente | undefined>(undefined);
 
   const loadData = () => {
     setEntities(db.clientes.getAll());
@@ -79,6 +83,11 @@ const Registrations = () => {
   const handleEdit = (entity: Cliente) => {
     setEditingEntity(entity);
     setIsModalOpen(true);
+  };
+
+  const handleViewDetails = (entity: Cliente) => {
+    setSelectedEntity(entity);
+    setIsDetailsOpen(true);
   };
 
   const handleAdd = () => {
@@ -165,19 +174,13 @@ const Registrations = () => {
                   <TableHead className="font-bold">Nome / Razão Social</TableHead>
                   <TableHead className="font-bold">CPF/CNPJ</TableHead>
                   <TableHead className="font-bold">Contato</TableHead>
-                  <TableHead className="font-bold">Cidade</TableHead>
                   <TableHead className="text-right font-bold">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredEntities.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-slate-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <Search size={32} className="opacity-20" />
-                        <p>Nenhum registro encontrado para este filtro.</p>
-                      </div>
-                    </TableCell>
+                    <TableCell colSpan={5} className="text-center py-12 text-slate-400">Nenhum registro encontrado.</TableCell>
                   </TableRow>
                 ) : (
                   filteredEntities.map((entity) => (
@@ -195,11 +198,6 @@ const Registrations = () => {
                              entity.tipo_entidade === 'F' ? 'FORNECEDOR' : 
                              entity.tipo_entidade === 'T' ? 'TRANSPORTADORA' : 'AMBOS'}
                           </Badge>
-                          {entity.is_funcionario && (
-                            <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 border-emerald-100 bg-emerald-50 px-2 py-0.5">
-                              FUNCIONÁRIO
-                            </Badge>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">
@@ -210,9 +208,17 @@ const Registrations = () => {
                       </TableCell>
                       <TableCell className="text-slate-500 font-mono text-xs">{entity.cpf_cnpj || "-"}</TableCell>
                       <TableCell className="text-slate-500 text-xs">{entity.cel || entity.tel1 || "-"}</TableCell>
-                      <TableCell className="text-slate-500 text-xs">{entity.cidade ? `${entity.cidade}/${entity.uf || ""}` : "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                            onClick={() => handleViewDetails(entity)}
+                            title="Ver Ficha Completa"
+                          >
+                            <FileText size={16} />
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -238,6 +244,19 @@ const Registrations = () => {
             </Table>
           </Card>
         </Tabs>
+
+        {/* Modal de Ficha do Cliente */}
+        <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="text-indigo-600" />
+                Ficha do Cliente: {selectedEntity?.nome}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedEntity && <ClientDetails client={selectedEntity} />}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

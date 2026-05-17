@@ -92,8 +92,8 @@ export interface Produto {
   data_atualizacao: string;
 }
 
-export type TipoFinanceiro = 'R' | 'P'; // Receita | Pagamento
-export type MeioPagamento = 'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Cheque' | 'Boleto' | 'Transferência';
+export type TipoFinanceiro = 'R' | 'P';
+export type MeioPagamento = 'Dinheiro' | 'Cartão Crédito' | 'Cartão Débito' | 'PIX' | 'Cheque' | 'Boleto' | 'Transferência' | 'Crediário';
 
 export interface LancamentoFinanceiro {
   cd_lancamento: number;
@@ -110,6 +110,7 @@ export interface LancamentoFinanceiro {
   bandeira_cartao?: string;
   cd_conta?: number; 
   is_fixa?: boolean;
+  cd_venda?: number; // Link com a venda
 }
 
 export interface ContaBancaria {
@@ -118,18 +119,30 @@ export interface ContaBancaria {
   banco_numero?: string;
   agencia?: string;
   conta_numero?: string;
-  saldo_inicial: number; // Novo campo
+  saldo_inicial: number;
   saldo: number;
   tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
 }
 
-export interface Transferencia {
-  cd_transferencia: number;
-  data: string;
+export interface VendaItem {
+  cd_produto: number;
+  nome_produto: string;
   valor: number;
-  cd_conta_origem: number;
-  cd_conta_destino: number;
-  obs?: string;
+  qtde: number;
+  subtotal: number;
+}
+
+export interface Venda {
+  cd_venda: number;
+  data: string;
+  total: number;
+  custo_total: number; 
+  cd_clientes: number;
+  nome_cliente?: string;
+  cd_func: number;
+  tipo_venda: 'Vista' | 'Prazo';
+  meio_pagamento: MeioPagamento;
+  itens: VendaItem[];
 }
 
 export interface Patrimonio {
@@ -140,13 +153,11 @@ export interface Patrimonio {
   proprietário: 'Empresa' | 'Sócio A' | 'Sócio B';
 }
 
-export interface Venda {
-  cd_venda: number;
+export interface Transferencia {
+  cd_transferencia: number;
   data: string;
-  total: number;
-  custo_total: number; 
-  cd_clientes: number;
-  cd_func: number;
-  tipo_venda: 'Vista' | 'Prazo';
-  meio_pagamento: MeioPagamento;
+  valor: number;
+  cd_conta_origem: number;
+  cd_conta_destino: number;
+  obs?: string;
 }

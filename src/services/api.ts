@@ -1,6 +1,6 @@
 "use client";
 
-import { Cliente, Produto, Compra, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Transferencia, Patrimonio } from '../types/database';
 
 const STORAGE_KEY = 'dyaderp_db';
 const AUTH_KEY = 'dyaderp_auth';
@@ -47,6 +47,7 @@ const getDB = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
   } else {
     database = JSON.parse(data);
+    if (!database.vendas) database.vendas = [];
     if (!database.transferencias) database.transferencias = [];
     if (!database.patrimonio) database.patrimonio = [];
     if (!database.contas) {
@@ -87,6 +88,9 @@ export const db = {
   },
   financeiro: {
     getAll: (): LancamentoFinanceiro[] => getDB().financeiro,
+    getByEntidade: (cd_entidade: number): LancamentoFinanceiro[] => {
+      return getDB().financeiro.filter((l: any) => l.cd_entidade === cd_entidade);
+    },
     add: (lancamento: Omit<LancamentoFinanceiro, 'cd_lancamento'>) => {
       const database = getDB();
       const novo = { ...lancamento, cd_lancamento: Date.now() };
@@ -98,55 +102,6 @@ export const db = {
           else database.contas[cIdx].saldo -= novo.valor;
         }
       }
-      saveDB(database);
-    },
-    updateManual: (id: number, novoValor: number) => {
-      const database = getDB();
-      const index = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
-      if (index !== -1) {
-        const lanc = database.financeiro[index];
-        if (lanc.status === 'Pago' && lanc.cd_conta) {
-          const cIdx = database.contas.findIndex((c: any) => c.cd_conta === lanc.cd_conta);
-          if (cIdx !== -1) {
-            const diff = novoValor - lanc.valor;
-            if (lanc.tipo === 'R') database.contas[cIdx].saldo += diff;
-            else database.contas[cIdx].saldo -= diff;
-          }
-        }
-        lanc.valor = novoValor;
-        saveDB(database);
-      }
-    },
-    changeAccount: (lancamentoId: number, newAccountId: number) => {
-      const database = getDB();
-      const lIdx = database.financeiro.findIndex((l: any) => l.cd_lancamento === lancamentoId);
-      if (lIdx === -1) return;
-
-      const lanc = database.financeiro[lIdx];
-      const oldAccountId = lanc.cd_conta;
-
-      if (oldAccountId === newAccountId) return;
-
-      // Se estava pago, ajusta os saldos das contas
-      if (lanc.status === 'Pago') {
-        // Remove do saldo da conta antiga
-        if (oldAccountId) {
-          const oldIdx = database.contas.findIndex((c: any) => c.cd_conta === oldAccountId);
-          if (oldIdx !== -1) {
-            if (lanc.tipo === 'R') database.contas[oldIdx].saldo -= lanc.valor;
-            else database.contas[oldIdx].saldo += lanc.valor;
-          }
-        }
-
-        // Adiciona ao saldo da conta nova
-        const newIdx = database.contas.findIndex((c: any) => c.cd_conta === newAccountId);
-        if (newIdx !== -1) {
-          if (lanc.tipo === 'R') database.contas[newIdx].saldo += lanc.valor;
-          else database.contas[newIdx].saldo -= lanc.valor;
-        }
-      }
-
-      lanc.cd_conta = newAccountId;
       saveDB(database);
     },
     baixar: (id: number, cd_conta: number) => {
@@ -168,7 +123,6 @@ export const db = {
       const database = getDB();
       const oIdx = database.contas.findIndex((c: any) => c.cd_conta === transf.cd_conta_origem);
       const dIdx = database.contas.findIndex((c: any) => c.cd_conta === transf.cd_conta_destino);
-      
       if (oIdx !== -1 && dIdx !== -1) {
         database.contas[oIdx].saldo -= transf.valor;
         database.contas[dIdx].saldo += transf.valor;
@@ -177,34 +131,14 @@ export const db = {
       }
     }
   },
-  contas: {
-    getAll: (): ContaBancaria[] => getDB().contas,
-    add: (conta: Omit<ContaBancaria, 'cd_conta'>) => {
-      const database = getDB();
-      if (!database.contas) database.contas = [];
-      database.contas.push({ ...conta, cd_conta: Date.now() });
-      saveDB(database);
+  vendas: {
+    getAll: (): Venda[] => getDB().vendas,
+    getByCliente: (cd_clientes: number): Venda[] => {
+      return getDB().vendas.filter((v: any) => v.cd_clientes === cd_clientes);
     },
-    update: (id: number, data: Partial<ContaBancaria>) => {
+    add: (v: Venda) => {
       const database = getDB();
-      const idx = database.contas.findIndex((c: any) => c.cd_conta === id);
-      if (idx !== -1) {
-        database.contas[idx] = { ...database.contas[idx], ...data };
-        saveDB(database);
-      }
-    },
-    delete: (id: number) => {
-      const database = getDB();
-      database.contas = database.contas.filter((c: any) => c.cd_conta !== id);
-      saveDB(database);
-    }
-  },
-  patrimonio: {
-    getAll: (): Patrimonio[] => getDB().patrimonio,
-    add: (item: Omit<Patrimonio, 'cd_patrimonio'>) => {
-      const database = getDB();
-      if (!database.patrimonio) database.patrimonio = [];
-      database.patrimonio.push({ ...item, cd_patrimonio: Date.now() });
+      database.vendas.push(v);
       saveDB(database);
     }
   },
@@ -241,12 +175,24 @@ export const db = {
       saveDB(db);
     }
   },
-  vendas: {
-    getAll: (): Venda[] => getDB().vendas,
-    add: (v: Venda) => {
-      const db = getDB();
-      db.vendas.push(v);
-      saveDB(db);
+  contas: {
+    getAll: (): ContaBancaria[] => getDB().contas,
+    update: (id: number, data: Partial<ContaBancaria>) => {
+      const database = getDB();
+      const idx = database.contas.findIndex((c: any) => c.cd_conta === id);
+      if (idx !== -1) {
+        database.contas[idx] = { ...database.contas[idx], ...data };
+        saveDB(database);
+      }
+    }
+  },
+  patrimonio: {
+    getAll: (): Patrimonio[] => getDB().patrimonio,
+    add: (item: Omit<Patrimonio, 'cd_patrimonio'>) => {
+      const database = getDB();
+      if (!database.patrimonio) database.patrimonio = [];
+      database.patrimonio.push({ ...item, cd_patrimonio: Date.now() });
+      saveDB(database);
     }
   }
 };
