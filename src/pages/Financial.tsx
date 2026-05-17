@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { showSuccess, showError } from '@/utils/toast';
 import FinancialForm from '@/components/FinancialForm';
 import AccountForm from '@/components/AccountForm';
+import PatrimonyForm from '@/components/PatrimonyForm';
 
 const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
@@ -52,6 +53,7 @@ const Financial = () => {
   const [editValue, setEditValue] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = React.useState(false);
+  const [isPatrimonyModalOpen, setIsPatrimonyModalOpen] = React.useState(false);
   const user = db.auth.getUser();
 
   const loadData = () => {
@@ -247,12 +249,23 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
-              <Card className="border-dashed border-2 border-slate-200 flex items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors">
-                <div className="text-center text-slate-400">
-                  <Plus className="mx-auto mb-2" />
-                  <p className="text-sm font-medium">Adicionar Patrimônio</p>
-                </div>
-              </Card>
+              
+              <Dialog open={isPatrimonyModalOpen} onOpenChange={setIsPatrimonyModalOpen}>
+                <DialogTrigger asChild>
+                  <Card className="border-dashed border-2 border-slate-200 flex items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors">
+                    <div className="text-center text-slate-400">
+                      <Plus className="mx-auto mb-2" />
+                      <p className="text-sm font-medium">Adicionar Patrimônio</p>
+                    </div>
+                  </Card>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Registrar Novo Patrimônio</DialogTitle>
+                  </DialogHeader>
+                  <PatrimonyForm onSuccess={() => { setIsPatrimonyModalOpen(false); loadData(); }} />
+                </DialogContent>
+              </Dialog>
             </div>
           </TabsContent>
         </Tabs>
