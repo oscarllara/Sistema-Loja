@@ -39,9 +39,9 @@ const getDB = () => {
       transferencias: [],
       patrimonio: [],
       contas: [
-        { cd_conta: 1, nome: 'Caixa Loja', saldo: 0, tipo: 'Caixa' },
-        { cd_conta: 2, nome: 'Banco do Brasil', saldo: 0, tipo: 'Banco' },
-        { cd_conta: 3, nome: 'Retaguarda (Cofre)', saldo: 0, tipo: 'Retaguarda' }
+        { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa' },
+        { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco' },
+        { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda' }
       ],
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
@@ -51,9 +51,9 @@ const getDB = () => {
     if (!database.patrimonio) database.patrimonio = [];
     if (!database.contas) {
       database.contas = [
-        { cd_conta: 1, nome: 'Caixa Loja', saldo: 0, tipo: 'Caixa' },
-        { cd_conta: 2, nome: 'Banco do Brasil', saldo: 0, tipo: 'Banco' },
-        { cd_conta: 3, nome: 'Retaguarda (Cofre)', saldo: 0, tipo: 'Retaguarda' }
+        { cd_conta: 1, nome: 'CAIXA LOJA', saldo: 0, tipo: 'Caixa' },
+        { cd_conta: 2, nome: 'SICOOB', saldo: 0, tipo: 'Banco' },
+        { cd_conta: 3, nome: 'RETAGUARDA (COFRE)', saldo: 0, tipo: 'Retaguarda' }
       ];
     }
     if (!database.financeiro) database.financeiro = [];
@@ -116,6 +116,38 @@ export const db = {
         lanc.valor = novoValor;
         saveDB(database);
       }
+    },
+    changeAccount: (lancamentoId: number, newAccountId: number) => {
+      const database = getDB();
+      const lIdx = database.financeiro.findIndex((l: any) => l.cd_lancamento === lancamentoId);
+      if (lIdx === -1) return;
+
+      const lanc = database.financeiro[lIdx];
+      const oldAccountId = lanc.cd_conta;
+
+      if (oldAccountId === newAccountId) return;
+
+      // Se estava pago, ajusta os saldos das contas
+      if (lanc.status === 'Pago') {
+        // Remove do saldo da conta antiga
+        if (oldAccountId) {
+          const oldIdx = database.contas.findIndex((c: any) => c.cd_conta === oldAccountId);
+          if (oldIdx !== -1) {
+            if (lanc.tipo === 'R') database.contas[oldIdx].saldo -= lanc.valor;
+            else database.contas[oldIdx].saldo += lanc.valor;
+          }
+        }
+
+        // Adiciona ao saldo da conta nova
+        const newIdx = database.contas.findIndex((c: any) => c.cd_conta === newAccountId);
+        if (newIdx !== -1) {
+          if (lanc.tipo === 'R') database.contas[newIdx].saldo += lanc.valor;
+          else database.contas[newIdx].saldo -= lanc.valor;
+        }
+      }
+
+      lanc.cd_conta = newAccountId;
+      saveDB(database);
     },
     baixar: (id: number, cd_conta: number) => {
       const database = getDB();

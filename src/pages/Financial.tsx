@@ -46,6 +46,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import FinancialForm from '@/components/FinancialForm';
 import AccountForm from '@/components/AccountForm';
 import PatrimonyForm from '@/components/PatrimonyForm';
+import AccountDetails from '@/components/AccountDetails';
 
 const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
@@ -57,6 +58,7 @@ const Financial = () => {
   const [isAccountModalOpen, setIsAccountModalOpen] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
   const [isPatrimonyModalOpen, setIsPatrimonyModalOpen] = React.useState(false);
+  const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const user = db.auth.getUser();
 
   const loadData = () => {
@@ -188,13 +190,17 @@ const Financial = () => {
           <TabsContent value="accounts">
             <div className="grid gap-4 md:grid-cols-3">
               {contas.map((account) => (
-                <Card key={account.cd_conta} className="border-none shadow-sm group relative">
+                <Card 
+                  key={account.cd_conta} 
+                  className="border-none shadow-sm group relative cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all"
+                  onClick={() => setSelectedAccountForDetails(account)}
+                >
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-2 bg-slate-100 rounded-lg"><Wallet className="text-slate-600" size={20} /></div>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => handleEditAccount(account)}>
                             <Edit size={12} />
                           </Button>
@@ -295,6 +301,29 @@ const Financial = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Modal de Detalhes da Conta */}
+        <Dialog open={!!selectedAccountForDetails} onOpenChange={(open) => !open && setSelectedAccountForDetails(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="text-indigo-600" />
+                Extrato Detalhado: {selectedAccountForDetails?.nome}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedAccountForDetails && (
+              <AccountDetails 
+                account={selectedAccountForDetails} 
+                onUpdate={() => {
+                  loadData();
+                  // Atualiza a conta selecionada para refletir o novo saldo
+                  const updated = db.contas.getAll().find(c => c.cd_conta === selectedAccountForDetails.cd_conta);
+                  if (updated) setSelectedAccountForDetails(updated);
+                }} 
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
