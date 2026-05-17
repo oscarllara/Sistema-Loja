@@ -39,12 +39,12 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
 
   // 1. Calcular Saldo Anterior ao Período (Saldo Inicial + Movimentações antes da data inicial)
   const saldoAnteriorAoPeriodo = allLancamentos
-    .filter(l => (l.data_pagamento || l.data_vencimento) < startDate)
+    .filter(l => (l.data_pagamento || l.data_vencimento || "").split('T')[0] < startDate)
     .reduce((acc, l) => l.tipo === 'R' ? acc + l.valor : acc - l.valor, account.saldo_inicial || 0);
 
   // 2. Filtrar lançamentos do período e busca
   const filtered = allLancamentos.filter(l => {
-    const data = (l.data_pagamento || l.data_vencimento).split('T')[0];
+    const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
     const matchesDate = data >= startDate && data <= endDate;
     const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          l.categoria.toLowerCase().includes(searchTerm.toLowerCase());
@@ -80,22 +80,48 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
       {/* Filtros de Período */}
       <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
         <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase text-slate-500">Início</Label>
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 w-40" />
+          <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Início</label>
+          <Input 
+            type="date" 
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)} 
+            className="h-10 w-44 bg-white" 
+          />
         </div>
         <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase text-slate-500">Fim</Label>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-40" />
+          <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Fim</label>
+          <Input 
+            type="date" 
+            value={endDate} 
+            onChange={(e) => setEndDate(e.target.value)} 
+            className="h-10 w-44 bg-white" 
+          />
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={setToday} className="h-9">Hoje</Button>
-          <Button variant="outline" size="sm" onClick={setMonth} className="h-9">Este Mês</Button>
+        <div className="flex gap-2 h-10">
+          <Button 
+            type="button"
+            variant="outline" 
+            size="sm" 
+            onClick={setToday} 
+            className="h-full px-4 bg-white hover:bg-indigo-50 hover:text-indigo-600 border-slate-200"
+          >
+            Hoje
+          </Button>
+          <Button 
+            type="button"
+            variant="outline" 
+            size="sm" 
+            onClick={setMonth} 
+            className="h-full px-4 bg-white hover:bg-indigo-50 hover:text-indigo-600 border-slate-200"
+          >
+            Este Mês
+          </Button>
         </div>
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <Input 
             placeholder="Buscar no extrato..." 
-            className="pl-9 h-9"
+            className="pl-10 h-10 bg-white"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -104,16 +130,16 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
 
       {/* Cards de Resumo do Período */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-slate-100 rounded-xl border border-slate-200">
+        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
           <p className="text-[10px] font-bold text-slate-500 uppercase">Saldo Anterior</p>
           <p className="text-lg font-bold text-slate-700">R$ {saldoAnteriorAoPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           <p className="text-[9px] text-slate-400">Até {new Date(startDate).toLocaleDateString()}</p>
         </div>
-        <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+        <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 shadow-sm">
           <p className="text-[10px] font-bold text-emerald-600 uppercase">Entradas no Período</p>
           <p className="text-lg font-bold text-emerald-700">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
-        <div className="p-4 bg-rose-50 rounded-xl border border-rose-100">
+        <div className="p-4 bg-rose-50 rounded-xl border border-rose-100 shadow-sm">
           <p className="text-[10px] font-bold text-rose-600 uppercase">Saídas no Período</p>
           <p className="text-lg font-bold text-rose-700">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
@@ -129,7 +155,7 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
         <span>A matemática do período: Saldo Anterior + Entradas - Saídas = Saldo Final do Período.</span>
       </div>
 
-      <div className="border rounded-xl overflow-hidden">
+      <div className="border rounded-xl overflow-hidden bg-white">
         <Table>
           <TableHeader className="bg-slate-50">
             <TableRow>
@@ -187,12 +213,5 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
     </div>
   );
 };
-
-// Importação necessária para o Label que faltou no contexto anterior
-const Label = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-  <label className={cn("text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70", className)}>
-    {children}
-  </label>
-);
 
 export default AccountDetails;
