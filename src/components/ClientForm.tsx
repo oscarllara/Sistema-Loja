@@ -1,32 +1,86 @@
 "use client";
 
 import React from 'react';
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { 
+  User, 
+  MapPin, 
+  Briefcase, 
+  DollarSign, 
+  ShieldCheck, 
+  Plus, 
+  Trash2,
+  Search
+} from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Cliente } from '@/types/database';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Cliente, TipoPessoa, TipoEntidade } from '@/types/database';
 import { db } from '@/services/api';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
+import { cn } from '@/lib/utils';
 
 const clientSchema = z.object({
-  nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
-  fantasia: z.string().optional(),
-  cpf: z.string().optional(),
-  cnpj: z.string().optional(),
-  tel1: z.string().optional(),
-  cel: z.string().optional(),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  tipo_entidade: z.enum(['C', 'F', 'A']),
+  tipo_pessoa: z.enum(['F', 'J']),
+  nome: z.string().min(3, "Nome obrigatório"),
+  apelido_fantasia: z.string().optional(),
+  cpf_cnpj: z.string().optional(),
+  rg_ie: z.string().optional(),
+  tipo_documento: z.string().optional(),
+  
+  // Pessoal
+  sexo: z.string().optional(),
+  estado_civil: z.string().optional(),
+  naturalidade: z.string().optional(),
+  profissao: z.string().optional(),
+  data_nascimento: z.string().optional(),
+  filiacao_pai: z.string().optional(),
+  filiacao_mae: z.string().optional(),
+  
+  // Cônjuge
+  conjuge_nome: z.string().optional(),
+  conjuge_nascimento: z.string().optional(),
+  conjuge_empresa: z.string().optional(),
+  conjuge_telefone: z.string().optional(),
+  conjuge_salario: z.coerce.number().optional(),
+  
+  // Profissional
+  local_trabalho: z.string().optional(),
+  cargo: z.string().optional(),
+  data_admissao: z.string().optional(),
+  salario: z.coerce.number().optional(),
+  
+  // Endereço
+  cep: z.string().optional(),
   endereco: z.string().optional(),
+  numero: z.string().optional(),
+  complemento: z.string().optional(),
   bairro: z.string().optional(),
   cidade: z.string().optional(),
-  uf: z.string().max(2).optional(),
-  cep: z.string().optional(),
-  obs1: z.string().optional(),
+  uf: z.string().optional(),
+  referencia: z.string().optional(),
+  
+  // Contato
+  tel1: z.string().optional(),
+  tel2: z.string().optional(),
+  cel: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  
+  // Financeiro
   limite: z.coerce.number().optional(),
+  despesa_fixa: z.coerce.number().optional(),
+  despesa_alimentacao: z.coerce.number().optional(),
+  despesa_aluguel: z.coerce.number().optional(),
+  obs1: z.string().optional(),
+  
+  // Autorizações
+  pessoas_autorizadas: z.array(z.string()).optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -37,111 +91,322 @@ interface ClientFormProps {
 }
 
 const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
-  const { register, handleSubmit, formState: { errors } } = useForm<ClientFormValues>({
+  const [isSearchingCep, setIsSearchingCep] = React.useState(false);
+  
+  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
     defaultValues: client || {
+      tipo_entidade: 'C',
+      tipo_pessoa: 'F',
       nome: "",
-      fantasia: "",
-      cpf: "",
-      cnpj: "",
-      tel1: "",
-      cel: "",
-      email: "",
-      endereco: "",
-      bairro: "",
-      cidade: "",
-      uf: "",
-      cep: "",
-      obs1: "",
-      limite: 0,
+      pessoas_autorizadas: [""],
     }
   });
 
+  const tipoPessoa = watch("tipo_pessoa");
+  const tipoEntidade = watch("tipo_entidade");
+
+  const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const cep = e.target.value.replace(/\D/g, '');
+    if (cep.length !== 8) return;
+
+    setIsSearchingCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await response.json();
+      if (!data.erro) {
+        setValue("endereco", data.logradouro);
+        setValue("bairro", data.bairro);
+        setValue("cidade", data.localidade);
+        setValue("uf", data.uf);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar CEP", err);
+    } finally {
+      setIsSearchingCep(false);
+    }
+  };
+
   const onSubmit = (data: ClientFormValues) => {
+    const payload = {
+      ...data,
+      cd_clientes: client?.cd_clientes || Date.now(),
+      data: client?.data || new Date().toISOString(),
+    } as Cliente;
+
     if (client) {
-      db.clientes.update(client.cd_clientes, data);
-      showSuccess("Cliente atualizado com sucesso!");
+      db.clientes.update(client.cd_clientes, payload);
+      showSuccess("Cadastro atualizado!");
     } else {
-      const newClient: Cliente = {
-        ...data,
-        cd_clientes: Date.now(),
-        data: new Date().toISOString(),
-      } as Cliente;
-      db.clientes.add(newClient);
-      showSuccess("Cliente cadastrado com sucesso!");
+      db.clientes.add(payload);
+      showSuccess("Cadastro realizado com sucesso!");
     }
     onSuccess();
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="nome">Nome / Razão Social *</Label>
-          <Input id="nome" {...register("nome")} />
-          {errors.nome && <p className="text-xs text-red-500">{errors.nome.message}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="fantasia">Nome Fantasia</Label>
-          <Input id="fantasia" {...register("fantasia")} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cpf">CPF</Label>
-          <Input id="cpf" {...register("cpf")} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cnpj">CNPJ</Label>
-          <Input id="cnpj" {...register("cnpj")} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tel1">Telefone Fixo</Label>
-          <Input id="tel1" {...register("tel1")} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cel">Celular</Label>
-          <Input id="cel" {...register("cel")} />
-        </div>
-        <div className="col-span-full space-y-2">
-          <Label htmlFor="email">E-mail</Label>
-          <Input id="email" type="email" {...register("email")} />
-          {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
-        </div>
-        <div className="col-span-full space-y-2">
-          <Label htmlFor="endereco">Endereço</Label>
-          <Input id="endereco" {...register("endereco")} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="bairro">Bairro</Label>
-          <Input id="bairro" {...register("bairro")} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cidade">Cidade</Label>
-          <Input id="cidade" {...register("cidade")} />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-2">
-            <Label htmlFor="uf">UF</Label>
-            <Input id="uf" maxLength={2} {...register("uf")} />
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="flex items-center gap-6">
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Cadastro</Label>
+            <RadioGroup 
+              defaultValue={tipoEntidade} 
+              onValueChange={(v) => setValue("tipo_entidade", v as TipoEntidade)}
+              className="flex gap-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="C" id="ent-c" />
+                <Label htmlFor="ent-c" className="text-sm">Cliente</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="F" id="ent-f" />
+                <Label htmlFor="ent-f" className="text-sm">Fornecedor</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="A" id="ent-a" />
+                <Label htmlFor="ent-a" className="text-sm">Ambos</Label>
+              </div>
+            </RadioGroup>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="cep">CEP</Label>
-            <Input id="cep" {...register("cep")} />
+
+          <div className="w-px h-10 bg-slate-200" />
+
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Pessoa</Label>
+            <RadioGroup 
+              defaultValue={tipoPessoa} 
+              onValueChange={(v) => setValue("tipo_pessoa", v as TipoPessoa)}
+              className="flex gap-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="F" id="p-f" />
+                <Label htmlFor="p-f" className="text-sm">Física</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="J" id="p-j" />
+                <Label htmlFor="p-j" className="text-sm">Jurídica</Label>
+              </div>
+            </RadioGroup>
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="limite">Limite de Crédito</Label>
-          <Input id="limite" type="number" step="0.01" {...register("limite")} />
-        </div>
-        <div className="col-span-full space-y-2">
-          <Label htmlFor="obs1">Observações</Label>
-          <Textarea id="obs1" {...register("obs1")} />
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700">
-          {client ? "Salvar Alterações" : "Cadastrar Cliente"}
+        
+        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8">
+          Salvar Cadastro
         </Button>
       </div>
+
+      <Tabs defaultValue="geral" className="w-full">
+        <TabsList className="grid grid-cols-4 w-full bg-slate-100 p-1 rounded-xl">
+          <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
+          <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
+          <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> Pessoal/Prof.</TabsTrigger>
+          <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="geral" className="mt-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Nome / Razão Social *</Label>
+              <Input {...register("nome")} placeholder="Nome completo" />
+              {errors.nome && <p className="text-xs text-red-500">{errors.nome.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>{tipoPessoa === 'F' ? 'Apelido' : 'Nome Fantasia'}</Label>
+              <Input {...register("apelido_fantasia")} />
+            </div>
+            <div className="space-y-2">
+              <Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label>
+              <Input {...register("cpf_cnpj")} placeholder="000.000.000-00" />
+            </div>
+            <div className="space-y-2">
+              <Label>{tipoPessoa === 'F' ? 'RG / Identidade' : 'Inscrição Estadual'}</Label>
+              <Input {...register("rg_ie")} />
+            </div>
+            <div className="space-y-2">
+              <Label>E-mail Principal</Label>
+              <Input type="email" {...register("email")} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>Celular</Label>
+                <Input {...register("cel")} placeholder="(00) 00000-0000" />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefone Fixo</Label>
+                <Input {...register("tel1")} />
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="endereco" className="mt-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                CEP {isSearchingCep && <Search size={12} className="animate-spin" />}
+              </Label>
+              <Input {...register("cep")} onBlur={handleCepBlur} placeholder="00000-000" />
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label>Endereço</Label>
+              <Input {...register("endereco")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Número</Label>
+              <Input {...register("numero")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Bairro</Label>
+              <Input {...register("bairro")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Complemento</Label>
+              <Input {...register("complemento")} />
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label>Cidade</Label>
+              <Input {...register("cidade")} />
+            </div>
+            <div className="space-y-2">
+              <Label>UF</Label>
+              <Input {...register("uf")} maxLength={2} />
+            </div>
+            <div className="md:col-span-3 space-y-2">
+              <Label>Referência de Proximidade</Label>
+              <Input {...register("referencia")} placeholder="Ex: Próximo ao mercado..." />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="pessoal" className="mt-6 space-y-6">
+          {tipoPessoa === 'F' && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Data de Nascimento</Label>
+                  <Input type="date" {...register("data_nascimento")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sexo</Label>
+                  <select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" {...register("sexo")}>
+                    <option value="">Selecione</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                    <option value="O">Outro</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado Civil</Label>
+                  <Input {...register("estado_civil")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Naturalidade</Label>
+                  <Input {...register("naturalidade")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Filiação (Pai)</Label>
+                  <Input {...register("filiacao_pai")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Filiação (Mãe)</Label>
+                  <Input {...register("filiacao_mae")} />
+                </div>
+              </div>
+
+              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4">
+                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                  <User size={16} /> Dados do Cônjuge
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nome do Cônjuge</Label>
+                    <Input {...register("conjuge_nome")} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label>Nascimento</Label>
+                      <Input type="date" {...register("conjuge_nascimento")} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Telefone</Label>
+                      <Input {...register("conjuge_telefone")} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Briefcase size={16} /> Dados Profissionais
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Profissão</Label>
+                <Input {...register("profissao")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Local de Trabalho</Label>
+                <Input {...register("local_trabalho")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Cargo</Label>
+                <Input {...register("cargo")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Data Admissão</Label>
+                <Input type="date" {...register("data_admissao")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Salário Mensal</Label>
+                <Input type="number" step="0.01" {...register("salario")} />
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="financeiro" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label>Limite de Crédito</Label>
+              <Input type="number" step="0.01" {...register("limite")} className="text-indigo-600 font-bold" />
+            </div>
+            <div className="space-y-2">
+              <Label>Despesa Fixa (Água/Luz)</Label>
+              <Input type="number" step="0.01" {...register("despesa_fixa")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Despesa Alimentação</Label>
+              <Input type="number" step="0.01" {...register("despesa_alimentacao")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Despesa Aluguel</Label>
+              <Input type="number" step="0.01" {...register("despesa_aluguel")} />
+            </div>
+          </div>
+
+          <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-4">
+            <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
+              <ShieldCheck size={16} /> Pessoas Autorizadas a Comprar
+            </h4>
+            <div className="space-y-2">
+              <Textarea 
+                placeholder="Digite os nomes das pessoas autorizadas, um por linha..." 
+                className="min-h-[100px]"
+                {...register("obs1")} // Usando obs1 temporariamente para simplificar a lista
+              />
+              <p className="text-[10px] text-emerald-600">Estas pessoas serão consultadas no momento da venda.</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Observações Gerais</Label>
+            <Textarea {...register("obs1")} className="min-h-[100px]" />
+          </div>
+        </TabsContent>
+      </Tabs>
     </form>
   );
 };

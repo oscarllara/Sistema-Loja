@@ -1,37 +1,85 @@
 "use client";
 
-export interface Cliente {
-  cd_clientes: number;
-  data: string;
-  nome: string;
-  endereco?: string;
+export type TipoPessoa = 'F' | 'J';
+export type TipoEntidade = 'C' | 'F' | 'A'; // Cliente, Fornecedor, Ambos
+
+export interface EnderecoAdicional {
+  tipo: 'Entrega' | 'Cobrança' | 'Trabalho';
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
   bairro?: string;
   cidade?: string;
   uf?: string;
+}
+
+export interface Cliente {
+  cd_clientes: number;
+  tipo_entidade: TipoEntidade;
+  tipo_pessoa: TipoPessoa;
+  data: string;
+  nome: string;
+  apelido_fantasia?: string;
+  
+  // Documentos
+  cpf_cnpj?: string;
+  rg_ie?: string;
+  tipo_documento?: string; // RG, CNH, Passaporte, etc.
+  
+  // Pessoal (PF)
+  sexo?: string;
+  estado_civil?: string;
+  naturalidade?: string;
+  profissao?: string;
+  data_nascimento?: string;
+  filiacao_pai?: string;
+  filiacao_mae?: string;
+  
+  // Cônjuge
+  conjuge_nome?: string;
+  conjuge_nascimento?: string;
+  conjuge_empresa?: string;
+  conjuge_telefone?: string;
+  conjuge_salario?: number;
+  
+  // Profissional
+  local_trabalho?: string;
+  cargo?: string;
+  data_admissao?: string;
+  salario?: number;
+  
+  // Endereço Principal
   cep?: string;
-  cpf?: string;
-  cnpj?: string;
+  endereco?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  referencia?: string;
+  
+  // Contato
   tel1?: string;
+  tel2?: string;
   cel?: string;
   email?: string;
+  
+  // Financeiro / Adicional
   limite?: number;
+  despesa_fixa?: number; // Água/Luz/Tel
+  despesa_alimentacao?: number;
+  despesa_aluguel?: number;
   obs1?: string;
-  fantasia?: string;
-  cd_func?: number;
+  
+  // Autorizações
+  pessoas_autorizadas?: string[]; // Lista de nomes
+  
+  // Múltiplos Endereços
+  enderecos_adicionais?: EnderecoAdicional[];
 }
 
-export interface Funcionario {
-  cd_func: number;
-  nome: string;
-  cpf?: string;
-  tel?: string;
-  cargo?: string;
-  fixo?: number;
-  comissao?: number;
-  admissao?: string;
-  demitido: boolean;
-}
-
+// ... manter as outras interfaces (Produto, Venda, etc)
 export interface Produto {
   cd_produto: number;
   nome: string;
