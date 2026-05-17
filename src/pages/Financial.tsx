@@ -19,7 +19,8 @@ import {
   Edit,
   Trash2,
   Search,
-  Calendar
+  Calendar,
+  FileText
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,13 +43,14 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog";
 import { db } from '@/services/api';
-import { LancamentoFinanceiro, ContaBancaria, Patrimonio } from '@/types/database';
+import { LancamentoFinanceiro, ContaBancaria, Patrimonio, Cliente } from '@/types/database';
 import { Badge } from "@/components/ui/badge";
 import { showSuccess, showError } from '@/utils/toast';
 import FinancialForm from '@/components/FinancialForm';
 import AccountForm from '@/components/AccountForm';
 import PatrimonyForm from '@/components/PatrimonyForm';
 import AccountDetails from '@/components/AccountDetails';
+import ClientDetails from '@/components/ClientDetails';
 import { cn } from '@/lib/utils';
 
 const Financial = () => {
@@ -58,10 +60,8 @@ const Financial = () => {
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [editValue, setEditValue] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [isAccountModalOpen, setIsAccountModalOpen] = React.useState(false);
-  const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
-  const [isPatrimonyModalOpen, setIsPatrimonyModalOpen] = React.useState(false);
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
+  const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
   
   // Filtros
   const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
@@ -80,18 +80,6 @@ const Financial = () => {
     loadData();
   }, [loadData]);
 
-  const handleManualEdit = (id: number) => {
-    if (user?.usuario !== 'admin') {
-      showError("Apenas administradores podem editar valores manualmente.");
-      return;
-    }
-    // Simulação de update manual no serviço
-    db.financeiro.add({ ...lancamentos.find(l => l.cd_lancamento === id)!, valor: parseFloat(editValue.replace(',', '.')) } as any);
-    setEditingId(null);
-    showSuccess("Valor ajustado!");
-    loadData();
-  };
-
   const handleBaixa = (id: number) => {
     if (contas.length === 0) {
       showError("Nenhuma conta cadastrada para realizar a baixa.");
@@ -100,6 +88,12 @@ const Financial = () => {
     db.financeiro.baixar(id, contas[0].cd_conta);
     showSuccess("Baixa realizada com sucesso!");
     loadData();
+  };
+
+  const handleViewClient = (clientId?: number) => {
+    if (!clientId) return;
+    const client = db.clientes.getAll().find(c => c.cd_clientes === clientId);
+    if (client) setSelectedClientForDetails(client);
   };
 
   const filterData = (tipo: 'R' | 'P') => {
@@ -177,12 +171,7 @@ const Financial = () => {
             <FinancialTable 
               data={filterData('R')} 
               onBaixa={handleBaixa}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              onManualSave={handleManualEdit}
-              isAdmin={user?.usuario === 'admin'}
+              onViewClient={handleViewClient}
             />
           </TabsContent>
 
@@ -191,12 +180,7 @@ const Financial = () => {
             <FinancialTable 
               data={filterData('P')} 
               onBaixa={handleBaixa}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              onManualSave={handleManualEdit}
-              isAdmin={user?.usuario === 'admin'}
+              onViewClient={handleViewClient}
             />
           </TabsContent>
 
@@ -262,6 +246,19 @@ const Financial = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Modal de Ficha do Cliente (Atalho do Financeiro) */}
+        <Dialog open={!!selectedClientForDetails} onOpenChange={(open) => !open && setSelectedClientForDetails(null)}>
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="text-indigo-600" />
+                Ficha do Cliente: {selectedClientForDetails?.nome}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedClientForDetails && <ClientDetails client={selectedClientForDetails} />}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
@@ -290,7 +287,7 @@ const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) =>
   </div>
 );
 
-const FinancialTable = ({ data, onBaixa, editingId, setEditingId, editValue, setEditValue, onManualSave, isAdmin }: any) => (
+const FinancialTable = ({ data, onBaixa, onViewClient }: any) => (
   <Card className="border-none shadow-sm overflow-hidden">
     <Table>
       <TableHeader className="bg-slate-50">
@@ -329,11 +326,23 @@ const FinancialTable = ({ data, onBaixa, editingId, setEditingId, editValue, set
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                {l.status === 'Pendente' && (
-                  <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1" onClick={() => onBaixa(l.cd_lancamento)}>
-                    <CheckCircle2 size={14} /> Baixar
-                  </Button>
-                )}
+                <div className="flex justify-end gap-2">
+                  {l.cd_entidade && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 text-[10px] gap-1 text-indigo-600 hover:bg-indigo-50"
+                      onClick={() => onViewClient(l.cd_entidade)}
+                    >
+                      <FileText size={14} /> Ver Histórico
+                    </Button>
+                  )}
+                  {l.status === 'Pendente' && (
+                    <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1 border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => onBaixa(l.cd_lancamento)}>
+                      <CheckCircle2 size={14} /> Baixar
+                    </Button>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
           ))

@@ -209,15 +209,14 @@ const Registrations = () => {
                       <TableCell className="text-slate-500 font-mono text-xs">{entity.cpf_cnpj || "-"}</TableCell>
                       <TableCell className="text-slate-500 text-xs">{entity.cel || entity.tel1 || "-"}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end gap-2">
                           <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] gap-1 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                             onClick={() => handleViewDetails(entity)}
-                            title="Ver Ficha Completa"
                           >
-                            <FileText size={16} />
+                            <FileText size={14} /> Ver Ficha
                           </Button>
                           <Button 
                             variant="ghost" 
