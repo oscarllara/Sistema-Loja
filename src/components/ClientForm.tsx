@@ -138,7 +138,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
 
-  // Máscara de CPF
+  // Máscara de CPF (xxx.xxx.xxx-xx)
   const maskCPF = (value: string) => {
     return value
       .replace(/\D/g, "")
@@ -148,7 +148,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
-  // Máscara de Telefone (+55 (xx) xxxxx-xxxx)
+  // Máscara de Telefone (+55 (xx) xxxxx-xxxx ou +55 (xx) xxxx-xxxx)
   const maskPhone = (value: string) => {
     let v = value.replace(/\D/g, "");
     if (v.startsWith("55")) v = v.slice(2);
@@ -180,14 +180,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     setValue(fieldName, maskFn(e.target.value));
   };
 
-  const handleSocialClick = (field: keyof ClientFormValues, baseUrl: string) => {
+  // Função para preencher o link inicial e focar
+  const handleSocialFocus = (field: keyof ClientFormValues, baseUrl: string) => {
     const current = watch(field);
-    if (!current || typeof current !== 'string' || !current.includes(baseUrl)) {
+    if (!current || current === "") {
       setValue(field, baseUrl as any);
     }
-    // O foco automático ajuda a colocar o cursor no final
-    const input = document.getElementsByName(field)[0] as HTMLInputElement;
-    if (input) input.focus();
   };
 
   const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -363,22 +361,34 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialClick("facebook", "https://facebook.com/")}>
+                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialFocus("facebook", "https://facebook.com/")}>
                   <Facebook size={14} /> Facebook
                 </Label>
-                <Input {...register("facebook")} placeholder="https://facebook.com/usuario" />
+                <Input 
+                  {...register("facebook")} 
+                  onFocus={() => handleSocialFocus("facebook", "https://facebook.com/")}
+                  placeholder="https://facebook.com/usuario" 
+                />
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialClick("instagram", "https://instagram.com/")}>
+                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialFocus("instagram", "https://instagram.com/")}>
                   <Instagram size={14} /> Instagram
                 </Label>
-                <Input {...register("instagram")} placeholder="https://instagram.com/usuario" />
+                <Input 
+                  {...register("instagram")} 
+                  onFocus={() => handleSocialFocus("instagram", "https://instagram.com/")}
+                  placeholder="https://instagram.com/usuario" 
+                />
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialClick("linkedin", "https://linkedin.com/in/")}>
+                <Label className="flex items-center gap-2 cursor-pointer hover:text-indigo-600" onClick={() => handleSocialFocus("linkedin", "https://linkedin.com/in/")}>
                   <Linkedin size={14} /> LinkedIn
                 </Label>
-                <Input {...register("linkedin")} placeholder="https://linkedin.com/in/usuario" />
+                <Input 
+                  {...register("linkedin")} 
+                  onFocus={() => handleSocialFocus("linkedin", "https://linkedin.com/in/")}
+                  placeholder="https://linkedin.com/in/usuario" 
+                />
               </div>
             </div>
           </div>
@@ -516,6 +526,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                       <Input 
                         {...register("conjuge_telefone")} 
                         onChange={(e) => handleMaskChange(e, "conjuge_telefone", maskPhone)}
+                        placeholder="+55 (00) 00000-0000"
                       />
                     </div>
                   </div>
@@ -554,6 +565,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                             const masked = maskCPF(e.target.value);
                             setValue(`quadro_societario.${index}.cpf` as any, masked);
                           }}
+                          placeholder="000.000.000-00"
                         />
                       </div>
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeSocio(index)} className="text-rose-500">
@@ -604,6 +616,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                             const masked = maskPhone(e.target.value);
                             setValue(`contatos_responsaveis.${index}.telefone` as any, masked);
                           }}
+                          placeholder="+55 (00) 00000-0000"
                         />
                       </div>
                       <div className="flex gap-2 items-end">
