@@ -27,7 +27,9 @@ import {
   Edit3,
   Zap,
   CreditCard,
-  CheckCircle
+  CheckCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -85,6 +87,9 @@ const POS = () => {
   
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
   const [editData, setEditData] = React.useState({ qtde: 1, valor: 0, total: 0 });
+  const [showMargin, setShowMargin] = React.useState(false);
+  const [marginPassword, setMarginPassword] = React.useState("");
+  const [isMarginAuthOpen, setIsMarginAuthOpen] = React.useState(false);
 
   const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
@@ -144,6 +149,20 @@ const POS = () => {
     } else {
       showError("Senha de administrador incorreta.");
       setAdminPassword("");
+    }
+  };
+
+  const handleMarginAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    const admin = db.clientes.getAll().find(c => c.usuario === 'admin' && c.senha === marginPassword);
+    if (admin) {
+      setShowMargin(true);
+      setIsMarginAuthOpen(false);
+      setMarginPassword("");
+      showSuccess("Margem liberada!");
+    } else {
+      showError("Senha incorreta.");
+      setMarginPassword("");
     }
   };
 
@@ -247,6 +266,7 @@ const POS = () => {
       valor: item.finalPrice,
       total: item.quantity * item.finalPrice
     });
+    setShowMargin(false);
     setIsEditItemOpen(true);
   };
 
@@ -263,7 +283,7 @@ const POS = () => {
     });
     
     setIsEditItemOpen(false);
-    setSelectedIndex(null);
+    setEditingIndex(null);
     showSuccess("Item atualizado!");
   };
 
@@ -635,11 +655,38 @@ const POS = () => {
             </div>
 
             {editingIndex !== null && editData.valor > 0 && (
-              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-                <p className="text-[10px] font-bold text-indigo-600 uppercase">Margem de Lucro nesta Venda</p>
-                <p className="text-lg font-black text-indigo-700">
-                  {(((editData.valor / cart[editingIndex].costPrice) - 1) * 100).toFixed(1)}%
-                </p>
+              <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold text-indigo-600 uppercase">Margem de Lucro</p>
+                  {!showMargin ? (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 text-[9px] gap-1 text-indigo-600 hover:bg-indigo-100"
+                      onClick={() => setIsMarginAuthOpen(true)}
+                    >
+                      <Lock size={12} /> Exibir Margem
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 text-[9px] gap-1 text-slate-500 hover:bg-indigo-100"
+                      onClick={() => setShowMargin(false)}
+                    >
+                      <EyeOff size={12} /> Ocultar
+                    </Button>
+                  )}
+                </div>
+                {showMargin ? (
+                  <p className="text-2xl font-black text-indigo-700 animate-in fade-in zoom-in-95">
+                    {(((editData.valor / cart[editingIndex].costPrice) - 1) * 100).toFixed(1)}%
+                  </p>
+                ) : (
+                  <div className="h-8 flex items-center gap-1">
+                    {[1,2,3,4].map(i => <div key={i} className="w-2 h-2 rounded-full bg-indigo-200" />)}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -647,6 +694,23 @@ const POS = () => {
             <Button variant="outline" onClick={() => { setIsEditItemOpen(false); setEditingIndex(null); }}>Cancelar</Button>
             <Button onClick={saveEdit} className="bg-indigo-600">Salvar Alterações</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Autenticação para Margem */}
+      <Dialog open={isMarginAuthOpen} onOpenChange={setIsMarginAuthOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader><DialogTitle className="text-sm">Supervisor / Admin</DialogTitle></DialogHeader>
+          <form onSubmit={handleMarginAuth} className="space-y-4">
+            <Input 
+              type="password" 
+              autoFocus 
+              placeholder="Senha..." 
+              value={marginPassword} 
+              onChange={(e) => setMarginPassword(e.target.value)} 
+            />
+            <Button type="submit" className="w-full bg-indigo-600">Liberar</Button>
+          </form>
         </DialogContent>
       </Dialog>
 
