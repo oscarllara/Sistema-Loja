@@ -180,7 +180,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     const digits = value.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
     if (isNaN(number)) return "";
-    return new Intl.NumberFormat("pt-BR", {
+    return new Intl.FormatNumber("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(number);
@@ -237,7 +237,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     if (cep.length !== 8) return;
     setIsSearchingCep(true);
     try {
-      const response = await fetch(`https://viacep.br/ws/${cep}/json/`);
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const data = await response.json();
       if (!data.erro) {
         setValue("endereco", formatTitleCase(data.logradouro));
@@ -386,7 +386,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-4">
                 <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões do Usuário</h4>
                 <div className="grid grid-cols-1 gap-3">
-                  {(Object.keys(permissionLabels) as Array<key-of Permissoes>).map((key) => (
+                  {(Object.keys(permissionLabels) as Array<keyof Permissoes>).map((key) => (
                     <div key={key} className="flex items-center space-x-3 bg-white p-2 rounded-lg border border-indigo-50">
                       <Checkbox 
                         id={`perm-${key}`} 
