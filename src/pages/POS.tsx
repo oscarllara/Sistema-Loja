@@ -30,7 +30,8 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
-  FileText
+  FileText,
+  CalendarClock
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,7 @@ import PaymentsModal from '@/components/PaymentsModal';
 
 const POS = () => {
   const navigate = useNavigate();
-  const [mode, setMode] = React.useState<'VENDA' | 'COMPRA'>('VENDA');
+  const [mode, setMode] = React.useState<'VENDA' | 'COMPRA' | 'LOCACAO'>('VENDA');
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
   const [cart, setCart] = React.useState<any[]>([]);
   const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
@@ -108,7 +109,7 @@ const POS = () => {
   const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
   const fornecedores = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
 
-  const entities = mode === 'VENDA' ? clientes : fornecedores;
+  const entities = mode === 'COMPRA' ? fornecedores : clientes;
 
   React.useEffect(() => {
     if (selectedSellerId) {
@@ -121,7 +122,7 @@ const POS = () => {
       setSearchInitialTerm("");
       setIsSearchOpen(true);
     }
-    if (key === 'F3') { if(confirm("Deseja realmente cancelar esta venda e limpar o carrinho?")) setCart([]); }
+    if (key === 'F3') { if(confirm("Deseja realmente cancelar esta operação e limpar o carrinho?")) setCart([]); }
     if (key === 'F10') {
       if (cart.length === 0) {
         showError("Carrinho vazio!");
@@ -447,7 +448,7 @@ const POS = () => {
     showSuccess("Orçamento carregado!");
   };
 
-  const themeColor = mode === 'VENDA' ? 'indigo' : 'emerald';
+  const themeColor = mode === 'VENDA' ? 'indigo' : mode === 'COMPRA' ? 'emerald' : 'amber';
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
@@ -464,7 +465,7 @@ const POS = () => {
           <p className="text-[10px] text-slate-500 font-bold">{config.slogan}</p>
         </div>
 
-        <div className={cn("p-4 text-white space-y-3", mode === 'VENDA' ? "bg-slate-900" : "bg-emerald-900")}>
+        <div className={cn("p-4 text-white space-y-3", mode === 'VENDA' ? "bg-slate-900" : mode === 'COMPRA' ? "bg-emerald-900" : "bg-amber-900")}>
           <div className="space-y-1">
             <label className="text-[8px] font-bold text-slate-500 uppercase">Usuário do Sistema *</label>
             <select 
@@ -472,7 +473,7 @@ const POS = () => {
                 "w-full border-none text-[10px] font-bold h-10 rounded px-2 transition-all duration-300",
                 !selectedSellerId 
                   ? "bg-rose-600 text-white animate-pulse ring-2 ring-rose-400 ring-offset-2 ring-offset-slate-900" 
-                  : (mode === 'VENDA' ? "bg-slate-800 text-white" : "bg-emerald-800 text-white")
+                  : "bg-white/10 text-white"
               )}
               value={selectedSellerId}
               onChange={(e) => setSelectedSellerId(e.target.value ? Number(e.target.value) : "")}
@@ -488,7 +489,12 @@ const POS = () => {
             <div className="space-y-2">
               <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Ações Rápidas</h3>
               <Button 
-                className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg gap-2 shadow-lg shadow-emerald-100 rounded-xl"
+                className={cn(
+                  "w-full h-16 text-white font-black text-lg gap-2 shadow-lg rounded-xl",
+                  mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100" :
+                  mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100" :
+                  "bg-amber-600 hover:bg-amber-700 shadow-amber-100"
+                )}
                 onClick={() => handleShortcut('F10')}
               >
                 <CheckCircle size={24} /> FINALIZAR (F10)
@@ -527,22 +533,55 @@ const POS = () => {
 
       {/* Área Principal */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b", mode === 'VENDA' ? "bg-slate-900 border-slate-800" : "bg-emerald-900 border-emerald-800")}>
+        <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b", 
+          mode === 'VENDA' ? "bg-slate-900 border-slate-800" : 
+          mode === 'COMPRA' ? "bg-emerald-900 border-emerald-800" : 
+          "bg-amber-900 border-amber-800")}>
           <div className="flex items-center gap-8">
+            {/* Seletor de Modo */}
+            <div className="flex bg-white/10 p-1 rounded-lg">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={cn("h-8 px-4 text-[10px] font-bold rounded-md transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
+                onClick={() => setMode('VENDA')}
+              >
+                VENDA
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={cn("h-8 px-4 text-[10px] font-bold rounded-md transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
+                onClick={() => setMode('COMPRA')}
+              >
+                COMPRA
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={cn("h-8 px-4 text-[10px] font-bold rounded-md transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
+                onClick={() => setMode('LOCACAO')}
+              >
+                LOCAÇÃO
+              </Button>
+            </div>
+
+            <div className="h-10 w-px bg-white/10" />
+
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase">Itens no Carrinho</p>
               <p className="text-3xl font-black">{cart.length} Produto(s)</p>
             </div>
             <div className="h-10 w-px bg-white/10" />
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Cliente Selecionado</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
               <div className="flex items-center gap-2">
                 <select 
                   className="bg-transparent border-none text-sm font-bold focus:ring-0 p-0 h-auto min-w-[200px]"
                   value={selectedEntityId}
                   onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}
                 >
-                  <option value="" className="text-slate-900">CONSUMIDOR FINAL</option>
+                  <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
                   {entities.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
                 </select>
                 <Button 
