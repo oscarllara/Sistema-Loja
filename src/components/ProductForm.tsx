@@ -78,38 +78,19 @@ interface ProductFormProps {
 }
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
-  const allProducts = db.produtos.getAll().filter(p => p.cd_produto !== product?.cd_produto);
-
-  const formatCurrency = (value: number | string) => {
-    if (value === undefined || value === null) return "0,00";
-    const val = typeof value === 'number' ? value.toFixed(2).replace('.', '') : value.toString().replace(/\D/g, "");
-    const number = parseInt(val) / 100;
-    if (isNaN(number)) return "0,00";
-    return new Intl.NumberFormat("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(number);
-  };
-
-  const parseCurrencyToNumber = (value: string) => {
-    if (!value) return 0;
-    const cleanValue = value.replace(/\./g, "").replace(",", ".");
-    return parseFloat(cleanValue) || 0;
-  };
-
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
-      compra: formatCurrency(product.compra || 0),
-      venda: formatCurrency(product.venda || 0),
-      venda_vista: formatCurrency(product.venda_vista || 0),
-      venda_fracionada: formatCurrency(product.venda_fracionada || 0),
-      valor_diaria: formatCurrency(product.valor_diaria || 0),
-      valor_semana: formatCurrency(product.valor_semana || 0),
-      valor_quinzena: formatCurrency(product.valor_quinzena || 0),
-      valor_mes: formatCurrency(product.valor_mes || 0),
-      preco_site: formatCurrency(product.preco_site || 0),
+      compra: product.compra ? product.compra.toFixed(2).replace('.', ',') : "0,00",
+      venda: product.venda ? product.venda.toFixed(2).replace('.', ',') : "0,00",
+      venda_vista: product.venda_vista ? product.venda_vista.toFixed(2).replace('.', ',') : "0,00",
+      venda_fracionada: product.venda_fracionada ? product.venda_fracionada.toFixed(2).replace('.', ',') : "0,00",
+      valor_diaria: product.valor_diaria ? product.valor_diaria.toFixed(2).replace('.', ',') : "0,00",
+      valor_semana: product.valor_semana ? product.valor_semana.toFixed(2).replace('.', ',') : "0,00",
+      valor_quinzena: product.valor_quinzena ? product.valor_quinzena.toFixed(2).replace('.', ',') : "0,00",
+      valor_mes: product.valor_mes ? product.valor_mes.toFixed(2).replace('.', ',') : "0,00",
+      preco_site: product.preco_site ? product.preco_site.toFixed(2).replace('.', ',') : "0,00",
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
       estoque: product.estoque.toString(),
       minimo: product.minimo?.toString() || "0",
@@ -123,22 +104,35 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       is_kit: false,
       is_locacao: false,
       disponivel_site: false,
-      itens_kit: [],
+      venda: "0,00",
+      compra: "0,00",
+      estoque: "0",
     }
-  });
-
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "itens_kit"
   });
 
   const vendaStr = watch("venda");
   const descTipo = watch("desconto_vista_tipo");
   const descValorStr = watch("desconto_vista_valor");
-  const isKit = watch("is_kit");
   const isFracionado = watch("fracionado");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
+  const isKit = watch("is_kit");
+
+  const parseCurrencyToNumber = (value: string) => {
+    if (!value) return 0;
+    const cleanValue = value.replace(/\./g, "").replace(",", ".");
+    return parseFloat(cleanValue) || 0;
+  };
+
+  const formatCurrencyInput = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "0,00";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
 
   React.useEffect(() => {
     const venda = parseCurrencyToNumber(vendaStr);
@@ -151,11 +145,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       calculado = venda - descValor;
     }
     
-    setValue("venda_vista", formatCurrency(calculado.toFixed(2).replace('.', '')));
+    setValue("venda_vista", calculado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
   }, [vendaStr, descTipo, descValorStr, setValue]);
 
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
-    const formatted = formatCurrency(e.target.value);
+    const formatted = formatCurrencyInput(e.target.value);
     setValue(fieldName, formatted as any);
   };
 
@@ -166,7 +160,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         cd_produto: product?.cd_produto || Date.now(),
         nome: data.nome.toUpperCase(),
         un: data.un.toUpperCase(),
-        un_fracionada: data.un_fracionada?.toUpperCase(),
         compra: parseCurrencyToNumber(data.compra || ""),
         venda: parseCurrencyToNumber(data.venda),
         venda_vista: parseCurrencyToNumber(data.venda_vista || ""),
@@ -186,21 +179,23 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado!");
       } else {
-        db.produtos.add(payload);
+        const newProd = db.produtos.add(payload);
+        
+        // Se for locação, envia para o patrimônio
         if (payload.is_locacao) {
           db.patrimonio.add({
             descricao: `EQUIPAMENTO: ${payload.nome}`,
             valor: payload.compra || payload.venda,
             tipo: 'Equipamento',
             proprietário: 'Empresa',
-            cd_produto_vinculado: payload.cd_produto
-          } as any);
+            cd_produto_vinculado: newProd.cd_produto
+          });
         }
-        showSuccess("Produto cadastrado!");
+        showSuccess("Produto cadastrado com sucesso!");
       }
       onSuccess();
     } catch (err: any) {
-      showError(err.message);
+      showError("Erro ao salvar: " + err.message);
     }
   };
 
@@ -216,25 +211,31 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <TabsTrigger value="kit">Kit</TabsTrigger>
         </TabsList>
 
-        {/* Container com altura fixa para evitar que o modal mude de tamanho */}
-        <div className="min-h-[380px] mt-4">
+        <div className="min-h-[400px] mt-4">
           <TabsContent value="geral" className="space-y-4 m-0">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2"><Hash size={14} /> Código (ID)</Label>
-                <Input {...register("id_manual")} placeholder="Vazio para automático" className="font-bold text-indigo-600" />
+                <Input {...register("id_manual")} placeholder="Automático" className="font-bold text-indigo-600" />
               </div>
               <div className="md:col-span-2 space-y-2">
-                <Label className="flex items-center gap-2"><Package size={14} /> Nome do Produto *</Label>
-                <Input {...register("nome")} className="uppercase" onChange={(e) => setValue("nome", e.target.value.toUpperCase())} />
+                <Label className="flex items-center gap-2">
+                  <Package size={14} /> Nome do Produto <span className="text-rose-500">*</span>
+                </Label>
+                <Input 
+                  {...register("nome")} 
+                  className={cn("uppercase", errors.nome && "border-rose-500")} 
+                  placeholder="EX: CIMENTO VOTORAN 50KG"
+                />
+                {errors.nome && <p className="text-[10px] text-rose-500 font-bold">{errors.nome.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Código de Barras</Label>
-                <Input {...register("cod_barras")} />
+                <Input {...register("cod_barras")} placeholder="Bipe o código aqui..." />
               </div>
               <div className="space-y-2">
                 <Label>NCM</Label>
-                <Input {...register("ncm")} />
+                <Input {...register("ncm")} placeholder="0000.00.00" />
               </div>
             </div>
           </TabsContent>
@@ -243,11 +244,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Unidade Principal</Label>
-                <Input {...register("un")} placeholder="Ex: UN" className="uppercase" />
+                <Input {...register("un")} placeholder="Ex: UN, PC, KG, MT" className="uppercase" />
               </div>
               <div className="space-y-2">
                 <Label>Estoque Atual</Label>
-                <Input type="number" step="0.001" {...register("estoque")} />
+                <Input type="number" step="0.001" {...register("estoque")} className="font-bold" />
               </div>
               <div className="space-y-2">
                 <Label>Estoque Mínimo</Label>
@@ -255,8 +256,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </div>
             </div>
             <div className="flex items-center space-x-2 p-4 bg-slate-50 rounded-lg border">
-              <Checkbox id="fracionado" onCheckedChange={(checked) => setValue("fracionado", checked as boolean)} defaultChecked={product?.fracionado} />
-              <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável</Label>
+              <Checkbox 
+                id="fracionado" 
+                checked={isFracionado}
+                onCheckedChange={(checked) => setValue("fracionado", !!checked)} 
+              />
+              <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável (Ex: Areia, Brita, Fio)</Label>
             </div>
           </TabsContent>
 
@@ -265,12 +270,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
                 <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
                 <div className="space-y-2">
-                  <Label>Valor de Venda ({watch("un")})</Label>
-                  <Input {...register("venda")} onChange={(e) => handleCurrencyChange(e, "venda")} className="text-lg font-bold" />
+                  <Label>Valor de Venda (A Prazo) <span className="text-rose-500">*</span></Label>
+                  <Input 
+                    {...register("venda")} 
+                    onChange={(e) => handleCurrencyChange(e, "venda")} 
+                    className={cn("text-lg font-black", errors.venda && "border-rose-500")} 
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Preço de Custo</Label>
+                  <Label>Preço de Custo (Valor do Bem)</Label>
                   <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} />
+                  <p className="text-[9px] text-slate-500">Usado para cálculo de lucro e valor no patrimônio.</p>
                 </div>
               </div>
               <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
@@ -278,11 +288,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Desconto (%)</Label>
-                    <Input {...register("desconto_vista_valor")} />
+                    <Input {...register("desconto_vista_valor")} className="font-bold" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Preço Final</Label>
-                    <Input {...register("venda_vista")} readOnly className="bg-white font-bold text-emerald-700" />
+                    <Label>Preço Final À Vista</Label>
+                    <Input {...register("venda_vista")} readOnly className="bg-white font-black text-emerald-700" />
                   </div>
                 </div>
               </div>
@@ -292,27 +302,36 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <TabsContent value="locacao" className="space-y-4 m-0">
             <div className={cn("p-4 rounded-xl border transition-all", isLocacao ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200")}>
               <div className="flex items-center space-x-2 mb-6">
-                <Checkbox id="is_locacao" onCheckedChange={(checked) => setValue("is_locacao", checked as boolean)} defaultChecked={product?.is_locacao} />
-                <Label htmlFor="is_locacao" className="font-bold text-lg cursor-pointer">Disponível para Locação (Aluguel)</Label>
+                <Checkbox 
+                  id="is_locacao" 
+                  checked={isLocacao}
+                  onCheckedChange={(checked) => setValue("is_locacao", !!checked)} 
+                />
+                <Label htmlFor="is_locacao" className="font-black text-lg cursor-pointer text-indigo-900">Disponível para Locação (Aluguel)</Label>
               </div>
 
               {isLocacao && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="space-y-2">
-                    <Label>Valor Diária</Label>
-                    <Input {...register("valor_diaria")} onChange={(e) => handleCurrencyChange(e, "valor_diaria")} className="font-bold" />
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase">Valor Diária</Label>
+                      <Input {...register("valor_diaria")} onChange={(e) => handleCurrencyChange(e, "valor_diaria")} className="font-bold" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase">Valor Semana</Label>
+                      <Input {...register("valor_semana")} onChange={(e) => handleCurrencyChange(e, "valor_semana")} className="font-bold" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase">Valor Quinzena</Label>
+                      <Input {...register("valor_quinzena")} onChange={(e) => handleCurrencyChange(e, "valor_quinzena")} className="font-bold" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-bold uppercase">Valor Mês</Label>
+                      <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Valor Semana</Label>
-                    <Input {...register("valor_semana")} onChange={(e) => handleCurrencyChange(e, "valor_semana")} className="font-bold" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor Quinzena</Label>
-                    <Input {...register("valor_quinzena")} onChange={(e) => handleCurrencyChange(e, "valor_quinzena")} className="font-bold" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor Mês</Label>
-                    <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
+                  <div className="p-3 bg-white/50 rounded-lg border border-indigo-100 text-[10px] text-indigo-700 font-medium">
+                    * Ao salvar, este item será adicionado automaticamente ao seu Patrimônio como Equipamento.
                   </div>
                 </div>
               )}
@@ -322,8 +341,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <TabsContent value="site" className="space-y-4 m-0">
             <div className={cn("p-4 rounded-xl border transition-all", disponivelSite ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200")}>
               <div className="flex items-center space-x-2 mb-6">
-                <Checkbox id="disponivel_site" onCheckedChange={(checked) => setValue("disponivel_site", checked as boolean)} defaultChecked={product?.disponivel_site} />
-                <Label htmlFor="disponivel_site" className="font-bold text-lg cursor-pointer">Exibir no Site (construlara.com.br)</Label>
+                <Checkbox 
+                  id="disponivel_site" 
+                  checked={disponivelSite}
+                  onCheckedChange={(checked) => setValue("disponivel_site", !!checked)} 
+                />
+                <Label htmlFor="disponivel_site" className="font-black text-lg cursor-pointer text-blue-900">Exibir no Site (construlara.com.br)</Label>
               </div>
 
               {disponivelSite && (
@@ -340,7 +363,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Descrição para o Site</Label>
-                    <Textarea {...register("descricao_site")} placeholder="Destaque as principais características..." className="min-h-[100px]" />
+                    <Textarea {...register("descricao_site")} placeholder="Destaque as principais características para o cliente online..." className="min-h-[100px]" />
                   </div>
                 </div>
               )}
@@ -348,10 +371,20 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
 
           <TabsContent value="kit" className="m-0">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="flex items-center space-x-2 mb-4">
-                <Checkbox id="is_kit" onCheckedChange={(checked) => setValue("is_kit", checked as boolean)} defaultChecked={product?.is_kit} />
-                <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
+            <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                <Boxes className="text-slate-400" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-center space-x-2">
+                  <Checkbox 
+                    id="is_kit" 
+                    checked={isKit}
+                    onCheckedChange={(checked) => setValue("is_kit", !!checked)} 
+                  />
+                  <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
+                </div>
+                <p className="text-xs text-slate-500 max-w-xs">Kits permitem vender vários produtos juntos com um único código, baixando o estoque de cada item individualmente.</p>
               </div>
             </div>
           </TabsContent>
@@ -359,8 +392,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       </Tabs>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8 h-11 rounded-xl shadow-lg shadow-indigo-100">
-          Salvar Produto
+        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-10 h-12 rounded-xl font-black shadow-lg shadow-indigo-100">
+          SALVAR PRODUTO
         </Button>
       </div>
     </form>
