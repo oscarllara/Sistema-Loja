@@ -160,7 +160,7 @@ const POS = () => {
 
   const parseCurrency = (value: string) => {
     if (!value) return 0;
-    const cleanValue = value.replace(/\./g, "").replace(",", ".");
+    const cleanValue = value.replace(/[^\d,]/g, "").replace(",", ".");
     return parseFloat(cleanValue) || 0;
   };
 
@@ -208,7 +208,7 @@ const POS = () => {
     if (selectedSellerId) {
       setTimeout(() => codeRef.current?.focus(), 100);
     }
-  }, [selectedSellerId, mode]); // Foca ao trocar de modo também
+  }, [selectedSellerId, mode]);
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') {
@@ -781,7 +781,7 @@ const POS = () => {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item?.finalPrice?.toFixed(2).replace('.', ',')}</TableCell>
+                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
                   <TableCell className="py-0 text-xs text-center border-r border-slate-200">
                     {Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </TableCell>
@@ -794,7 +794,7 @@ const POS = () => {
                   >
                     {item?.selectedUnit}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2).replace('.', ',')}</TableCell>
+                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
                   <TableCell className="py-0 text-center">
                     <Button 
                       variant="ghost" 
@@ -909,9 +909,9 @@ const POS = () => {
               <label className="text-[9px] font-bold text-slate-400 uppercase">Valor Unitário</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
                 {pendingProduct ? (
-                  mode === 'LOCACAO' 
-                    ? calculateRentalPrice(getDays(), pendingProduct).toFixed(2).replace('.', ',')
-                    : getProductPrice(pendingProduct, inputUnit, priceMode).toFixed(2).replace('.', ',')
+                  formatCurrency(mode === 'LOCACAO' 
+                    ? calculateRentalPrice(getDays(), pendingProduct)
+                    : getProductPrice(pendingProduct, inputUnit, priceMode))
                 ) : "0,00"}
               </div>
             </div>
@@ -919,10 +919,10 @@ const POS = () => {
               <label className="text-[9px] font-bold text-slate-400 uppercase">Sub Total</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
                 {pendingProduct ? (
-                  ((mode === 'LOCACAO' 
+                  formatCurrency((mode === 'LOCACAO' 
                     ? calculateRentalPrice(getDays(), pendingProduct)
-                    : getProductPrice(pendingProduct, inputUnit, priceMode)) * (parseFloat(inputQty.replace(',', '.')) || 1)).toFixed(2).replace('.', ',')
-                ).toFixed(2).replace('.', ',') : "0,00"}
+                    : getProductPrice(pendingProduct, inputUnit, priceMode)) * (parseFloat(inputQty.replace(',', '.')) || 1))
+                ) : "0,00"}
               </div>
             </div>
           </form>
@@ -959,7 +959,7 @@ const POS = () => {
               <div className="p-3 bg-slate-50 rounded-lg border mb-4">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Produto</p>
                 <p className="text-sm font-bold text-slate-900">{cart[editingIndex]?.nome}</p>
-                <p className="text-[10px] text-indigo-600 font-bold">Custo Base: R$ {(cart[editingIndex]?.costPrice || 0).toFixed(2).replace('.', ',')}</p>
+                <p className="text-[10px] text-indigo-600 font-bold">Custo Base: R$ {formatCurrency(cart[editingIndex]?.costPrice || 0)}</p>
               </div>
             )}
             
