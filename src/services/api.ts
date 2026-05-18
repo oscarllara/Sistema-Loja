@@ -25,7 +25,8 @@ const getDB = () => {
       purchases: true,
       financial: true,
       reports: true,
-      settings: true
+      settings: true,
+      rentals: true
     }
   };
 
@@ -42,8 +43,8 @@ const getDB = () => {
     margem_topo: 5,
     margem_rodape: 5,
     juros_parcelamento: 0,
-    juros_atraso: 0.033, // 1% ao mês aprox.
-    multa_atraso: 2.00    // 2% de multa padrão
+    juros_atraso: 0.033,
+    multa_atraso: 2.00
   };
 
   if (!data) {
@@ -169,18 +170,6 @@ export const db = {
               database.produtos[pIdx].venda = item.valor_venda;
               database.produtos[pIdx].data_atualizacao = new Date().toISOString();
             }
-            if (item.codigo_fornecedor) {
-              const mIdx = database.mappings.findIndex((m: any) => 
-                m.cd_fornecedor === compra.cd_fornecedores && m.codigo_externo === item.codigo_fornecedor
-              );
-              if (mIdx === -1) {
-                database.mappings.push({
-                  cd_fornecedor: compra.cd_fornecedores,
-                  codigo_externo: item.codigo_fornecedor,
-                  cd_produto_interno: item.cd_produto
-                });
-              }
-            }
           }
         });
 
@@ -256,18 +245,50 @@ export const db = {
       }
       saveDB(database);
     },
-    baixar: (id: number, cd_conta: number) => {
+    baixar: (id: number, cd_conta: number, valorRecebido?: number, meio?: any) => {
       const database = getDB();
       const index = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
       const cIdx = database.contas.findIndex((c: any) => c.cd_conta === cd_conta);
+      
       if (index !== -1 && cIdx !== -1) {
         const lanc = database.financeiro[index];
         if (lanc.status === 'Pago') return;
-        lanc.status = 'Pago';
-        lanc.cd_conta = cd_conta;
-        lanc.data_pagamento = new Date().toISOString();
-        if (lanc.tipo === 'R') database.contas[cIdx].saldo += lanc.valor;
-        else database.contas[cIdx].saldo -= lanc.valor;
+
+        const valorFinal = valorRecebido || lanc.valor;
+        const isParcial = valorFinal < lanc.valor;
+
+        if (isParcial) {
+          // Cria um novo registro de pagamento (PAGO)
+          database.financeiro.push({
+            cd_lancamento: Date.now(),
+            tipo: lanc.tipo,
+            descricao: `PAGTO PARCIAL: ${lanc.descricao}`,
+            valor: valorFinal,
+            data_vencimento: lanc.data_vencimento,
+            data_pagamento: new Date().toISOString(),
+            status: 'Pago',
+            categoria: lanc.categoria,
+            meio_pagamento: meio || 'Dinheiro',
+            cd_entidade: lanc.cd_entidade,
+            nome_entidade: lanc.nome_entidade,
+            cd_conta: cd_conta,
+            cd_venda: lanc.cd_venda
+          });
+
+          // Abate o valor da dívida original
+          lanc.valor -= valorFinal;
+        } else {
+          // Baixa total
+          lanc.status = 'Pago';
+          lanc.cd_conta = cd_conta;
+          lanc.meio_pagamento = meio || lanc.meio_pagamento || 'Dinheiro';
+          lanc.data_pagamento = new Date().toISOString();
+        }
+
+        // Atualiza saldo da conta
+        if (lanc.tipo === 'R') database.contas[cIdx].saldo += valorFinal;
+        else database.contas[cIdx].saldo -= valorFinal;
+        
         saveDB(database);
       }
     },
