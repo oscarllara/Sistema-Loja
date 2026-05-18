@@ -126,7 +126,7 @@ const POS = () => {
     return Math.max(1, diffDays);
   }, [rentalStart, rentalEnd]);
 
-  // Função de cálculo de locação por períodos
+  // Função de cálculo de locação por períodos estritos
   const calculateRentalPrice = React.useCallback((days: number, p: any) => {
     if (!p) return 0;
     if (days <= 0) return 0;
@@ -134,11 +134,11 @@ const POS = () => {
     if (days >= 1 && days <= 3) {
       return p.valor_diaria || p.venda || 0;
     } else if (days >= 4 && days <= 10) {
-      return p.valor_semana || (p.valor_diaria || p.venda || 0) * 7;
+      return p.valor_semana || p.valor_diaria || p.venda || 0;
     } else if (days >= 11 && days <= 18) {
-      return p.valor_quinzena || (p.valor_diaria || p.venda || 0) * 15;
+      return p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
     } else {
-      return p.valor_mes || (p.valor_diaria || p.venda || 0) * 30;
+      return p.valor_mes || p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
     }
   }, []);
 
@@ -857,26 +857,9 @@ const POS = () => {
 
             <div className="w-32 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Unidade</label>
-              <select 
-                ref={unitRef}
-                className="w-full h-10 bg-[#E1FFFF] rounded border-none font-black text-slate-900 text-center text-sm"
-                value={inputUnit}
-                onChange={(e) => setInputUnit(e.target.value)}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Tab') && commitToCart()}
-              >
-                {pendingProduct ? (
-                  mode === 'LOCACAO' ? (
-                    <option value={inputUnit}>{inputUnit}</option>
-                  ) : (
-                    <>
-                      <option value={pendingProduct.un}>{pendingProduct.un}</option>
-                      {pendingProduct.fracionado && pendingProduct.un_fracionada && (
-                        <option value={pendingProduct.un_fracionada}>{pendingProduct.un_fracionada}</option>
-                      )}
-                    </>
-                  )
-                ) : <option value="UN">UN</option>}
-              </select>
+              <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-center font-black text-slate-900 text-xs uppercase">
+                {mode === 'LOCACAO' ? getRentalUnit(getDays()) : (pendingProduct?.un || "UN")}
+              </div>
             </div>
             <div className="w-40 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Valor Unitário</label>
