@@ -21,7 +21,8 @@ import {
   ChevronRight,
   LogOut,
   History,
-  CalendarClock
+  CalendarClock,
+  Database
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       items: [
         { icon: BarChart3, label: 'Relatórios', path: '/reports', perm: 'reports' },
         { icon: Settings, label: 'Configurações', path: '/settings', perm: 'settings' },
+        { icon: Database, label: 'Importar Dados', path: '/import', perm: 'settings' },
       ]
     }
   ];

@@ -14,6 +14,7 @@ import Purchases from "./pages/Purchases";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Rentals from "./pages/Rentals";
+import ImportData from "./pages/ImportData";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,7 @@ const App = () => (
           <Route path="/purchases" element={<ProtectedRoute permission="purchases"><Purchases /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute permission="reports"><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute permission="settings"><Settings /></ProtectedRoute>} />
+          <Route path="/import" element={<ProtectedRoute permission="settings"><ImportData /></ProtectedRoute>} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
