@@ -158,9 +158,10 @@ const POS = () => {
     }
   }, [rentalStart, rentalEnd, mode, pendingProduct, getDays, getRentalUnit]);
 
+  // Foco automático ao selecionar vendedor
   React.useEffect(() => {
     if (selectedSellerId) {
-      codeRef.current?.focus();
+      setTimeout(() => codeRef.current?.focus(), 100);
     }
   }, [selectedSellerId]);
 
@@ -239,17 +240,16 @@ const POS = () => {
       return;
     }
     setPendingProduct(product);
+    setInputCode(product.nome); // Coloca o nome no input
     
     if (mode === 'LOCACAO') {
       const days = getDays();
       setInputUnit(getRentalUnit(days));
       setInputQty(days.toString());
-      setInputCode(product.nome);
       setTimeout(() => rentalStartRef.current?.focus(), 50);
     } else {
       setInputUnit(product.un);
       setInputQty("1");
-      setInputCode(product.nome); 
       setTimeout(() => qtyRef.current?.focus(), 50);
     }
   };
@@ -347,6 +347,12 @@ const POS = () => {
     if (!val) {
       setPendingProduct(null);
       return;
+    }
+
+    // Se digitar texto (nome), abre a pesquisa automática após 2 caracteres
+    if (val.length > 2 && !/^\d+$/.test(val) && !pendingProduct) {
+      setSearchInitialTerm(val);
+      setIsSearchOpen(true);
     }
 
     if (pendingProduct && val !== pendingProduct.nome) {
@@ -774,7 +780,7 @@ const POS = () => {
                 value={inputCode}
                 onChange={handleCodeChange}
                 onKeyDown={(e) => {
-                  if (e.key === 'Tab') {
+                  if (e.key === 'Tab' || e.key === 'Enter') {
                     e.preventDefault();
                     handleCodeSubmit(e);
                   }
@@ -797,7 +803,7 @@ const POS = () => {
                     value={rentalStart}
                     onChange={(e) => setRentalStart(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'Enter' || e.key === 'Tab') {
                         e.preventDefault();
                         rentalEndRef.current?.focus();
                       }
@@ -813,7 +819,7 @@ const POS = () => {
                     value={rentalEnd}
                     onChange={(e) => setRentalEnd(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'Enter' || e.key === 'Tab') {
                         e.preventDefault();
                         commitToCart();
                       }
@@ -836,7 +842,7 @@ const POS = () => {
                   value={inputQty}
                   onChange={(e) => setInputQty(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && pendingProduct) {
+                    if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) {
                       if (pendingProduct.fracionado) {
                         unitRef.current?.focus();
                       } else {
@@ -856,7 +862,7 @@ const POS = () => {
                 className="w-full h-10 bg-[#E1FFFF] rounded border-none font-black text-slate-900 text-center text-sm"
                 value={inputUnit}
                 onChange={(e) => setInputUnit(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && commitToCart()}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Tab') && commitToCart()}
               >
                 {pendingProduct ? (
                   mode === 'LOCACAO' ? (
