@@ -113,9 +113,6 @@ const POS = () => {
   // Refs para foco
   const codeRef = React.useRef<HTMLInputElement>(null);
   const qtyRef = React.useRef<HTMLInputElement>(null);
-  const unitRef = React.useRef<HTMLSelectElement>(null);
-  const rentalStartRef = React.useRef<HTMLInputElement>(null);
-  const rentalEndRef = React.useRef<HTMLInputElement>(null);
 
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchInitialTerm, setSearchInitialTerm] = React.useState("");
@@ -360,6 +357,13 @@ const POS = () => {
     showSuccess(`Modo de preço alterado para: ${newMode}`);
   };
 
+  const togglePendingUnit = () => {
+    if (!pendingProduct || !pendingProduct.fracionado || !pendingProduct.un_fracionada) return;
+    const newUnit = inputUnit === pendingProduct.un ? pendingProduct.un_fracionada : pendingProduct.un;
+    setInputUnit(newUnit);
+    showSuccess(`Unidade alterada para ${newUnit}`);
+  };
+
   const toggleItemUnit = (index: number) => {
     setCart(prev => {
       const newCart = [...prev];
@@ -579,6 +583,9 @@ const POS = () => {
   };
 
   const themeColor = mode === 'VENDA' ? 'indigo' : mode === 'COMPRA' ? 'emerald' : 'amber';
+
+  const rentalStartRef = React.useRef<HTMLInputElement>(null);
+  const rentalEndRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
@@ -887,11 +894,7 @@ const POS = () => {
                   onChange={(e) => setInputQty(e.target.value)}
                   onKeyDown={(e) => {
                     if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) {
-                      if (pendingProduct.fracionado) {
-                        unitRef.current?.focus();
-                      } else {
-                        commitToCart();
-                      }
+                      commitToCart();
                     }
                   }}
                   className="h-10 bg-[#E1FFFF] border-none text-lg font-black text-slate-900 text-center"
@@ -901,9 +904,16 @@ const POS = () => {
 
             <div className="w-32 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Unidade</label>
-              <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-center font-black text-slate-900 text-xs uppercase">
-                {mode === 'LOCACAO' ? getRentalUnit(getDays()) : (pendingProduct?.un || "UN")}
-              </div>
+              <button 
+                type="button"
+                onClick={togglePendingUnit}
+                className={cn(
+                  "w-full h-10 rounded flex items-center justify-center font-black text-xs uppercase transition-colors",
+                  pendingProduct?.fracionado ? "bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" : "bg-[#E1FFFF] text-slate-900 cursor-default"
+                )}
+              >
+                {mode === 'LOCACAO' ? getRentalUnit(getDays()) : (inputUnit || "UN")}
+              </button>
             </div>
             <div className="w-40 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Valor Unitário</label>
