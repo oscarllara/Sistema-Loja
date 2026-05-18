@@ -21,7 +21,8 @@ import {
   Search,
   Calendar,
   FileText,
-  ArrowRightLeft
+  Briefcase,
+  Layers
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,8 +60,12 @@ const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
+  const [activeTab, setActiveTab] = React.useState("receivable");
+  
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isTransferOpen, setIsTransferOpen] = React.useState(false);
+  const [isPatrimonyOpen, setIsPatrimonyOpen] = React.useState(false);
+  
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
   
@@ -106,12 +111,33 @@ const Financial = () => {
     });
   };
 
+  const filteredPatrimony = patrimonio.filter(p => 
+    p.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.tipo.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const calculateTotals = (data: LancamentoFinanceiro[]) => {
     const total = data.reduce((acc, l) => acc + l.valor, 0);
     const pagos = data.filter(l => l.status === 'Pago').reduce((acc, l) => acc + l.valor, 0);
     const pendentes = data.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + l.valor, 0);
     return { total, pagos, pendentes };
   };
+
+  // Cálculos de Patrimônio
+  const patrimonyStats = React.useMemo(() => {
+    const stats = {
+      Imóvel: 0,
+      Veículo: 0,
+      Equipamento: 0,
+      Outros: 0,
+      Total: 0
+    };
+    patrimonio.forEach(p => {
+      stats[p.tipo] += p.valor;
+      stats.Total += p.valor;
+    });
+    return stats;
+  }, [patrimonio]);
 
   return (
     <Layout>
@@ -122,46 +148,66 @@ const Financial = () => {
             <p className="text-slate-500">Controle global de Contas a Receber e Contas a Pagar.</p>
           </div>
           <div className="flex gap-2">
-            <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl gap-2">
-                  <ArrowRightLeft size={20} /> Transferir
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader><DialogTitle>Transferência entre Contas</DialogTitle></DialogHeader>
-                <TransferForm onSuccess={() => { setIsTransferOpen(false); loadData(); }} />
-              </DialogContent>
-            </Dialog>
+            {activeTab === 'patrimony' ? (
+              <Dialog open={isPatrimonyOpen} onOpenChange={setIsPatrimonyOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-amber-600 hover:bg-amber-700 rounded-xl gap-2 shadow-lg shadow-amber-100">
+                    <Plus size={20} /> Novo Patrimônio
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader><DialogTitle>Cadastrar Bem / Patrimônio</DialogTitle></DialogHeader>
+                  <PatrimonyForm onSuccess={() => { setIsPatrimonyOpen(false); loadData(); }} />
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <>
+                <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl gap-2">
+                      <ArrowRightLeft size={20} /> Transferir
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader><DialogTitle>Transferência entre Contas</DialogTitle></DialogHeader>
+                    <TransferForm onSuccess={() => { setIsTransferOpen(false); loadData(); }} />
+                  </DialogContent>
+                </Dialog>
 
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
-                  <Plus size={20} /> Novo Lançamento
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader><DialogTitle>Novo Lançamento Financeiro</DialogTitle></DialogHeader>
-                <FinancialForm onSuccess={() => { setIsModalOpen(false); loadData(); }} />
-              </DialogContent>
-            </Dialog>
+                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
+                      <Plus size={20} /> Novo Lançamento
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader><DialogTitle>Novo Lançamento Financeiro</DialogTitle></DialogHeader>
+                    <FinancialForm onSuccess={() => { setIsModalOpen(false); loadData(); }} />
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
           </div>
         </div>
 
         {/* Filtros Globais */}
         <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase text-slate-500">Início</Label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 w-40" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase text-slate-500">Fim</Label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-40" />
-          </div>
+          {activeTab !== 'patrimony' && activeTab !== 'accounts' && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-slate-500">Início</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 w-40" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-slate-500">Fim</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-40" />
+              </div>
+            </>
+          )}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <Input 
-              placeholder="Buscar por descrição ou cliente/fornecedor..." 
+              placeholder={activeTab === 'patrimony' ? "Buscar no patrimônio..." : "Buscar por descrição ou cliente/fornecedor..."}
               className="pl-10 h-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -169,7 +215,7 @@ const Financial = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="receivable" className="w-full">
+        <Tabs defaultValue="receivable" onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-white border border-slate-200 p-1 h-auto flex-wrap justify-start gap-1 rounded-xl mb-6">
             <TabsTrigger value="receivable" className="rounded-lg gap-2"><ArrowUpCircle size={16} /> Contas a Receber</TabsTrigger>
             <TabsTrigger value="payable" className="rounded-lg gap-2"><ArrowDownCircle size={16} /> Contas a Pagar</TabsTrigger>
@@ -218,24 +264,59 @@ const Financial = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="patrimony">
+          <TabsContent value="patrimony" className="space-y-6">
+            {/* Resumo de Patrimônio por Categoria */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <PatrimonyStatCard title="Imóveis" value={patrimonyStats.Imóvel} icon={Home} color="text-blue-600" />
+              <PatrimonyStatCard title="Veículos" value={patrimonyStats.Veículo} icon={Car} color="text-amber-600" />
+              <PatrimonyStatCard title="Equipamentos" value={patrimonyStats.Equipamento} icon={Briefcase} color="text-emerald-600" />
+              <PatrimonyStatCard title="Outros" value={patrimonyStats.Outros} icon={Layers} color="text-slate-600" />
+              <Card className="bg-slate-900 text-white border-none shadow-lg">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Total Patrimonial</p>
+                  <p className="text-lg font-black">R$ {patrimonyStats.Total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-3">
-              {patrimonio.map((item) => (
-                <Card key={item.cd_patrimonio} className="border-none shadow-sm">
+              {filteredPatrimony.map((item) => (
+                <Card key={item.cd_patrimonio} className="border-none shadow-sm hover:shadow-md transition-all">
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-amber-50 rounded-lg">
-                        {item.tipo === 'Veículo' ? <Car className="text-amber-600" size={20} /> : <Building className="text-amber-600" size={20} />}
+                      <div className={cn(
+                        "p-2 rounded-lg",
+                        item.tipo === 'Imóvel' ? "bg-blue-50 text-blue-600" :
+                        item.tipo === 'Veículo' ? "bg-amber-50 text-amber-600" :
+                        item.tipo === 'Equipamento' ? "bg-emerald-50 text-emerald-600" :
+                        "bg-slate-50 text-slate-600"
+                      )}>
+                        {item.tipo === 'Veículo' ? <Car size={20} /> : 
+                         item.tipo === 'Imóvel' ? <Home size={20} /> : 
+                         item.tipo === 'Equipamento' ? <Briefcase size={20} /> : 
+                         <Layers size={20} />}
                       </div>
-                      <Badge className="bg-amber-100 text-amber-700 border-none">{item.proprietário}</Badge>
+                      <Badge className="bg-slate-100 text-slate-600 border-none text-[10px]">{item.proprietário}</Badge>
                     </div>
-                    <h3 className="font-bold text-slate-900">{item.descricao}</h3>
-                    <p className="text-xl font-bold text-slate-700 mt-2">
-                      R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
+                    <h3 className="font-bold text-slate-900 uppercase text-sm">{item.descricao}</h3>
+                    <div className="mt-4 flex items-end justify-between">
+                      <div>
+                        <p className="text-[9px] text-slate-400 uppercase font-bold">Valor Estimado</p>
+                        <p className="text-xl font-black text-slate-900">
+                          R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-[9px] font-bold">{item.tipo.toUpperCase()}</Badge>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
+              {filteredPatrimony.length === 0 && (
+                <div className="col-span-full py-20 text-center text-slate-400">
+                  <Home size={48} className="mx-auto mb-2 opacity-10" />
+                  <p>Nenhum bem encontrado.</p>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -274,6 +355,18 @@ const Financial = () => {
     </Layout>
   );
 };
+
+const PatrimonyStatCard = ({ title, value, icon: Icon, color }: any) => (
+  <Card className="border-none shadow-sm bg-white">
+    <CardContent className="p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon size={14} className={color} />
+        <p className="text-[9px] font-bold uppercase text-slate-500">{title}</p>
+      </div>
+      <p className="text-sm font-black text-slate-900">R$ {value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+    </CardContent>
+  </Card>
+);
 
 const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
