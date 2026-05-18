@@ -396,7 +396,7 @@ const Financial = () => {
             </DialogHeader>
             {selectedClientForDetails && <ClientDetails client={selectedClientForDetails} />}
           </DialogContent>
-        </Dialog>
+        </div>
       </div>
     </Layout>
   );
@@ -433,7 +433,8 @@ const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) =>
         <p className="text-[10px] font-bold uppercase text-rose-600">Valores a {type === 'R' ? 'Receber' : 'Pagar'}</p>
         <p className="text-xl font-black text-rose-700">R$ {totals.pendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
-    </div>
+    </Card>
+  </div>
 );
 
 const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }: any) => (
