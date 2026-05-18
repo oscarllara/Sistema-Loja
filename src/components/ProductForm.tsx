@@ -94,7 +94,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       valor_mes: product.valor_mes ? product.valor_mes.toFixed(2).replace('.', ',') : "0,00",
       preco_site: product.preco_site ? product.preco_site.toFixed(2).replace('.', ',') : "0,00",
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
-      estoque: product.estoque.toString(),
+      estoque: product.estoque?.toString() || "0",
       minimo: product.minimo?.toString() || "0",
       fator_conversao: product.fator_conversao?.toString() || "",
     } : {
