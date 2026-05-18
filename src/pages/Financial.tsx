@@ -64,6 +64,7 @@ const Financial = () => {
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
   const [activeTab, setActiveTab] = React.useState("receivable");
+  const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
   
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isTransferOpen, setIsTransferOpen] = React.useState(false);
@@ -141,10 +142,12 @@ const Financial = () => {
     });
   };
 
-  const filteredPatrimony = patrimonio.filter(p => 
-    p.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.tipo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPatrimony = patrimonio.filter(p => {
+    const matchesSearch = p.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         p.tipo.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = patrimonyFilter ? p.tipo === patrimonyFilter : true;
+    return matchesSearch && matchesCategory;
+  });
 
   const calculateTotals = (data: LancamentoFinanceiro[]) => {
     const total = data.reduce((acc, l) => acc + l.valor, 0);
@@ -290,11 +293,45 @@ const Financial = () => {
 
           <TabsContent value="patrimony" className="space-y-6">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <PatrimonyStatCard title="Imóveis" value={patrimonyStats.Imóvel} icon={Home} color="text-blue-600" />
-              <PatrimonyStatCard title="Veículos" value={patrimonyStats.Veículo} icon={Car} color="text-amber-600" />
-              <PatrimonyStatCard title="Equipamentos" value={patrimonyStats.Equipamento} icon={Briefcase} color="text-emerald-600" />
-              <PatrimonyStatCard title="Outros" value={patrimonyStats.Outros} icon={Layers} color="text-slate-600" />
-              <Card className="bg-slate-900 text-white border-none shadow-lg">
+              <PatrimonyStatCard 
+                title="Imóveis" 
+                value={patrimonyStats.Imóvel} 
+                icon={Home} 
+                color="text-blue-600" 
+                isActive={patrimonyFilter === 'Imóvel'}
+                onClick={() => setPatrimonyFilter(patrimonyFilter === 'Imóvel' ? null : 'Imóvel')}
+              />
+              <PatrimonyStatCard 
+                title="Veículos" 
+                value={patrimonyStats.Veículo} 
+                icon={Car} 
+                color="text-amber-600" 
+                isActive={patrimonyFilter === 'Veículo'}
+                onClick={() => setPatrimonyFilter(patrimonyFilter === 'Veículo' ? null : 'Veículo')}
+              />
+              <PatrimonyStatCard 
+                title="Equipamentos" 
+                value={patrimonyStats.Equipamento} 
+                icon={Briefcase} 
+                color="text-emerald-600" 
+                isActive={patrimonyFilter === 'Equipamento'}
+                onClick={() => setPatrimonyFilter(patrimonyFilter === 'Equipamento' ? null : 'Equipamento')}
+              />
+              <PatrimonyStatCard 
+                title="Outros" 
+                value={patrimonyStats.Outros} 
+                icon={Layers} 
+                color="text-slate-600" 
+                isActive={patrimonyFilter === 'Outros'}
+                onClick={() => setPatrimonyFilter(patrimonyFilter === 'Outros' ? null : 'Outros')}
+              />
+              <Card 
+                className={cn(
+                  "bg-slate-900 text-white border-none shadow-lg cursor-pointer transition-all",
+                  !patrimonyFilter && "ring-4 ring-indigo-500 ring-offset-2"
+                )}
+                onClick={() => setPatrimonyFilter(null)}
+              >
                 <CardContent className="p-4">
                   <p className="text-[10px] font-bold uppercase text-slate-400">Total Patrimonial</p>
                   <p className="text-lg font-black">R$ {patrimonyStats.Total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -334,6 +371,11 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
+              {filteredPatrimony.length === 0 && (
+                <div className="col-span-full py-20 text-center text-slate-400">
+                  Nenhum bem encontrado nesta categoria.
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -403,8 +445,14 @@ const Financial = () => {
   );
 };
 
-const PatrimonyStatCard = ({ title, value, icon: Icon, color }: any) => (
-  <Card className="border-none shadow-sm bg-white">
+const PatrimonyStatCard = ({ title, value, icon: Icon, color, isActive, onClick }: any) => (
+  <Card 
+    className={cn(
+      "border-none shadow-sm bg-white cursor-pointer transition-all hover:shadow-md",
+      isActive && "ring-4 ring-indigo-500 ring-offset-2"
+    )}
+    onClick={onClick}
+  >
     <CardContent className="p-4">
       <div className="flex items-center gap-2 mb-1">
         <Icon size={14} className={color} />

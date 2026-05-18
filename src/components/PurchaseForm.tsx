@@ -115,23 +115,32 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   };
 
   const handleProductSelect = (product: any) => {
-    const newItem = { 
-      cd_produto: product.cd_produto, 
-      qtde: 1, 
-      valor_unit: product.compra || 0, 
-      margem: product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0,
-      valor_venda: product.venda || 0,
-      subtotal: product.compra || 0,
-      un: product.un
-    };
-
     if (activeItemIndex !== null) {
       const newItems = [...items];
-      newItems[activeItemIndex] = newItem;
+      const originalItem = newItems[activeItemIndex];
+      
+      newItems[activeItemIndex] = {
+        ...originalItem,
+        cd_produto: product.cd_produto,
+        un: product.un,
+        // Mantém os valores que vieram do XML se existirem
+        valor_unit: originalItem.valor_unit || product.compra || 0,
+        valor_venda: originalItem.valor_venda || product.venda || 0,
+        margem: originalItem.margem || (product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0),
+        subtotal: (originalItem.qtde || 1) * (originalItem.valor_unit || product.compra || 0)
+      };
       setItems(newItems);
       setActiveItemIndex(null);
     } else {
-      setItems([...items, newItem]);
+      setItems([...items, { 
+        cd_produto: product.cd_produto, 
+        qtde: 1, 
+        valor_unit: product.compra || 0, 
+        margem: product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0,
+        valor_venda: product.venda || 0,
+        subtotal: product.compra || 0,
+        un: product.un
+      }]);
     }
     setIsSearchOpen(false);
   };
@@ -146,7 +155,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         vencimento: date.toISOString().split('T')[0],
         valor: Number(baseAmount.toFixed(2)),
         documento: nf ? `${nf}/${i + 1}` : "",
-        // Campos de Cheque
         banco_nome: "",
         banco_num: "",
         agencia: "",
@@ -164,6 +172,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const handleFinalize = () => {
     if (!supplierId) { showError("Selecione um fornecedor."); return; }
     if (items.length === 0) { showError("Adicione pelo menos um item."); return; }
+    if (items.some(i => !i.cd_produto)) { showError("Existem itens no XML não vinculados ao estoque."); return; }
     
     const supplier = suppliers.find(s => s.cd_clientes === supplierId);
     const compra: Compra = {
@@ -177,10 +186,8 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       itens: items
     };
 
-    // Salva a compra e atualiza estoque
     db.compras.save(compra);
 
-    // Gera os lançamentos financeiros baseados nas parcelas editadas
     installments.forEach((inst, idx) => {
       db.financeiro.add({
         tipo: 'P',
@@ -254,7 +261,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
           <TableHeader className="bg-slate-50">
             <TableRow>
               <TableHead className="w-12">#</TableHead>
-              <TableHead>Produto no Estoque</TableHead>
+              <TableHead>Produto (XML vs Estoque)</TableHead>
               <TableHead className="w-24 text-center">Qtde</TableHead>
               <TableHead className="w-32 text-right">Custo Unit.</TableHead>
               <TableHead className="w-24 text-center">Margem %</TableHead>
@@ -283,18 +290,32 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                           <div>
                             <p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p>
                             <p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p>
+                            {item.nome_fornecedor && <p className="text-[8px] text-indigo-500 font-bold">XML: {item.nome_fornecedor}</p>}
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <AlertCircle size={14} className="text-rose-500" />
-                          <Button 
-                            variant="link" 
-                            className="p-0 h-auto text-rose-600 text-xs font-bold underline"
-                            onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}
-                          >
-                            VINCULAR PRODUTO...
-                          </Button>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle size={14} className="text-rose-500" />
+                            <p className="text-xs font-bold text-rose-600 uppercase">{item.nome_fornecedor || "PRODUTO NÃO VINCULADO"}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="link" 
+                              className="p-0 h-auto text-indigo-600 text-[10px] font-bold underline"
+                              onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}
+                            >
+                              VINCULAR EXISTENTE
+                            </Button>
+                            <span className="text-slate-300">|</span>
+                            <Button 
+                              variant="link" 
+                              className="p-0 h-auto text-emerald-600 text-[10px] font-bold underline"
+                              onClick={() => { setActiveItemIndex(index); setIsNewProductOpen(true); }}
+                            >
+                              CADASTRAR NOVO
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </TableCell>
@@ -380,7 +401,19 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         </div>
       </div>
 
-      {/* Modal de Conclusão / Pagamento */}
+      <ProductSearchModal 
+        isOpen={isSearchOpen} 
+        onClose={() => { setIsSearchOpen(false); setActiveItemIndex(null); }} 
+        onSelect={handleProductSelect} 
+      />
+
+      <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader>
+          <ProductForm onSuccess={() => { setIsNewProductOpen(false); }} />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
           <DialogHeader className="p-6 border-b bg-slate-50">
@@ -388,7 +421,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
           </DialogHeader>
           
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-            {/* Lado Esquerdo: Configuração */}
             <div className="w-full md:w-80 p-6 bg-slate-50 border-r space-y-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-slate-500">Meio de Pagamento</Label>
@@ -403,7 +435,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-slate-500">Número de Parcelas</Label>
                 <div className="flex items-center gap-3">
-                  <Button variant="outline" size="icon" onClick={() => setNumInstallments(Math.max(1, numInstallments - 1))}><Minus size={16} /></Button>
+                  <Button variant="outline" size="icon" onClick={() => setNumInstallments(Math.max(1, numInstallments - 1))}><Plus size={16} className="rotate-45" /></Button>
                   <span className="text-xl font-black w-10 text-center">{numInstallments}x</span>
                   <Button variant="outline" size="icon" onClick={() => setNumInstallments(numInstallments + 1)}><Plus size={16} /></Button>
                 </div>
@@ -415,7 +447,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
               </div>
             </div>
 
-            {/* Lado Direito: Edição de Parcelas */}
             <div className="flex-1 flex flex-col overflow-hidden bg-white">
               <ScrollArea className="flex-1 p-6">
                 <div className="space-y-4">
@@ -448,31 +479,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                           }} className="h-9 text-xs" placeholder="Ex: Boleto 01" />
                         </div>
                       </div>
-
-                      {paymentMethod === 'Cheque' && (
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
-                          <div className="space-y-1">
-                            <Label className="text-[8px] font-bold uppercase">Banco</Label>
-                            <Input value={inst.banco_nome} onChange={(e) => { const n = [...installments]; n[idx].banco_nome = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" placeholder="Ex: Itaú" />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[8px] font-bold uppercase">Nº Banco</Label>
-                            <Input value={inst.banco_num} onChange={(e) => { const n = [...installments]; n[idx].banco_num = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" placeholder="341" />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[8px] font-bold uppercase">Agência</Label>
-                            <Input value={inst.agencia} onChange={(e) => { const n = [...installments]; n[idx].agencia = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[8px] font-bold uppercase">Conta</Label>
-                            <Input value={inst.conta_num} onChange={(e) => { const n = [...installments]; n[idx].conta_num = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[8px] font-bold uppercase">Nº Cheque</Label>
-                            <Input value={inst.cheque_num} onChange={(e) => { const n = [...installments]; n[idx].cheque_num = e.target.value; setInstallments(n); }} className="h-8 text-[10px] font-bold text-indigo-600" />
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -488,23 +494,8 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
           </div>
         </DialogContent>
       </Dialog>
-
-      <ProductSearchModal 
-        isOpen={isSearchOpen} 
-        onClose={() => { setIsSearchOpen(false); setActiveItemIndex(null); }} 
-        onSelect={handleProductSelect} 
-      />
-
-      <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader>
-          <ProductForm onSuccess={() => { setIsNewProductOpen(false); }} />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
-
-const Minus = ({ size }: { size: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 export default PurchaseForm;
