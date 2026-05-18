@@ -187,7 +187,7 @@ const Financial = () => {
                 <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl gap-2">
-                      <ArrowRightLeft size={20} /> Transferir
+                      <ArrowLeftRight size={20} /> Transferir
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl">
@@ -433,8 +433,7 @@ const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) =>
         <p className="text-[10px] font-bold uppercase text-rose-600">Valores a {type === 'R' ? 'Receber' : 'Pagar'}</p>
         <p className="text-xl font-black text-rose-700">R$ {totals.pendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
-    </Card>
-  </div>
+    </div>
 );
 
 const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }: any) => (
