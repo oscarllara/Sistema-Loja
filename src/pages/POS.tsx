@@ -32,7 +32,8 @@ import {
   EyeOff,
   FileText,
   CalendarClock,
-  Calendar
+  Calendar,
+  FileCode
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ import {
   DialogTitle,
   DialogFooter
 } from "@/components/ui/dialog";
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess, showError, showLoading, dismissToast } from '@/utils/toast';
 import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
 import ProductSearchModal from '@/components/ProductSearchModal';
@@ -72,6 +73,8 @@ const POS = () => {
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
   const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
   
+  const xmlInputRef = React.useRef<HTMLInputElement>(null);
+
   // Estados Multi-Carrinho (Um para cada modo)
   const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
     VENDA: [],
@@ -225,6 +228,7 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
+    if (key === 'F12' && mode === 'COMPRA') xmlInputRef.current?.click();
     if (key === 'CtrlL') {
       if (cart.length > 0) {
         handleOpenEdit(cart.length - 1);
@@ -234,7 +238,7 @@ const POS = () => {
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['F1', 'F3', 'F4', 'F10'].includes(e.key)) {
+      if (['F1', 'F3', 'F4', 'F10', 'F12'].includes(e.key)) {
         e.preventDefault();
         e.stopPropagation();
         handleShortcut(e.key);
@@ -465,6 +469,26 @@ const POS = () => {
     showSuccess("Item atualizado!");
   };
 
+  const handleXMLImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const loadingId = showLoading("Processando XML...");
+    
+    setTimeout(() => {
+      // Simulação de itens vindos do XML
+      const mockItems = [
+        { cd_produto: 1, nome: "CIMENTO CP-II 50KG", quantity: 10, finalPrice: 32.50, selectedUnit: "SC", costPrice: 32.50 },
+        { cd_produto: 2, nome: "ARGAMASSA AC-III 20KG", quantity: 20, finalPrice: 18.90, selectedUnit: "SC", costPrice: 18.90 }
+      ];
+
+      setCart(prev => [...prev, ...mockItems]);
+      dismissToast(loadingId);
+      showSuccess("Itens do XML importados para o carrinho!");
+      if (xmlInputRef.current) xmlInputRef.current.value = "";
+    }, 1000);
+  };
+
   const total = React.useMemo(() => {
     return cart.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0);
   }, [cart]);
@@ -591,23 +615,22 @@ const POS = () => {
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
       {/* Barra Lateral Esquerda */}
       <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center">
-          <div className="w-32 h-32 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-4 overflow-hidden">
-            <img src="/placeholder.svg" alt="Logo" className="w-20 h-20 opacity-20" />
-            <span className="text-[10px] font-bold uppercase">Sua Logo Aqui</span>
+        <div className="p-4 border-b border-slate-100 flex flex-col items-center text-center">
+          <div className="w-24 h-24 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-2 overflow-hidden">
+            <img src="/placeholder.svg" alt="Logo" className="w-16 h-16 opacity-20" />
           </div>
-          <h2 className={cn("text-xl font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>
+          <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>
             {config.nome_empresa}
           </h2>
-          <p className="text-[10px] text-slate-500 font-bold">{config.slogan}</p>
+          <p className="text-[9px] text-slate-500 font-bold">{config.slogan}</p>
         </div>
 
-        <div className={cn("p-4 text-white space-y-3", mode === 'VENDA' ? "bg-slate-900" : mode === 'COMPRA' ? "bg-emerald-900" : "bg-amber-900")}>
+        <div className={cn("p-3 text-white space-y-2", mode === 'VENDA' ? "bg-slate-900" : mode === 'COMPRA' ? "bg-emerald-900" : "bg-amber-900")}>
           <div className="space-y-1">
             <label className="text-[8px] font-bold text-slate-500 uppercase">Usuário do Sistema *</label>
             <select 
               className={cn(
-                "w-full border-none text-[10px] font-bold h-10 rounded px-2 transition-all duration-300",
+                "w-full border-none text-[10px] font-bold h-9 rounded px-2 transition-all duration-300",
                 !selectedSellerId 
                   ? "bg-rose-600 text-white animate-pulse ring-2 ring-rose-400 ring-offset-2 ring-offset-slate-900" 
                   : "bg-white/10 text-white"
@@ -621,46 +644,58 @@ const POS = () => {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-6">
+        <ScrollArea className="flex-1 p-3">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Ações Rápidas</h3>
+              <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Ações Principais</h3>
               <Button 
                 className={cn(
-                  "w-full h-16 text-white font-black text-lg gap-2 shadow-lg rounded-xl",
+                  "w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl",
                   mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100" :
                   mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100" :
                   "bg-amber-600 hover:bg-amber-700 shadow-amber-100"
                 )}
                 onClick={() => handleShortcut('F10')}
               >
-                <CheckCircle size={24} /> FINALIZAR (F10)
+                <CheckCircle size={20} /> FINALIZAR (F10)
               </Button>
+
+              {mode === 'COMPRA' && (
+                <>
+                  <input type="file" ref={xmlInputRef} className="hidden" accept=".xml" onChange={handleXMLImport} />
+                  <Button 
+                    className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs gap-2 rounded-xl shadow-lg shadow-blue-100"
+                    onClick={() => handleShortcut('F12')}
+                  >
+                    <FileCode size={18} /> IMPORTAR XML (F12)
+                  </Button>
+                </>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Controles do Carrinho</h3>
-              <div className="space-y-2">
-                <ShortcutItem keyName="CTRL+L" label="EDITAR ITEM" onClick={() => handleShortcut('CtrlL')} icon={<Edit3 size={14} />} />
-                <ShortcutItem keyName="F3" label="ZERAR OPERAÇÃO" onClick={() => handleShortcut('F3')} icon={<Trash2 size={14} />} color="rose" />
+            <div className="space-y-2">
+              <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Controles</h3>
+              <div className="space-y-1.5">
+                <ShortcutItem keyName="CTRL+L" label="EDITAR ITEM" onClick={() => handleShortcut('CtrlL')} icon={<Edit3 size={12} />} />
+                <ShortcutItem keyName="F3" label="ZERAR TUDO" onClick={() => handleShortcut('F3')} icon={<Trash2 size={12} />} color="rose" />
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Consultas e Recebimentos</h3>
-              <div className="space-y-2">
-                <ShortcutItem keyName="F5" label="HISTÓRICO / REIMPRIMIR" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
-                <ShortcutItem keyName="F6" label="PUXAR ORÇAMENTOS" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} />
-                <ShortcutItem keyName="F7" label="RECEBER CREDIÁRIO" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
+            <div className="space-y-2">
+              <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
+              <div className="space-y-1.5">
+                <ShortcutItem keyName="F5" label="HISTÓRICO" onClick={() => setIsHistoryOpen(true)} icon={<History size={12} />} />
+                <ShortcutItem keyName="F6" label="ORÇAMENTOS" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={12} />} />
+                <ShortcutItem keyName="F7" label="RECEBER" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={12} />} color="emerald" />
               </div>
             </div>
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className="p-3 border-t border-slate-100">
           <Button 
             variant="ghost" 
-            className="w-full h-10 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs"
+            className="w-full h-9 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs"
             onClick={() => setIsAdminAuthOpen(true)}
           >
             <LogOut size={14} /> SAIR DO PDV
@@ -670,17 +705,17 @@ const POS = () => {
 
       {/* Área Principal */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b", 
+        <header className={cn("h-16 text-white flex items-center justify-between px-6 shrink-0 border-b", 
           mode === 'VENDA' ? "bg-slate-900 border-slate-800" : 
           mode === 'COMPRA' ? "bg-emerald-900 border-emerald-800" : 
           "bg-amber-900 border-amber-800")}>
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6">
             {/* Seletor de Modo */}
             <div className="flex bg-white/10 p-1 rounded-lg">
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className={cn("h-8 px-4 text-[10px] font-bold rounded-md transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
+                className={cn("h-7 px-3 text-[9px] font-bold rounded-md transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
                 onClick={() => setMode('VENDA')}
               >
                 VENDA
@@ -688,7 +723,7 @@ const POS = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className={cn("h-8 px-4 text-[10px] font-bold rounded-md transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
+                className={cn("h-7 px-3 text-[9px] font-bold rounded-md transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
                 onClick={() => setMode('COMPRA')}
               >
                 COMPRA
@@ -696,25 +731,25 @@ const POS = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className={cn("h-8 px-4 text-[10px] font-bold rounded-md transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
+                className={cn("h-7 px-3 text-[9px] font-bold rounded-md transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")}
                 onClick={() => setMode('LOCACAO')}
               >
                 LOCAÇÃO
               </Button>
             </div>
 
-            <div className="h-10 w-px bg-white/10" />
+            <div className="h-8 w-px bg-white/10" />
 
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Itens no Carrinho</p>
-              <p className="text-3xl font-black">{cart.length} Produto(s)</p>
+              <p className="text-[8px] font-bold text-slate-400 uppercase">Carrinho</p>
+              <p className="text-xl font-black">{cart.length} Itens</p>
             </div>
-            <div className="h-10 w-px bg-white/10" />
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
+            <div className="h-8 w-px bg-white/10" />
+            <div className="space-y-0.5">
+              <p className="text-[8px] font-bold text-slate-400 uppercase">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
               <div className="flex items-center gap-2">
                 <select 
-                  className="bg-transparent border-none text-sm font-bold focus:ring-0 p-0 h-auto min-w-[200px]"
+                  className="bg-transparent border-none text-xs font-bold focus:ring-0 p-0 h-auto min-w-[150px]"
                   value={selectedEntityId}
                   onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}
                 >
@@ -724,36 +759,36 @@ const POS = () => {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-6 w-6 text-indigo-400 hover:text-white hover:bg-white/10"
+                  className="h-5 w-5 text-indigo-400 hover:text-white hover:bg-white/10"
                   onClick={() => setIsAddEntityOpen(true)}
                 >
-                  <UserPlus size={16} />
+                  <UserPlus size={14} />
                 </Button>
               </div>
             </div>
-            <div className="h-10 w-px bg-white/10" />
+            <div className="h-8 w-px bg-white/10" />
             
-            <div className="flex flex-col gap-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Modo de Preço</p>
+            <div className="flex flex-col gap-0.5">
+              <p className="text-[8px] font-bold text-slate-400 uppercase">Preço</p>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={togglePriceMode}
                 className={cn(
-                  "h-9 gap-2 font-black text-[10px] border-none transition-all duration-300",
+                  "h-7 gap-1.5 font-black text-[9px] border-none transition-all duration-300",
                   priceMode === 'VISTA' 
                     ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-900/20" 
                     : "bg-slate-700 text-slate-300 hover:bg-slate-600"
                 )}
               >
-                {priceMode === 'VISTA' ? <Zap size={14} fill="currentColor" /> : <CreditCard size={14} />}
+                {priceMode === 'VISTA' ? <Zap size={12} fill="currentColor" /> : <CreditCard size={12} />}
                 {priceMode === 'VISTA' ? 'À VISTA' : 'A PRAZO'}
               </Button>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-bold uppercase text-indigo-400">Total Geral</p>
-            <p className="text-5xl font-black text-white tracking-tighter">
+            <p className="text-[9px] font-bold uppercase text-indigo-400">Total Geral</p>
+            <p className="text-4xl font-black text-white tracking-tighter">
               {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </div>
@@ -763,37 +798,37 @@ const POS = () => {
           <Table className="border-collapse">
             <TableHeader className="sticky top-0 z-10">
               <TableRow className="bg-slate-800 hover:bg-transparent border-none">
-                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 w-24">CÓDIGO</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10">PRODUTO</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-right w-32">VALOR UNIT.</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-center w-24">QTDE</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-center w-20">UN</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 border-r border-white/10 text-right w-32">SUB TOTAL</TableHead>
-                <TableHead className="text-white font-bold text-[11px] h-8 text-center w-16">AÇÕES</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 w-20">CÓDIGO</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10">PRODUTO</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">VALOR UNIT.</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-20">QTDE</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-16">UN</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">SUB TOTAL</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 text-center w-14">AÇÕES</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {cart.map((item, idx) => (
                 <TableRow 
                   key={idx} 
-                  className="h-8 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer"
+                  className="h-7 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer"
                   onClick={() => handleOpenEdit(idx)}
                 >
-                  <TableCell className="py-0 text-xs font-mono border-r border-slate-200">{item?.id_manual?.padStart(5, '0')}</TableCell>
-                  <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">
+                  <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200">{item?.id_manual?.padStart(5, '0')}</TableCell>
+                  <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">
                     {item?.nome}
                     {item.isRental && (
-                      <span className="ml-2 text-[9px] bg-amber-100 text-amber-700 px-1 rounded">
+                      <span className="ml-2 text-[8px] bg-amber-100 text-amber-700 px-1 rounded">
                         LOCAÇÃO ({item.rentalDays} DIAS)
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
-                  <TableCell className="py-0 text-xs text-center border-r border-slate-200">
+                  <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">
                     {Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </TableCell>
                   <TableCell 
-                    className="py-0 text-xs text-center border-r border-slate-200 font-bold cursor-pointer hover:bg-indigo-100 transition-colors"
+                    className="py-0 text-[11px] text-center border-r border-slate-200 font-bold cursor-pointer hover:bg-indigo-100 transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleItemUnit(idx);
@@ -801,18 +836,18 @@ const POS = () => {
                   >
                     {item?.selectedUnit}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
                   <TableCell className="py-0 text-center">
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-rose-500 hover:bg-rose-100"
+                      className="h-5 w-5 text-rose-500 hover:bg-rose-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         removeItem(idx);
                       }}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={12} />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -822,10 +857,10 @@ const POS = () => {
         </div>
 
         {/* Barra Inferior de Inserção Sequencial */}
-        <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800">
-          <form onSubmit={handleCodeSubmit} className="flex items-end gap-4 h-full">
+        <footer className="h-20 border-t p-3 shrink-0 bg-slate-900 border-slate-800">
+          <form onSubmit={handleCodeSubmit} className="flex items-end gap-3 h-full">
             <div className="flex-1 space-y-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
+              <label className="text-[8px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
               <Input 
                 ref={codeRef}
                 value={inputCode}
@@ -837,7 +872,7 @@ const POS = () => {
                   }
                 }}
                 className={cn(
-                  "h-10 border-none text-lg font-black focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors",
+                  "h-9 border-none text-base font-black focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors",
                   pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900"
                 )}
                 placeholder="Bipe o produto ou digite o nome..."
@@ -846,8 +881,8 @@ const POS = () => {
 
             {mode === 'LOCACAO' ? (
               <>
-                <div className="w-36 space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase">Início Locação</label>
+                <div className="w-32 space-y-1">
+                  <label className="text-[8px] font-bold text-slate-400 uppercase">Início Locação</label>
                   <Input 
                     ref={rentalStartRef}
                     type="date"
@@ -859,11 +894,11 @@ const POS = () => {
                         rentalEndRef.current?.focus();
                       }
                     }}
-                    className="h-10 bg-[#E1FFFF] border-none text-xs font-black text-slate-900"
+                    className="h-9 bg-[#E1FFFF] border-none text-[11px] font-black text-slate-900"
                   />
                 </div>
-                <div className="w-36 space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase">Devolução Prevista</label>
+                <div className="w-32 space-y-1">
+                  <label className="text-[8px] font-bold text-slate-400 uppercase">Devolução Prevista</label>
                   <Input 
                     ref={rentalEndRef}
                     type="date"
@@ -875,19 +910,19 @@ const POS = () => {
                         commitToCart();
                       }
                     }}
-                    className="h-10 bg-[#E1FFFF] border-none text-xs font-black text-slate-900"
+                    className="h-9 bg-[#E1FFFF] border-none text-[11px] font-black text-slate-900"
                   />
                 </div>
-                <div className="w-20 space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase">Dias</label>
-                  <div className="h-10 bg-amber-500 rounded flex items-center justify-center font-black text-white">
+                <div className="w-16 space-y-1">
+                  <label className="text-[8px] font-bold text-slate-400 uppercase">Dias</label>
+                  <div className="h-9 bg-amber-500 rounded flex items-center justify-center font-black text-white text-sm">
                     {getDays()}
                   </div>
                 </div>
               </>
             ) : (
-              <div className="w-24 space-y-1">
-                <label className="text-[9px] font-bold text-slate-400 uppercase">Qtde</label>
+              <div className="w-20 space-y-1">
+                <label className="text-[8px] font-bold text-slate-400 uppercase">Qtde</label>
                 <Input 
                   ref={qtyRef}
                   value={inputQty}
@@ -897,27 +932,27 @@ const POS = () => {
                       commitToCart();
                     }
                   }}
-                  className="h-10 bg-[#E1FFFF] border-none text-lg font-black text-slate-900 text-center"
+                  className="h-9 bg-[#E1FFFF] border-none text-base font-black text-slate-900 text-center"
                 />
               </div>
             )}
 
-            <div className="w-32 space-y-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Unidade</label>
+            <div className="w-28 space-y-1">
+              <label className="text-[8px] font-bold text-slate-400 uppercase">Unidade</label>
               <button 
                 type="button"
                 onClick={togglePendingUnit}
                 className={cn(
-                  "w-full h-10 rounded flex items-center justify-center font-black text-xs uppercase transition-colors",
+                  "w-full h-9 rounded flex items-center justify-center font-black text-[10px] uppercase transition-colors",
                   pendingProduct?.fracionado ? "bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" : "bg-[#E1FFFF] text-slate-900 cursor-default"
                 )}
               >
                 {mode === 'LOCACAO' ? getRentalUnit(getDays()) : (inputUnit || "UN")}
               </button>
             </div>
-            <div className="w-40 space-y-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Valor Unitário</label>
-              <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
+            <div className="w-32 space-y-1">
+              <label className="text-[8px] font-bold text-slate-400 uppercase">Valor Unitário</label>
+              <div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">
                 {pendingProduct ? (
                   formatCurrency(mode === 'LOCACAO' 
                     ? calculateRentalPrice(getDays(), pendingProduct)
@@ -925,9 +960,9 @@ const POS = () => {
                 ) : "0,00"}
               </div>
             </div>
-            <div className="w-48 space-y-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Sub Total</label>
-              <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
+            <div className="w-40 space-y-1">
+              <label className="text-[8px] font-bold text-slate-400 uppercase">Sub Total</label>
+              <div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">
                 {pendingProduct ? (
                   formatCurrency((mode === 'LOCACAO' 
                     ? calculateRentalPrice(getDays(), pendingProduct)
@@ -1124,7 +1159,7 @@ const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { key
   <Button 
     variant="outline" 
     className={cn(
-      "w-full h-12 justify-between gap-3 border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-xs group transition-all",
+      "w-full h-10 justify-between gap-2 border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-[10px] group transition-all",
       color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50",
       color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50"
     )}
@@ -1132,7 +1167,7 @@ const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { key
   >
     <div className="flex items-center gap-2">
       <div className={cn(
-        "p-1.5 rounded-lg bg-slate-100 group-hover:bg-white transition-colors",
+        "p-1 rounded-lg bg-slate-100 group-hover:bg-white transition-colors",
         color === 'rose' && "bg-rose-50 text-rose-600",
         color === 'emerald' && "bg-emerald-50 text-emerald-600",
         color === 'indigo' && "bg-indigo-50 text-indigo-600"
@@ -1141,7 +1176,7 @@ const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { key
       </div>
       <span className="uppercase">{label}</span>
     </div>
-    <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-black text-slate-500 border border-slate-200">{keyName}</span>
+    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] font-black text-slate-500 border border-slate-200">{keyName}</span>
   </Button>
 );
 
