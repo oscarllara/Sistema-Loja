@@ -1,30 +1,24 @@
 "use client";
 
 import React from 'react';
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { 
   Package, 
   DollarSign, 
-  Layers, 
-  Scale,
   Hash,
-  Plus,
-  Trash2,
   Percent,
   Boxes,
   Globe,
   CalendarClock,
-  Image as ImageIcon,
-  Link as LinkIcon
+  Image as ImageIcon
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Produto } from '@/types/database';
 import { db } from '@/services/api';
@@ -69,7 +63,6 @@ const productSchema = z.object({
   link_externo: z.string().optional(),
   descricao_site: z.string().optional(),
 }).refine((data) => {
-  // Se não for locação, o preço de venda é obrigatório
   if (!data.is_locacao && (!data.venda || data.venda === "0,00" || data.venda === "")) {
     return false;
   }
@@ -87,7 +80,7 @@ interface ProductFormProps {
 }
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
-  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = useForm<ProductFormValues>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
@@ -210,16 +203,16 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <Tabs defaultValue="geral" className="w-full">
-        <TabsList className="grid w-full grid-cols-6 bg-slate-100 p-1 rounded-xl h-auto">
-          <TabsTrigger value="geral">Geral</TabsTrigger>
-          <TabsTrigger value="estoque">Estoque</TabsTrigger>
-          <TabsTrigger value="precos">Preços</TabsTrigger>
-          <TabsTrigger value="locacao" className="gap-1"><CalendarClock size={14} /> Locação</TabsTrigger>
-          <TabsTrigger value="site" className="gap-1"><Globe size={14} /> Site</TabsTrigger>
-          <TabsTrigger value="kit">Kit</TabsTrigger>
+        <TabsList className="flex w-full bg-slate-100 p-1 rounded-xl h-auto overflow-x-auto">
+          <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
+          {!isLocacao && <TabsTrigger value="estoque" className="flex-1">Estoque</TabsTrigger>}
+          {!isLocacao && <TabsTrigger value="precos" className="flex-1">Preços</TabsTrigger>}
+          {isLocacao && <TabsTrigger value="locacao" className="flex-1 gap-1"><CalendarClock size={14} /> Locação</TabsTrigger>}
+          <TabsTrigger value="site" className="flex-1 gap-1"><Globe size={14} /> Site</TabsTrigger>
+          {!isLocacao && <TabsTrigger value="kit" className="flex-1">Kit</TabsTrigger>}
         </TabsList>
 
-        <div className="min-h-[400px] mt-4">
+        <div className="min-h-[350px] mt-4">
           <TabsContent value="geral" className="space-y-4 m-0">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -233,7 +226,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Input 
                   {...register("nome")} 
                   className={cn("uppercase", errors.nome && "border-rose-500")} 
-                  placeholder="EX: CIMENTO VOTORAN 50KG"
+                  placeholder="EX: BETONEIRA 400L"
                 />
                 {errors.nome && <p className="text-[10px] text-rose-500 font-bold">{errors.nome.message}</p>}
               </div>
@@ -245,109 +238,133 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Label>NCM</Label>
                 <Input {...register("ncm")} placeholder="0000.00.00" />
               </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="estoque" className="space-y-4 m-0">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Unidade Principal</Label>
                 <Input {...register("un")} placeholder="Ex: UN, PC, KG, MT" className="uppercase" />
               </div>
-              <div className="space-y-2">
-                <Label>Estoque Atual</Label>
-                <Input type="number" step="0.001" {...register("estoque")} className="font-bold" />
-              </div>
-              <div className="space-y-2">
-                <Label>Estoque Mínimo</Label>
-                <Input type="number" step="0.001" {...register("minimo")} />
-              </div>
             </div>
-            <div className="flex items-center space-x-2 p-4 bg-slate-50 rounded-lg border">
+
+            <div className="flex items-center space-x-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100 mt-4">
               <Checkbox 
-                id="fracionado" 
-                checked={isFracionado}
-                onCheckedChange={(checked) => setValue("fracionado", !!checked)} 
+                id="is_locacao_geral" 
+                checked={isLocacao}
+                onCheckedChange={(checked) => setValue("is_locacao", !!checked)} 
               />
-              <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável (Ex: Areia, Brita, Fio)</Label>
+              <Label htmlFor="is_locacao_geral" className="font-black text-sm cursor-pointer text-indigo-900">
+                Este item é para Locação (Aluguel de Equipamento)
+              </Label>
             </div>
           </TabsContent>
 
-          <TabsContent value="precos" className="space-y-6 m-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
-                <div className="space-y-2">
-                  <Label>
-                    Valor de Venda (A Prazo) {!isLocacao && <span className="text-rose-500">*</span>}
-                  </Label>
-                  <Input 
-                    {...register("venda")} 
-                    onChange={(e) => handleCurrencyChange(e, "venda")} 
-                    className={cn("text-lg font-black", errors.venda && "border-rose-500")} 
+          {!isLocacao && (
+            <>
+              <TabsContent value="estoque" className="space-y-4 m-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Estoque Atual</Label>
+                    <Input type="number" step="0.001" {...register("estoque")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Estoque Mínimo</Label>
+                    <Input type="number" step="0.001" {...register("minimo")} />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 p-4 bg-slate-50 rounded-lg border">
+                  <Checkbox 
+                    id="fracionado" 
+                    checked={isFracionado}
+                    onCheckedChange={(checked) => setValue("fracionado", !!checked)} 
                   />
-                  {errors.venda && <p className="text-[10px] text-rose-500 font-bold">{errors.venda.message}</p>}
+                  <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável (Ex: Areia, Brita, Fio)</Label>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="precos" className="space-y-6 m-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                    <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
+                    <div className="space-y-2">
+                      <Label>Valor de Venda (A Prazo) <span className="text-rose-500">*</span></Label>
+                      <Input 
+                        {...register("venda")} 
+                        onChange={(e) => handleCurrencyChange(e, "venda")} 
+                        className={cn("text-lg font-black", errors.venda && "border-rose-500")} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Preço de Custo</Label>
+                      <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} />
+                    </div>
+                  </div>
+                  <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
+                    <h4 className="font-bold text-emerald-900 flex items-center gap-2"><Percent size={16} /> Configuração À Vista</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Desconto (%)</Label>
+                        <Input {...register("desconto_vista_valor")} className="font-bold" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Preço Final À Vista</Label>
+                        <Input {...register("venda_vista")} readOnly className="bg-white font-black text-emerald-700" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="kit" className="m-0">
+                <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                    <Boxes className="text-slate-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Checkbox 
+                        id="is_kit" 
+                        checked={isKit}
+                        onCheckedChange={(checked) => setValue("is_kit", !!checked)} 
+                      />
+                      <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
+                    </div>
+                    <p className="text-xs text-slate-500 max-w-xs">Kits permitem vender vários produtos juntos com um único código.</p>
+                  </div>
+                </div>
+              </TabsContent>
+            </>
+          )}
+
+          {isLocacao && (
+            <TabsContent value="locacao" className="space-y-4 m-0">
+              <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-4">
+                <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs">
+                  <CalendarClock size={16} /> Tabela de Preços de Locação
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase">Valor Diária</Label>
+                    <Input {...register("valor_diaria")} onChange={(e) => handleCurrencyChange(e, "valor_diaria")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase">Valor Semana</Label>
+                    <Input {...register("valor_semana")} onChange={(e) => handleCurrencyChange(e, "valor_semana")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase">Valor Quinzena</Label>
+                    <Input {...register("valor_quinzena")} onChange={(e) => handleCurrencyChange(e, "valor_quinzena")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase">Valor Mês</Label>
+                    <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Preço de Custo (Valor do Bem)</Label>
-                  <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} />
-                  <p className="text-[9px] text-slate-500">Usado para cálculo de lucro e valor no patrimônio.</p>
+                  <Label>Valor do Bem (Custo de Reposição)</Label>
+                  <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} placeholder="R$ 0,00" />
+                  <p className="text-[9px] text-slate-500">Valor usado para registro no patrimônio da empresa.</p>
                 </div>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
-                <h4 className="font-bold text-emerald-900 flex items-center gap-2"><Percent size={16} /> Configuração À Vista</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Desconto (%)</Label>
-                    <Input {...register("desconto_vista_valor")} className="font-bold" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Preço Final À Vista</Label>
-                    <Input {...register("venda_vista")} readOnly className="bg-white font-black text-emerald-700" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="locacao" className="space-y-4 m-0">
-            <div className={cn("p-4 rounded-xl border transition-all", isLocacao ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200")}>
-              <div className="flex items-center space-x-2 mb-6">
-                <Checkbox 
-                  id="is_locacao" 
-                  checked={isLocacao}
-                  onCheckedChange={(checked) => setValue("is_locacao", !!checked)} 
-                />
-                <Label htmlFor="is_locacao" className="font-black text-lg cursor-pointer text-indigo-900">Disponível para Locação (Aluguel)</Label>
-              </div>
-
-              {isLocacao && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase">Valor Diária</Label>
-                      <Input {...register("valor_diaria")} onChange={(e) => handleCurrencyChange(e, "valor_diaria")} className="font-bold" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase">Valor Semana</Label>
-                      <Input {...register("valor_semana")} onChange={(e) => handleCurrencyChange(e, "valor_semana")} className="font-bold" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase">Valor Quinzena</Label>
-                      <Input {...register("valor_quinzena")} onChange={(e) => handleCurrencyChange(e, "valor_quinzena")} className="font-bold" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold uppercase">Valor Mês</Label>
-                      <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
-                    </div>
-                  </div>
-                  <div className="p-3 bg-white/50 rounded-lg border border-indigo-100 text-[10px] text-indigo-700 font-medium">
-                    * Ao salvar, este item será adicionado automaticamente ao seu Patrimônio como Equipamento.
-                  </div>
-                </div>
-              )}
-            </div>
-          </TabsContent>
+            </TabsContent>
+          )}
 
           <TabsContent value="site" className="space-y-4 m-0">
             <div className={cn("p-4 rounded-xl border transition-all", disponivelSite ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200")}>
@@ -357,7 +374,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   checked={disponivelSite}
                   onCheckedChange={(checked) => setValue("disponivel_site", !!checked)} 
                 />
-                <Label htmlFor="disponivel_site" className="font-black text-lg cursor-pointer text-blue-900">Exibir no Site (construlara.com.br)</Label>
+                <Label htmlFor="disponivel_site" className="font-black text-lg cursor-pointer text-blue-900">Exibir no Site</Label>
               </div>
 
               {disponivelSite && (
@@ -374,29 +391,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Descrição para o Site</Label>
-                    <Textarea {...register("descricao_site")} placeholder="Destaque as principais características para o cliente online..." className="min-h-[100px]" />
+                    <Textarea {...register("descricao_site")} placeholder="Destaque as principais características..." className="min-h-[100px]" />
                   </div>
                 </div>
               )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="kit" className="m-0">
-            <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
-                <Boxes className="text-slate-400" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-center space-x-2">
-                  <Checkbox 
-                    id="is_kit" 
-                    checked={isKit}
-                    onCheckedChange={(checked) => setValue("is_kit", !!checked)} 
-                  />
-                  <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
-                </div>
-                <p className="text-xs text-slate-500 max-w-xs">Kits permitem vender vários produtos juntos com um único código, baixando o estoque de cada item individualmente.</p>
-              </div>
             </div>
           </TabsContent>
         </div>
