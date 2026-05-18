@@ -58,6 +58,9 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const [isNewProductOpen, setIsNewProductOpen] = React.useState(false);
   const [activeItemIndex, setActiveItemIndex] = React.useState<number | null>(null);
   
+  // Estado para carregar dados do XML no formulário de novo produto
+  const [preFillData, setPreFillData] = React.useState<any>(null);
+  
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState<MeioPagamento>('Boleto');
   const [numInstallments, setNumInstallments] = React.useState(1);
@@ -123,7 +126,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         subtotal: (originalItem.qtde || 1) * (originalItem.valor_unit || product.compra || 0)
       };
 
-      // Salva o mapeamento para futuras importações deste fornecedor
       if (originalItem.codigo_fornecedor && supplierId) {
         db.mappings.save(supplierId, originalItem.codigo_fornecedor, product.cd_produto);
       }
@@ -141,6 +143,21 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       handleProductSelect(lastProduct);
     }
     setIsNewProductOpen(false);
+    setPreFillData(null);
+  };
+
+  const handleOpenNewProduct = (index: number) => {
+    const item = items[index];
+    setActiveItemIndex(index);
+    // Prepara os dados do XML para o formulário
+    setPreFillData({
+      nome: item.nome_fornecedor?.toUpperCase(),
+      un: item.un?.toUpperCase(),
+      compra: item.valor_unit,
+      venda: item.valor_venda,
+      id_importado: item.codigo_fornecedor
+    });
+    setIsNewProductOpen(true);
   };
 
   const generateInstallments = () => {
@@ -287,7 +304,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                           <Button 
                             variant="link" 
                             className="p-0 h-auto text-emerald-600 text-[10px] font-bold underline"
-                            onClick={() => { setActiveItemIndex(index); setIsNewProductOpen(true); }}
+                            onClick={() => handleOpenNewProduct(index)}
                           >
                             CADASTRAR NOVO
                           </Button>
@@ -380,7 +397,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader>
-          <ProductForm onSuccess={handleNewProductSuccess} />
+          <ProductForm product={preFillData} onSuccess={handleNewProductSuccess} />
         </DialogContent>
       </Dialog>
 
