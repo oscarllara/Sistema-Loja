@@ -24,7 +24,8 @@ import {
   Briefcase,
   Layers,
   RotateCcw,
-  CheckSquare
+  CheckSquare,
+  PlusCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ const Financial = () => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isTransferOpen, setIsTransferOpen] = React.useState(false);
   const [isPatrimonyOpen, setIsPatrimonyOpen] = React.useState(false);
+  const [isAccountOpen, setIsAccountOpen] = React.useState(false);
   
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
@@ -194,6 +196,18 @@ const Financial = () => {
                   <PatrimonyForm onSuccess={() => { setIsPatrimonyOpen(false); loadData(); }} />
                 </DialogContent>
               </Dialog>
+            ) : activeTab === 'accounts' ? (
+              <Dialog open={isAccountOpen} onOpenChange={setIsAccountOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 shadow-lg shadow-indigo-100">
+                    <PlusCircle size={20} /> Nova Conta / Caixa
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader><DialogTitle>Cadastrar Nova Conta Bancária ou Caixa</DialogTitle></DialogHeader>
+                  <AccountForm onSuccess={() => { setIsAccountOpen(false); loadData(); }} />
+                </DialogContent>
+              </Dialog>
             ) : (
               <>
                 <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
@@ -306,6 +320,11 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
+              {contas.length === 0 && (
+                <div className="col-span-full py-20 text-center text-slate-400">
+                  Nenhuma conta cadastrada. Clique em "Nova Conta" para começar.
+                </div>
+              )}
             </div>
           </TabsContent>
 
@@ -457,7 +476,7 @@ const Financial = () => {
             </DialogHeader>
             {selectedClientForDetails && <ClientDetails client={selectedClientForDetails} />}
           </DialogContent>
-        </Dialog>
+        </div>
       </div>
     </Layout>
   );
