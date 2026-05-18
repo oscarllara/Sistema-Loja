@@ -11,7 +11,12 @@ import {
   CheckCircle2,
   ArrowRight,
   Percent,
-  DollarSign
+  DollarSign,
+  Calendar,
+  CreditCard,
+  Banknote,
+  FileText,
+  Wallet
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,10 +38,12 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle 
+  DialogTitle,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { cn } from '@/lib/utils';
-import { Compra, CompraItem } from '@/types/database';
+import { Compra, CompraItem, MeioPagamento } from '@/types/database';
+import { ScrollArea } from './ui/scroll-area';
 
 interface PurchaseFormProps {
   initialData?: Compra;
@@ -50,8 +57,16 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isNewProductOpen, setIsNewProductOpen] = React.useState(false);
   const [activeItemIndex, setActiveItemIndex] = React.useState<number | null>(null);
+  
+  // Estados de Pagamento
+  const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
+  const [paymentMethod, setPaymentMethod] = React.useState<MeioPagamento>('Boleto');
+  const [numInstallments, setNumInstallments] = React.useState(1);
+  const [installments, setInstallments] = React.useState<any[]>([]);
 
   const suppliers = db.clientes.getAll().filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
+
+  const total = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
 
   const formatCurrency = (value: number | string) => {
     const val = typeof value === 'number' ? value.toFixed(2) : value;
@@ -83,15 +98,12 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     if (field === 'valor_unit' || field === 'valor_venda') {
       const numValue = typeof value === 'string' ? parseCurrency(value) : value;
       (item as any)[field] = numValue;
-      
-      // Recalcular margem se mudar custo ou venda
       if (item.valor_unit > 0) {
         item.margem = ((item.valor_venda / item.valor_unit) - 1) * 100;
       }
     } else if (field === 'margem') {
       const numValue = parseFloat(value) || 0;
       item.margem = numValue;
-      // Recalcular venda se mudar margem
       item.valor_venda = item.valor_unit * (1 + item.margem / 100);
     } else {
       (item as any)[field] = value;
@@ -124,22 +136,35 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     setIsSearchOpen(false);
   };
 
-  const total = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
+  const generateInstallments = () => {
+    const baseAmount = total / numInstallments;
+    const newInst = [];
+    for (let i = 0; i < numInstallments; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() + (i * 30));
+      newInst.push({
+        vencimento: date.toISOString().split('T')[0],
+        valor: Number(baseAmount.toFixed(2)),
+        documento: nf ? `${nf}/${i + 1}` : "",
+        // Campos de Cheque
+        banco_nome: "",
+        banco_num: "",
+        agencia: "",
+        conta_num: "",
+        cheque_num: ""
+      });
+    }
+    setInstallments(newInst);
+  };
 
-  const handleSave = (status: 'Rascunho' | 'Confirmada') => {
-    if (!supplierId) {
-      showError("Selecione um fornecedor.");
-      return;
-    }
-    if (items.length === 0) {
-      showError("Adicione pelo menos um item.");
-      return;
-    }
-    if (status === 'Confirmada' && items.some(i => !i.cd_produto)) {
-      showError("Todos os itens devem estar vinculados a um produto do estoque.");
-      return;
-    }
+  React.useEffect(() => {
+    if (isCheckoutOpen) generateInstallments();
+  }, [isCheckoutOpen, numInstallments, total]);
 
+  const handleFinalize = () => {
+    if (!supplierId) { showError("Selecione um fornecedor."); return; }
+    if (items.length === 0) { showError("Adicione pelo menos um item."); return; }
+    
     const supplier = suppliers.find(s => s.cd_clientes === supplierId);
     const compra: Compra = {
       cd_compra: initialData?.cd_compra || Date.now(),
@@ -148,12 +173,36 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       cd_fornecedores: supplierId,
       nome_fornecedor: supplier?.nome,
       total: total,
-      status: status,
+      status: 'Confirmada',
       itens: items
     };
 
+    // Salva a compra e atualiza estoque
     db.compras.save(compra);
-    showSuccess(status === 'Confirmada' ? "Compra confirmada! Estoque e preços atualizados." : "Rascunho salvo com sucesso.");
+
+    // Gera os lançamentos financeiros baseados nas parcelas editadas
+    installments.forEach((inst, idx) => {
+      db.financeiro.add({
+        tipo: 'P',
+        descricao: `Compra NF ${nf || 'S/N'} (${idx + 1}/${installments.length})`,
+        valor: inst.valor,
+        data_vencimento: inst.vencimento,
+        status: 'Pendente',
+        cd_entidade: supplierId,
+        nome_entidade: supplier?.nome,
+        categoria: 'Fornecedor',
+        meio_pagamento: paymentMethod,
+        num_documento: inst.documento,
+        banco_nome: inst.banco_nome,
+        banco_num: inst.banco_num,
+        agencia: inst.agencia,
+        conta_num: inst.conta_num,
+        cheque_num: inst.cheque_num,
+        cd_compra: compra.cd_compra
+      });
+    });
+
+    showSuccess("Compra confirmada e parcelas geradas no financeiro!");
     onSuccess();
   };
 
@@ -246,7 +295,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                           >
                             VINCULAR PRODUTO...
                           </Button>
-                          {item.nome_fornecedor && <span className="text-[9px] text-slate-400 italic">({item.nome_fornecedor})</span>}
                         </div>
                       )}
                     </TableCell>
@@ -305,19 +353,141 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         <div className="flex gap-3">
           <Button 
             variant="outline" 
-            onClick={() => handleSave('Rascunho')}
+            onClick={() => {
+              db.compras.save({
+                cd_compra: initialData?.cd_compra || Date.now(),
+                data: new Date().toISOString(),
+                nota_fiscal: nf,
+                cd_fornecedores: supplierId,
+                nome_fornecedor: suppliers.find(s => s.cd_clientes === supplierId)?.nome,
+                total: total,
+                status: 'Rascunho',
+                itens: items
+              });
+              showSuccess("Rascunho salvo!");
+              onSuccess();
+            }}
             className="h-12 px-8 rounded-xl font-bold gap-2"
           >
             <Save size={20} /> Salvar Rascunho
           </Button>
           <Button 
-            onClick={() => handleSave('Confirmada')}
+            onClick={() => setIsCheckoutOpen(true)}
             className="h-12 px-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black gap-2 shadow-lg shadow-emerald-100"
           >
             <CheckCircle2 size={20} /> CONCLUIR COMPRA
           </Button>
         </div>
       </div>
+
+      {/* Modal de Conclusão / Pagamento */}
+      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 border-b bg-slate-50">
+            <DialogTitle className="text-xl font-black">Condição de Pagamento da Compra</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+            {/* Lado Esquerdo: Configuração */}
+            <div className="w-full md:w-80 p-6 bg-slate-50 border-r space-y-6">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-slate-500">Meio de Pagamento</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant={paymentMethod === 'Boleto' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Boleto')}><FileText size={16} /> BOLETO</Button>
+                  <Button variant={paymentMethod === 'Cheque' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Cheque')}><Wallet size={16} /> CHEQUE</Button>
+                  <Button variant={paymentMethod === 'Dinheiro' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Dinheiro')}><Banknote size={16} /> DINHEIRO</Button>
+                  <Button variant={paymentMethod === 'PIX' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('PIX')}><CreditCard size={16} /> PIX</Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-slate-500">Número de Parcelas</Label>
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" size="icon" onClick={() => setNumInstallments(Math.max(1, numInstallments - 1))}><Minus size={16} /></Button>
+                  <span className="text-xl font-black w-10 text-center">{numInstallments}x</span>
+                  <Button variant="outline" size="icon" onClick={() => setNumInstallments(numInstallments + 1)}><Plus size={16} /></Button>
+                </div>
+              </div>
+
+              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Total a Pagar</p>
+                <p className="text-2xl font-black text-indigo-600">R$ {total.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Lado Direito: Edição de Parcelas */}
+            <div className="flex-1 flex flex-col overflow-hidden bg-white">
+              <ScrollArea className="flex-1 p-6">
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2"><Calendar size={18} /> Detalhamento das Parcelas</h3>
+                  {installments.map((inst, idx) => (
+                    <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <Label className="text-[9px] font-bold uppercase">Vencimento</Label>
+                          <Input type="date" value={inst.vencimento} onChange={(e) => {
+                            const newInst = [...installments];
+                            newInst[idx].vencimento = e.target.value;
+                            setInstallments(newInst);
+                          }} className="h-9 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] font-bold uppercase">Valor (R$)</Label>
+                          <Input type="number" value={inst.valor} onChange={(e) => {
+                            const newInst = [...installments];
+                            newInst[idx].valor = parseFloat(e.target.value) || 0;
+                            setInstallments(newInst);
+                          }} className="h-9 text-xs font-bold" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] font-bold uppercase">Nº Documento</Label>
+                          <Input value={inst.documento} onChange={(e) => {
+                            const newInst = [...installments];
+                            newInst[idx].documento = e.target.value;
+                            setInstallments(newInst);
+                          }} className="h-9 text-xs" placeholder="Ex: Boleto 01" />
+                        </div>
+                      </div>
+
+                      {paymentMethod === 'Cheque' && (
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
+                          <div className="space-y-1">
+                            <Label className="text-[8px] font-bold uppercase">Banco</Label>
+                            <Input value={inst.banco_nome} onChange={(e) => { const n = [...installments]; n[idx].banco_nome = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" placeholder="Ex: Itaú" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[8px] font-bold uppercase">Nº Banco</Label>
+                            <Input value={inst.banco_num} onChange={(e) => { const n = [...installments]; n[idx].banco_num = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" placeholder="341" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[8px] font-bold uppercase">Agência</Label>
+                            <Input value={inst.agencia} onChange={(e) => { const n = [...installments]; n[idx].agencia = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[8px] font-bold uppercase">Conta</Label>
+                            <Input value={inst.conta_num} onChange={(e) => { const n = [...installments]; n[idx].conta_num = e.target.value; setInstallments(n); }} className="h-8 text-[10px]" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[8px] font-bold uppercase">Nº Cheque</Label>
+                            <Input value={inst.cheque_num} onChange={(e) => { const n = [...installments]; n[idx].cheque_num = e.target.value; setInstallments(n); }} className="h-8 text-[10px] font-bold text-indigo-600" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              
+              <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>Voltar</Button>
+                <Button onClick={handleFinalize} className="bg-emerald-600 hover:bg-emerald-700 px-10 font-black">
+                  CONFIRMAR E GERAR CONTAS
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ProductSearchModal 
         isOpen={isSearchOpen} 
@@ -334,5 +504,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     </div>
   );
 };
+
+const Minus = ({ size }: { size: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 export default PurchaseForm;

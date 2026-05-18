@@ -22,7 +22,9 @@ import {
   Calendar,
   FileText,
   Briefcase,
-  Layers
+  Layers,
+  RotateCcw,
+  CheckSquare
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,6 +71,11 @@ const Financial = () => {
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
   
+  // Estados para Compensação de Cheque
+  const [isCompensateOpen, setIsCompensateOpen] = React.useState(false);
+  const [selectedCheque, setSelectedCheque] = React.useState<LancamentoFinanceiro | null>(null);
+  const [targetAccountId, setTargetAccountId] = React.useState<string>("");
+
   // Filtros
   const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]);
@@ -92,6 +99,28 @@ const Financial = () => {
     db.financeiro.baixar(id, contas[0].cd_conta);
     showSuccess("Baixa realizada com sucesso!");
     loadData();
+  };
+
+  const handleCompensarCheque = () => {
+    if (!selectedCheque || !targetAccountId) return;
+    db.financeiro.baixar(selectedCheque.cd_lancamento, Number(targetAccountId));
+    showSuccess("Cheque compensado com sucesso!");
+    setIsCompensateOpen(false);
+    setSelectedCheque(null);
+    loadData();
+  };
+
+  const handleDevolverCheque = (id: number) => {
+    if (confirm("Deseja marcar este cheque como DEVOLVIDO?")) {
+      const database = JSON.parse(localStorage.getItem('dyaderp_db') || '{}');
+      const idx = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
+      if (idx !== -1) {
+        database.financeiro[idx].status = 'Devolvido';
+        localStorage.setItem('dyaderp_db', JSON.stringify(database));
+        showSuccess("Cheque marcado como devolvido.");
+        loadData();
+      }
+    }
   };
 
   const handleViewClient = (clientId?: number) => {
@@ -123,15 +152,8 @@ const Financial = () => {
     return { total, pagos, pendentes };
   };
 
-  // Cálculos de Patrimônio
   const patrimonyStats = React.useMemo(() => {
-    const stats = {
-      Imóvel: 0,
-      Veículo: 0,
-      Equipamento: 0,
-      Outros: 0,
-      Total: 0
-    };
+    const stats = { Imóvel: 0, Veículo: 0, Equipamento: 0, Outros: 0, Total: 0 };
     patrimonio.forEach(p => {
       stats[p.tipo] += p.valor;
       stats.Total += p.valor;
@@ -190,7 +212,6 @@ const Financial = () => {
           </div>
         </div>
 
-        {/* Filtros Globais */}
         <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           {activeTab !== 'patrimony' && activeTab !== 'accounts' && (
             <>
@@ -238,6 +259,8 @@ const Financial = () => {
               data={filterData('P')} 
               onBaixa={handleBaixa}
               onViewClient={handleViewClient}
+              onCompensar={(l: any) => { setSelectedCheque(l); setIsCompensateOpen(true); }}
+              onDevolver={handleDevolverCheque}
             />
           </TabsContent>
 
@@ -265,7 +288,6 @@ const Financial = () => {
           </TabsContent>
 
           <TabsContent value="patrimony" className="space-y-6">
-            {/* Resumo de Patrimônio por Categoria */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <PatrimonyStatCard title="Imóveis" value={patrimonyStats.Imóvel} icon={Home} color="text-blue-600" />
               <PatrimonyStatCard title="Veículos" value={patrimonyStats.Veículo} icon={Car} color="text-amber-600" />
@@ -311,17 +333,42 @@ const Financial = () => {
                   </CardContent>
                 </Card>
               ))}
-              {filteredPatrimony.length === 0 && (
-                <div className="col-span-full py-20 text-center text-slate-400">
-                  <Home size={48} className="mx-auto mb-2 opacity-10" />
-                  <p>Nenhum bem encontrado.</p>
-                </div>
-              )}
             </div>
           </TabsContent>
         </Tabs>
 
-        {/* Modal de Detalhes da Conta */}
+        {/* Modal de Compensação de Cheque */}
+        <Dialog open={isCompensateOpen} onOpenChange={setIsCompensateOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Compensar Cheque</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                <p className="text-[10px] font-bold text-indigo-600 uppercase">Cheque Selecionado</p>
+                <p className="text-sm font-bold text-slate-900">{selectedCheque?.descricao}</p>
+                <p className="text-lg font-black text-indigo-700">R$ {selectedCheque?.valor.toFixed(2)}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Nº Cheque: {selectedCheque?.cheque_num} | Banco: {selectedCheque?.banco_nome}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Conta para Débito</Label>
+                <select 
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  value={targetAccountId}
+                  onChange={(e) => setTargetAccountId(e.target.value)}
+                >
+                  <option value="">Selecione a conta...</option>
+                  {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome} (Saldo: R$ {c.saldo.toFixed(2)})</option>)}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCompensateOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCompensarCheque} className="bg-emerald-600 hover:bg-emerald-700" disabled={!targetAccountId}>
+                Compensar Agora
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={!!selectedAccountForDetails} onOpenChange={(open) => !open && setSelectedAccountForDetails(null)}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -339,7 +386,6 @@ const Financial = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Modal de Ficha do Cliente (Atalho do Financeiro) */}
         <Dialog open={!!selectedClientForDetails} onOpenChange={(open) => !open && setSelectedClientForDetails(null)}>
           <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
@@ -391,7 +437,7 @@ const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) =>
   </div>
 );
 
-const FinancialTable = ({ data, onBaixa, onViewClient }: any) => (
+const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }: any) => (
   <Card className="border-none shadow-sm overflow-hidden">
     <Table>
       <TableHeader className="bg-slate-50">
@@ -405,43 +451,47 @@ const FinancialTable = ({ data, onBaixa, onViewClient }: any) => (
       </TableHeader>
       <TableBody>
         {data.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={5} className="text-center py-12 text-slate-400">Nenhum lançamento no período.</TableCell>
-          </TableRow>
+          <TableRow><TableCell colSpan={5} className="text-center py-12 text-slate-400">Nenhum lançamento no período.</TableCell></TableRow>
         ) : (
           data.map((l: any) => (
             <TableRow key={l.cd_lancamento} className="hover:bg-slate-50/50 transition-colors">
               <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
               <TableCell>
                 <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
-                <div className="text-[10px] text-slate-500 uppercase flex items-center gap-2">
+                <div className="text-[10px] text-slate-500 uppercase flex flex-wrap items-center gap-2">
                   {l.nome_entidade || 'Lançamento Avulso'}
                   <span className="text-slate-300">|</span>
-                  {l.categoria}
+                  <Badge variant="outline" className="text-[8px] h-4 px-1">{l.meio_pagamento}</Badge>
+                  {l.num_documento && <span className="text-indigo-600 font-bold">DOC: {l.num_documento}</span>}
+                  {l.cheque_num && <span className="text-amber-600 font-bold">CHQ: {l.cheque_num}</span>}
                 </div>
               </TableCell>
               <TableCell>
                 <span className="font-bold">R$ {l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </TableCell>
               <TableCell>
-                <Badge className={l.status === 'Pago' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+                <Badge className={cn(
+                  l.status === 'Pago' ? "bg-emerald-100 text-emerald-700" : 
+                  l.status === 'Devolvido' ? "bg-rose-100 text-rose-700" :
+                  "bg-amber-100 text-amber-700"
+                )}>
                   {l.status === 'Pago' ? <CheckCircle2 size={10} className="mr-1" /> : <Clock size={10} className="mr-1" />}
                   {l.status.toUpperCase()}
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
-                  {l.cd_entidade && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 text-[10px] gap-1 text-indigo-600 hover:bg-indigo-50"
-                      onClick={() => onViewClient(l.cd_entidade)}
-                    >
-                      <FileText size={14} /> Ver Histórico
-                    </Button>
+                  {l.status === 'Pendente' && l.meio_pagamento === 'Cheque' && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1 border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => onCompensar(l)}>
+                        <CheckSquare size={14} /> Compensar
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1 border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => onDevolver(l.cd_lancamento)}>
+                        <RotateCcw size={14} /> Devolver
+                      </Button>
+                    </>
                   )}
-                  {l.status === 'Pendente' && (
+                  {l.status === 'Pendente' && l.meio_pagamento !== 'Cheque' && (
                     <Button size="sm" variant="outline" className="h-8 text-[10px] gap-1 border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => onBaixa(l.cd_lancamento)}>
                       <CheckCircle2 size={14} /> Baixar
                     </Button>
