@@ -64,13 +64,41 @@ import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
 
+type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
+
 const POS = () => {
   const navigate = useNavigate();
-  const [mode, setMode] = React.useState<'VENDA' | 'COMPRA' | 'LOCACAO'>('VENDA');
+  const [mode, setMode] = React.useState<POSMode>('VENDA');
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
-  const [cart, setCart] = React.useState<any[]>([]);
   const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
-  const [selectedEntityId, setSelectedEntityId] = React.useState<number | "">(""); 
+  
+  // Estados Multi-Carrinho (Um para cada modo)
+  const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
+    VENDA: [],
+    COMPRA: [],
+    LOCACAO: []
+  });
+
+  const [entitiesIds, setEntitiesIds] = React.useState<Record<POSMode, number | "">>({
+    VENDA: "",
+    COMPRA: "",
+    LOCACAO: ""
+  });
+
+  // Atalhos para o modo atual
+  const cart = carts[mode];
+  const selectedEntityId = entitiesIds[mode];
+
+  const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
+    setCarts(prev => ({
+      ...prev,
+      [mode]: typeof newCart === 'function' ? newCart(prev[mode]) : newCart
+    }));
+  };
+
+  const setSelectedEntityId = (id: number | "") => {
+    setEntitiesIds(prev => ({ ...prev, [mode]: id }));
+  };
   
   // Estados para o fluxo de inserção
   const [inputCode, setInputCode] = React.useState("");
@@ -180,7 +208,7 @@ const POS = () => {
     if (selectedSellerId) {
       setTimeout(() => codeRef.current?.focus(), 100);
     }
-  }, [selectedSellerId]);
+  }, [selectedSellerId, mode]); // Foca ao trocar de modo também
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') {
@@ -205,7 +233,7 @@ const POS = () => {
         handleOpenEdit(cart.length - 1);
       }
     }
-  }, [cart, selectedSellerId]);
+  }, [cart, selectedSellerId, mode]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
