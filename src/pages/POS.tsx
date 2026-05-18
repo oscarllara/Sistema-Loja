@@ -31,7 +31,8 @@ import {
   Eye,
   EyeOff,
   FileText,
-  CalendarClock
+  CalendarClock,
+  Calendar
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,10 @@ const POS = () => {
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
   
+  // Estados específicos de Locação
+  const [rentalStart, setRentalStart] = React.useState(new Date().toISOString().split('T')[0]);
+  const [rentalEnd, setRentalEnd] = React.useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+  
   // Refs para foco
   const codeRef = React.useRef<HTMLInputElement>(null);
   const qtyRef = React.useRef<HTMLInputElement>(null);
@@ -110,6 +115,45 @@ const POS = () => {
   const fornecedores = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
 
   const entities = mode === 'COMPRA' ? fornecedores : clientes;
+
+  // Função de cálculo de locação por períodos
+  const calculateRentalPrice = (days: number, p: any) => {
+    if (days <= 0) return 0;
+    
+    let total = 0;
+    let remainingDays = days;
+
+    // 1. Calcular meses cheios (30 dias)
+    if (remainingDays >= 30) {
+      const months = Math.floor(remainingDays / 30);
+      total += months * (p.valor_mes || p.venda * 30);
+      remainingDays %= 30;
+    }
+
+    if (remainingDays === 0) return total;
+
+    // 2. Lógica para os dias restantes baseada nas faixas do usuário
+    if (remainingDays >= 1 && remainingDays <= 3) {
+      total += (p.valor_diaria || p.venda) * remainingDays;
+    } else if (remainingDays >= 4 && remainingDays <= 10) {
+      total += (p.valor_semana || (p.valor_diaria || p.venda) * 7);
+    } else if (remainingDays >= 11 && remainingDays <= 18) {
+      total += (p.valor_quinzena || (p.valor_diaria || p.venda) * 15);
+    } else if (remainingDays >= 19) {
+      // Se sobrar mais de 19 dias, compensa cobrar o valor mensal
+      total += (p.valor_mes || p.venda * 30);
+    }
+
+    return total;
+  };
+
+  const getDays = () => {
+    const start = new Date(rentalStart);
+    const end = new Date(rentalEnd);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays);
+  };
 
   React.useEffect(() => {
     if (selectedSellerId) {
@@ -194,7 +238,7 @@ const POS = () => {
     setPendingProduct(product);
     setInputUnit(product.un);
     setInputQty("1");
-    setInputCode(product.nome); // Coloca o nome no campo de texto
+    setInputCode(product.nome); 
     setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
@@ -203,14 +247,26 @@ const POS = () => {
     if (!pendingProduct) return;
 
     const qty = parseFloat(inputQty.replace(',', '.')) || 1;
-    const price = getProductPrice(pendingProduct, inputUnit, priceMode);
+    let price = 0;
+
+    if (mode === 'LOCACAO') {
+      const days = getDays();
+      price = calculateRentalPrice(days, pendingProduct);
+      // Na locação, o preço final já é o total do período para 1 unidade do equipamento
+    } else {
+      price = getProductPrice(pendingProduct, inputUnit, priceMode);
+    }
     
     setCart(prev => [...prev, { 
       ...pendingProduct, 
       quantity: qty, 
       selectedUnit: inputUnit,
       finalPrice: price,
-      costPrice: pendingProduct.compra || 0
+      costPrice: pendingProduct.compra || 0,
+      isRental: mode === 'LOCACAO',
+      rentalStart: mode === 'LOCACAO' ? rentalStart : undefined,
+      rentalEnd: mode === 'LOCACAO' ? rentalEnd : undefined,
+      rentalDays: mode === 'LOCACAO' ? getDays() : undefined
     }]);
 
     setPendingProduct(null);
@@ -236,6 +292,7 @@ const POS = () => {
     setPriceMode(newMode);
     
     setCart(prev => prev.map(item => {
+      if (item.isRental) return item; // Locação não muda por modo de preço à vista/prazo do PDV
       const product = products.find(p => p.cd_produto === item.cd_produto);
       if (!product) return item;
       return {
@@ -251,8 +308,9 @@ const POS = () => {
     setCart(prev => {
       const newCart = [...prev];
       const item = { ...newCart[index] };
+      if (item.isRental) return prev;
+
       const product = products.find(p => p.cd_produto === item.cd_produto);
-      
       if (product && product.fracionado && product.un_fracionada) {
         const isSwitchingToFractional = item.selectedUnit === product.un;
         const newUnit = isSwitchingToFractional ? product.un_fracionada : product.un;
@@ -280,12 +338,10 @@ const POS = () => {
       return;
     }
 
-    // Se o usuário estiver apagando o nome do produto já identificado, limpa o estado pendente
     if (pendingProduct && val !== pendingProduct.nome) {
       setPendingProduct(null);
     }
 
-    // Busca instantânea apenas por código exato ou código com zeros à esquerda
     const paddedVal = val.padStart(5, '0');
     const product = products.find(p => 
       p.id_manual === val || 
@@ -304,10 +360,9 @@ const POS = () => {
     if (!inputCode.trim()) return;
 
     if (pendingProduct) {
-      setInputCode(pendingProduct.nome); // Garante que o nome apareça no campo
+      setInputCode(pendingProduct.nome); 
       qtyRef.current?.focus();
     } else {
-      // Se não for código, abre a pesquisa com o termo digitado
       setSearchInitialTerm(inputCode);
       setIsSearchOpen(true);
     }
@@ -367,22 +422,26 @@ const POS = () => {
           custo: item?.costPrice || 0,
           qtde: item?.quantity || 0,
           subtotal: (item?.finalPrice || 0) * (item?.quantity || 0),
-          un: item?.selectedUnit || 'UN'
+          un: item?.selectedUnit || 'UN',
+          isRental: item.isRental,
+          rentalStart: item.rentalStart,
+          rentalEnd: item.rentalEnd,
+          rentalDays: item.rentalDays
         }))
       };
 
-      if (mode === 'VENDA') {
+      if (mode === 'VENDA' || mode === 'LOCACAO') {
         db.vendas.add({ ...payload, cd_venda: id });
         payments.forEach(p => {
           if (p.method === 'Crediário' && p.installments) {
             p.installments.forEach((inst, idx) => {
               db.financeiro.add({
                 tipo: 'R',
-                descricao: `Venda PDV #${id} (${idx + 1}/${p.installments?.length})`,
+                descricao: `${mode === 'LOCACAO' ? 'Locação' : 'Venda'} PDV #${id} (${idx + 1}/${p.installments?.length})`,
                 valor: inst.amount,
                 data_vencimento: inst.date,
                 status: 'Pendente',
-                categoria: 'Venda',
+                categoria: mode === 'LOCACAO' ? 'Locação' : 'Venda',
                 meio_pagamento: 'Crediário',
                 cd_entidade: Number(selectedEntityId),
                 cd_venda: id
@@ -391,11 +450,11 @@ const POS = () => {
           } else {
             db.financeiro.add({
               tipo: 'R',
-              descricao: `Venda PDV #${id}`,
+              descricao: `${mode === 'LOCACAO' ? 'Locação' : 'Venda'} PDV #${id}`,
               valor: p.amount,
               data_vencimento: new Date().toISOString(),
               status: p.method === 'Crediário' ? 'Pendente' : 'Pago',
-              categoria: 'Venda',
+              categoria: mode === 'LOCACAO' ? 'Locação' : 'Venda',
               meio_pagamento: p.method,
               cd_entidade: Number(selectedEntityId) || 1,
               cd_conta: p.method === 'Crediário' ? undefined : 1,
@@ -403,26 +462,30 @@ const POS = () => {
             });
           }
         });
-        cart.forEach(item => {
-          const prod = products.find(p => p.cd_produto === item.cd_produto);
-          if (prod) {
-            let abate = item.quantity;
-            if (prod.fracionado && item.selectedUnit === prod.un_fracionada && prod.fator_conversao) {
-              abate = item.quantity * prod.fator_conversao;
+        
+        // Baixa de estoque apenas se não for locação (locação o item volta)
+        if (mode === 'VENDA') {
+          cart.forEach(item => {
+            const prod = products.find(p => p.cd_produto === item.cd_produto);
+            if (prod) {
+              let abate = item.quantity;
+              if (prod.fracionado && item.selectedUnit === prod.un_fracionada && prod.fator_conversao) {
+                abate = item.quantity * prod.fator_conversao;
+              }
+              db.produtos.update(prod.cd_produto, { estoque: prod.estoque - abate });
             }
-            db.produtos.update(prod.cd_produto, { estoque: prod.estoque - abate });
-          }
-        });
+          });
+        }
       }
 
-      setLastActionData({ ...payload, cd_venda: id, type: mode === 'VENDA' ? 'Venda' : 'Compra' });
+      setLastActionData({ ...payload, cd_venda: id, type: mode === 'VENDA' ? 'Venda' : mode === 'LOCACAO' ? 'Locação' : 'Compra' });
       showSuccess("Operação finalizada!");
       setCart([]);
       setIsCheckoutOpen(false);
       setIsPrintOpen(true);
     } catch (err) {
-      console.error("Erro ao finalizar venda:", err);
-      showError("Erro ao processar a venda.");
+      console.error("Erro ao finalizar:", err);
+      showError("Erro ao processar a operação.");
     }
   };
 
@@ -647,7 +710,14 @@ const POS = () => {
                   onClick={() => handleOpenEdit(idx)}
                 >
                   <TableCell className="py-0 text-xs font-mono border-r border-slate-200">{item?.id_manual}</TableCell>
-                  <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
+                  <TableCell className="py-0 text-xs font-bold uppercase border-r border-slate-200">
+                    {item?.nome}
+                    {item.isRental && (
+                      <span className="ml-2 text-[9px] bg-amber-100 text-amber-700 px-1 rounded">
+                        LOCAÇÃO ({item.rentalDays} DIAS)
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item?.finalPrice?.toFixed(2)}</TableCell>
                   <TableCell className="py-0 text-xs text-center border-r border-slate-200">
                     {Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
@@ -704,24 +774,55 @@ const POS = () => {
                 placeholder="Bipe o produto ou digite o nome..."
               />
             </div>
-            <div className="w-24 space-y-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Qtde</label>
-              <Input 
-                ref={qtyRef}
-                value={inputQty}
-                onChange={(e) => setInputQty(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && pendingProduct) {
-                    if (pendingProduct.fracionado) {
-                      unitRef.current?.focus();
-                    } else {
-                      commitToCart();
+
+            {mode === 'LOCACAO' ? (
+              <>
+                <div className="w-36 space-y-1">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase">Início Locação</label>
+                  <Input 
+                    type="date"
+                    value={rentalStart}
+                    onChange={(e) => setRentalStart(e.target.value)}
+                    className="h-10 bg-[#E1FFFF] border-none text-xs font-black text-slate-900"
+                  />
+                </div>
+                <div className="w-36 space-y-1">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase">Devolução Prevista</label>
+                  <Input 
+                    type="date"
+                    value={rentalEnd}
+                    onChange={(e) => setRentalEnd(e.target.value)}
+                    className="h-10 bg-[#E1FFFF] border-none text-xs font-black text-slate-900"
+                  />
+                </div>
+                <div className="w-20 space-y-1">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase">Dias</label>
+                  <div className="h-10 bg-amber-500 rounded flex items-center justify-center font-black text-white">
+                    {getDays()}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="w-24 space-y-1">
+                <label className="text-[9px] font-bold text-slate-400 uppercase">Qtde</label>
+                <Input 
+                  ref={qtyRef}
+                  value={inputQty}
+                  onChange={(e) => setInputQty(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && pendingProduct) {
+                      if (pendingProduct.fracionado) {
+                        unitRef.current?.focus();
+                      } else {
+                        commitToCart();
+                      }
                     }
-                  }
-                }}
-                className="h-10 bg-[#E1FFFF] border-none text-lg font-black text-slate-900 text-center"
-              />
-            </div>
+                  }}
+                  className="h-10 bg-[#E1FFFF] border-none text-lg font-black text-slate-900 text-center"
+                />
+              </div>
+            )}
+
             <div className="w-32 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Unidade</label>
               <select 
@@ -744,13 +845,21 @@ const POS = () => {
             <div className="w-40 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Valor Unitário</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
-                {pendingProduct ? getProductPrice(pendingProduct, inputUnit, priceMode).toFixed(2) : "0,00"}
+                {pendingProduct ? (
+                  mode === 'LOCACAO' 
+                    ? calculateRentalPrice(getDays(), pendingProduct).toFixed(2)
+                    : getProductPrice(pendingProduct, inputUnit, priceMode).toFixed(2)
+                ) : "0,00"}
               </div>
             </div>
             <div className="w-48 space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase">Sub Total</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
-                {pendingProduct ? (getProductPrice(pendingProduct, inputUnit, priceMode) * (parseFloat(inputQty.replace(',', '.')) || 1)).toFixed(2) : "0,00"}
+                {pendingProduct ? (
+                  (mode === 'LOCACAO' 
+                    ? calculateRentalPrice(getDays(), pendingProduct)
+                    : getProductPrice(pendingProduct, inputUnit, priceMode)) * (parseFloat(inputQty.replace(',', '.')) || 1)
+                ).toFixed(2) : "0,00"}
               </div>
             </div>
           </form>
