@@ -123,7 +123,6 @@ const POS = () => {
     let total = 0;
     let remainingDays = days;
 
-    // 1. Calcular meses cheios (30 dias)
     if (remainingDays >= 30) {
       const months = Math.floor(remainingDays / 30);
       total += months * (p.valor_mes || p.venda * 30);
@@ -132,7 +131,6 @@ const POS = () => {
 
     if (remainingDays === 0) return total;
 
-    // 2. Lógica para os dias restantes baseada nas faixas do usuário
     if (remainingDays >= 1 && remainingDays <= 3) {
       total += (p.valor_diaria || p.venda) * remainingDays;
     } else if (remainingDays >= 4 && remainingDays <= 10) {
@@ -140,7 +138,6 @@ const POS = () => {
     } else if (remainingDays >= 11 && remainingDays <= 18) {
       total += (p.valor_quinzena || (p.valor_diaria || p.venda) * 15);
     } else if (remainingDays >= 19) {
-      // Se sobrar mais de 19 dias, compensa cobrar o valor mensal
       total += (p.valor_mes || p.venda * 30);
     }
 
@@ -252,7 +249,6 @@ const POS = () => {
     if (mode === 'LOCACAO') {
       const days = getDays();
       price = calculateRentalPrice(days, pendingProduct);
-      // Na locação, o preço final já é o total do período para 1 unidade do equipamento
     } else {
       price = getProductPrice(pendingProduct, inputUnit, priceMode);
     }
@@ -292,7 +288,7 @@ const POS = () => {
     setPriceMode(newMode);
     
     setCart(prev => prev.map(item => {
-      if (item.isRental) return item; // Locação não muda por modo de preço à vista/prazo do PDV
+      if (item.isRental) return item;
       const product = products.find(p => p.cd_produto === item.cd_produto);
       if (!product) return item;
       return {
@@ -338,20 +334,9 @@ const POS = () => {
       return;
     }
 
+    // Se o usuário estiver apagando o nome do produto já identificado, limpa o estado pendente
     if (pendingProduct && val !== pendingProduct.nome) {
       setPendingProduct(null);
-    }
-
-    const paddedVal = val.padStart(5, '0');
-    const product = products.find(p => 
-      p.id_manual === val || 
-      p.id_manual === paddedVal || 
-      p.cod_barras === val
-    );
-
-    if (product) {
-      setPendingProduct(product);
-      setInputUnit(product.un);
     }
   };
 
@@ -359,10 +344,27 @@ const POS = () => {
     e.preventDefault();
     if (!inputCode.trim()) return;
 
+    // 1. Se já temos um produto pendente (nome já está na caixa), pula para quantidade
     if (pendingProduct) {
-      setInputCode(pendingProduct.nome); 
       qtyRef.current?.focus();
+      return;
+    }
+
+    // 2. Tenta identificar por código exato
+    const paddedVal = inputCode.padStart(5, '0');
+    const product = products.find(p => 
+      p.id_manual === inputCode || 
+      p.id_manual === paddedVal || 
+      p.cod_barras === inputCode
+    );
+
+    if (product) {
+      setPendingProduct(product);
+      setInputUnit(product.un);
+      setInputCode(product.nome); // Coloca o nome dentro da caixa
+      setTimeout(() => qtyRef.current?.focus(), 50);
     } else {
+      // 3. Se não for código, abre a pesquisa com o termo digitado
       setSearchInitialTerm(inputCode);
       setIsSearchOpen(true);
     }
@@ -463,7 +465,6 @@ const POS = () => {
           }
         });
         
-        // Baixa de estoque apenas se não for locação (locação o item volta)
         if (mode === 'VENDA') {
           cart.forEach(item => {
             const prod = products.find(p => p.cd_produto === item.cd_produto);
@@ -755,18 +756,17 @@ const POS = () => {
         <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800">
           <form onSubmit={handleCodeSubmit} className="flex items-end gap-4 h-full">
             <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[9px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
-                {pendingProduct && (
-                  <span className="text-[10px] font-black text-emerald-400 uppercase animate-in fade-in slide-in-from-left-2">
-                    {pendingProduct.nome}
-                  </span>
-                )}
-              </div>
+              <label className="text-[9px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
               <Input 
                 ref={codeRef}
                 value={inputCode}
                 onChange={handleCodeChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    handleCodeSubmit(e);
+                  }
+                }}
                 className={cn(
                   "h-10 border-none text-lg font-black focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors",
                   pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900"
