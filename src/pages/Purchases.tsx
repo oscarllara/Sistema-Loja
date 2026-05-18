@@ -6,13 +6,11 @@ import {
   FileCode, 
   Plus, 
   Upload, 
-  History, 
-  FileText, 
-  Trash2, 
-  Edit,
+  FileSearch,
   CheckCircle2,
   Clock,
-  FileSearch
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +32,8 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { showSuccess, showError, showLoading, dismissToast } from '@/utils/toast';
+import { showSuccess, showLoading, dismissToast } from '@/utils/toast';
+import { cn } from '@/lib/utils';
 
 const Purchases = () => {
   const [compras, setCompras] = React.useState(db.compras.getAll());
@@ -54,49 +53,33 @@ const Purchases = () => {
 
     const loadingId = showLoading("Lendo arquivo XML...");
 
-    // Simulação de processamento de XML (Em um ambiente real, usaríamos um parser de XML)
+    // Simulação de processamento de XML
     setTimeout(() => {
       const mockXMLData = {
         cd_compra: Date.now(),
         nota_fiscal: (Math.floor(Math.random() * 900000) + 100000).toString(),
         cd_fornecedores: 1, 
-        nome_fornecedor: "DISTRIBUIDORA NACIONAL DE MATERIAIS LTDA",
+        nome_fornecedor: "DISTRIBUIDORA EXEMPLO LTDA",
         total: 1250.00,
         status: 'Rascunho' as const,
         itens: [
           { 
             codigo_fornecedor: "REF-1020", 
-            nome_fornecedor: "CIMENTO CP-II 50KG VOTORAN", 
-            un: "SC", 
-            qtde: 20, 
-            valor_unit: 32.50, 
-            margem: 35, 
-            valor_venda: 43.80, 
-            subtotal: 650.00 
-          },
-          { 
-            codigo_fornecedor: "REF-5050", 
-            nome_fornecedor: "ARGAMASSA AC-III 20KG", 
-            un: "SC", 
-            qtde: 30, 
-            valor_unit: 20.00, 
+            nome_fornecedor: "PRODUTO IMPORTADO XML 01", 
+            un: "UN", 
+            qtde: 10, 
+            valor_unit: 50.00, 
             margem: 40, 
-            valor_venda: 28.00, 
-            subtotal: 600.00 
+            valor_venda: 70.00, 
+            subtotal: 500.00 
           }
         ]
       };
 
-      // Tentar mapear produtos automaticamente baseado no histórico de compras desse fornecedor
-      mockXMLData.itens = mockXMLData.itens.map(item => {
-        const mappedId = db.mappings.get(mockXMLData.cd_fornecedores, item.codigo_fornecedor);
-        return { ...item, cd_produto: mappedId || undefined };
-      });
-
       dismissToast(loadingId);
       setEditingCompra(mockXMLData);
       setIsModalOpen(true);
-      showSuccess("XML processado! Verifique os vínculos e preços.");
+      showSuccess("XML processado com sucesso!");
       
       if (fileInputRef.current) fileInputRef.current.value = "";
     }, 1500);
@@ -133,14 +116,14 @@ const Purchases = () => {
             <Button 
               variant="outline" 
               onClick={() => fileInputRef.current?.click()}
-              className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 rounded-xl gap-2 h-11 shadow-sm"
+              className="bg-blue-600 text-white hover:bg-blue-700 border-none rounded-xl gap-2 h-11 px-6 shadow-lg shadow-blue-100"
             >
-              <Upload size={20} /> Importar XML (NFe)
+              <Upload size={20} /> Importar XML (F12)
             </Button>
             
             <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingCompra(null); }}>
               <DialogTrigger asChild>
-                <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 shadow-lg shadow-indigo-100">
+                <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg shadow-indigo-100">
                   <Plus size={20} /> Nova Compra Manual
                 </Button>
               </DialogTrigger>
@@ -166,13 +149,21 @@ const Purchases = () => {
             <p className="text-slate-500 max-w-xs mt-2">
               Importe um arquivo XML da nota fiscal ou registre manualmente para atualizar seu estoque e financeiro.
             </p>
-            <Button 
-              variant="outline" 
-              className="mt-6 rounded-xl gap-2"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={18} /> Começar pelo XML
-            </Button>
+            <div className="flex gap-3 mt-6">
+              <Button 
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-blue-600 hover:bg-blue-700 rounded-xl gap-2 h-12 px-8 shadow-lg shadow-blue-100"
+              >
+                <Upload size={18} /> Importar XML agora
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => setIsModalOpen(true)}
+                className="rounded-xl h-12 px-8"
+              >
+                Entrada Manual
+              </Button>
+            </div>
           </Card>
         ) : (
           <Card className="border-none shadow-sm overflow-hidden bg-white">
