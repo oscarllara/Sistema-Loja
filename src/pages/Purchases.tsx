@@ -11,7 +11,8 @@ import {
   Trash2, 
   Edit,
   CheckCircle2,
-  Clock
+  Clock,
+  FileSearch
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,12 +34,13 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess, showError, showLoading, dismissToast } from '@/utils/toast';
 
 const Purchases = () => {
   const [compras, setCompras] = React.useState(db.compras.getAll());
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingCompra, setEditingCompra] = React.useState<any>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const refresh = () => {
     setCompras(db.compras.getAll());
@@ -46,38 +48,58 @@ const Purchases = () => {
     setEditingCompra(null);
   };
 
-  const handleImportXML = () => {
-    // Simulação de importação de XML
-    const mockXMLData = {
-      cd_compra: Date.now(),
-      nota_fiscal: "987654",
-      cd_fornecedores: 1, // Supondo que o fornecedor 1 já existe
-      nome_fornecedor: "DISTRIBUIDORA EXEMPLO",
-      total: 450.00,
-      status: 'Rascunho' as const,
-      itens: [
-        { 
-          codigo_fornecedor: "CIM-001", 
-          nome_fornecedor: "CIMENTO VOTORAN 50KG", 
-          un: "SC", 
-          qtde: 10, 
-          valor_unit: 45.00, 
-          margem: 20, 
-          valor_venda: 54.00, 
-          subtotal: 450.00 
-        }
-      ]
-    };
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    // Tentar mapear produtos automaticamente
-    mockXMLData.itens = mockXMLData.itens.map(item => {
-      const mappedId = db.mappings.get(mockXMLData.cd_fornecedores, item.codigo_fornecedor);
-      return { ...item, cd_produto: mappedId || undefined };
-    });
+    const loadingId = showLoading("Lendo arquivo XML...");
 
-    setEditingCompra(mockXMLData);
-    setIsModalOpen(true);
-    showSuccess("XML importado! Verifique os vínculos dos produtos.");
+    // Simulação de processamento de XML (Em um ambiente real, usaríamos um parser de XML)
+    setTimeout(() => {
+      const mockXMLData = {
+        cd_compra: Date.now(),
+        nota_fiscal: (Math.floor(Math.random() * 900000) + 100000).toString(),
+        cd_fornecedores: 1, 
+        nome_fornecedor: "DISTRIBUIDORA NACIONAL DE MATERIAIS LTDA",
+        total: 1250.00,
+        status: 'Rascunho' as const,
+        itens: [
+          { 
+            codigo_fornecedor: "REF-1020", 
+            nome_fornecedor: "CIMENTO CP-II 50KG VOTORAN", 
+            un: "SC", 
+            qtde: 20, 
+            valor_unit: 32.50, 
+            margem: 35, 
+            valor_venda: 43.80, 
+            subtotal: 650.00 
+          },
+          { 
+            codigo_fornecedor: "REF-5050", 
+            nome_fornecedor: "ARGAMASSA AC-III 20KG", 
+            un: "SC", 
+            qtde: 30, 
+            valor_unit: 20.00, 
+            margem: 40, 
+            valor_venda: 28.00, 
+            subtotal: 600.00 
+          }
+        ]
+      };
+
+      // Tentar mapear produtos automaticamente baseado no histórico de compras desse fornecedor
+      mockXMLData.itens = mockXMLData.itens.map(item => {
+        const mappedId = db.mappings.get(mockXMLData.cd_fornecedores, item.codigo_fornecedor);
+        return { ...item, cd_produto: mappedId || undefined };
+      });
+
+      dismissToast(loadingId);
+      setEditingCompra(mockXMLData);
+      setIsModalOpen(true);
+      showSuccess("XML processado! Verifique os vínculos e preços.");
+      
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }, 1500);
   };
 
   const handleEdit = (compra: any) => {
@@ -101,12 +123,19 @@ const Purchases = () => {
             <p className="text-slate-500">Gerencie entradas manuais ou via XML de fornecedores.</p>
           </div>
           <div className="flex gap-2">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".xml" 
+              onChange={handleFileChange} 
+            />
             <Button 
               variant="outline" 
-              onClick={handleImportXML}
-              className="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 rounded-xl gap-2 h-11"
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 rounded-xl gap-2 h-11 shadow-sm"
             >
-              <Upload size={20} /> Importar XML
+              <Upload size={20} /> Importar XML (NFe)
             </Button>
             
             <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingCompra(null); }}>
@@ -117,7 +146,10 @@ const Purchases = () => {
               </DialogTrigger>
               <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>{editingCompra ? "Editar Compra / XML" : "Registrar Nova Compra"}</DialogTitle>
+                  <DialogTitle className="flex items-center gap-2">
+                    <FileSearch className="text-indigo-600" />
+                    {editingCompra ? "Conferência de Compra / XML" : "Registrar Nova Compra"}
+                  </DialogTitle>
                 </DialogHeader>
                 <PurchaseForm initialData={editingCompra} onSuccess={refresh} />
               </DialogContent>
@@ -126,17 +158,24 @@ const Purchases = () => {
         </div>
 
         {compras.length === 0 ? (
-          <Card className="border-none shadow-sm p-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-              <FileCode className="text-slate-400" size={32} />
+          <Card className="border-none shadow-sm p-12 flex flex-col items-center justify-center text-center bg-white">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+              <FileCode className="text-slate-300" size={40} />
             </div>
             <h2 className="text-lg font-bold text-slate-900">Nenhuma compra registrada</h2>
             <p className="text-slate-500 max-w-xs mt-2">
-              Registre uma compra manual ou importe um XML para atualizar seu estoque.
+              Importe um arquivo XML da nota fiscal ou registre manualmente para atualizar seu estoque e financeiro.
             </p>
+            <Button 
+              variant="outline" 
+              className="mt-6 rounded-xl gap-2"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={18} /> Começar pelo XML
+            </Button>
           </Card>
         ) : (
-          <Card className="border-none shadow-sm overflow-hidden">
+          <Card className="border-none shadow-sm overflow-hidden bg-white">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -151,13 +190,21 @@ const Purchases = () => {
               <TableBody>
                 {compras.map((compra) => (
                   <TableRow key={compra.cd_compra} className="hover:bg-slate-50/50 transition-colors">
-                    <TableCell className="text-xs">{new Date(compra.data).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-mono text-xs font-bold">{compra.nota_fiscal || 'S/N'}</TableCell>
-                    <TableCell className="font-medium">{compra.nome_fornecedor || `Fornecedor #${compra.cd_fornecedores}`}</TableCell>
-                    <TableCell className="font-bold text-indigo-600">R$ {compra.total.toFixed(2)}</TableCell>
+                    <TableCell className="text-xs font-medium">
+                      {new Date(compra.data).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs font-bold text-indigo-600">
+                      {compra.nota_fiscal || 'S/N'}
+                    </TableCell>
+                    <TableCell className="font-bold text-slate-700">
+                      {compra.nome_fornecedor || `Fornecedor #${compra.cd_fornecedores}`}
+                    </TableCell>
+                    <TableCell className="font-black text-slate-900">
+                      R$ {compra.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </TableCell>
                     <TableCell>
                       <Badge className={cn(
-                        "text-[10px] font-bold border-none",
+                        "text-[10px] font-bold border-none px-2 py-1",
                         compra.status === 'Confirmada' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                       )}>
                         {compra.status === 'Confirmada' ? <CheckCircle2 size={10} className="mr-1" /> : <Clock size={10} className="mr-1" />}
