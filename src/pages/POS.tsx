@@ -194,7 +194,7 @@ const POS = () => {
     setPendingProduct(product);
     setInputUnit(product.un);
     setInputQty("1");
-    setInputCode(product.id_manual);
+    setInputCode(product.nome); // Coloca o nome no campo de texto
     setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
@@ -280,6 +280,11 @@ const POS = () => {
       return;
     }
 
+    // Se o usuário estiver apagando o nome do produto já identificado, limpa o estado pendente
+    if (pendingProduct && val !== pendingProduct.nome) {
+      setPendingProduct(null);
+    }
+
     // Busca instantânea apenas por código exato ou código com zeros à esquerda
     const paddedVal = val.padStart(5, '0');
     const product = products.find(p => 
@@ -291,8 +296,6 @@ const POS = () => {
     if (product) {
       setPendingProduct(product);
       setInputUnit(product.un);
-    } else {
-      setPendingProduct(null);
     }
   };
 
@@ -301,6 +304,7 @@ const POS = () => {
     if (!inputCode.trim()) return;
 
     if (pendingProduct) {
+      setInputCode(pendingProduct.nome); // Garante que o nome apareça no campo
       qtyRef.current?.focus();
     } else {
       // Se não for código, abre a pesquisa com o termo digitado
