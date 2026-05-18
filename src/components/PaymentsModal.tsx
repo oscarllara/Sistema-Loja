@@ -34,7 +34,6 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
   const [selectedClient, setSelectedClient] = React.useState<Cliente | null>(null);
   const [pendencias, setPendencias] = React.useState<LancamentoFinanceiro[]>([]);
   
-  // Estados para o formulário de recebimento
   const [payingEntry, setPayingEntry] = React.useState<LancamentoFinanceiro | null>(null);
   const [receiveValue, setReceiveValue] = React.useState("");
   const [receiveMethod, setReceiveMethod] = React.useState<MeioPagamento>('Dinheiro');
@@ -82,10 +81,10 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="p-6 border-b bg-slate-50">
-          <DialogTitle className="flex items-center gap-2">
-            <Wallet className="text-emerald-600" />
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+        <DialogHeader className="p-4 border-b bg-slate-50 shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Wallet className="text-emerald-600" size={20} />
             Recebimento de Contas / Crediário
           </DialogTitle>
         </DialogHeader>
@@ -124,42 +123,42 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="p-4 bg-indigo-600 text-white flex items-center justify-between">
+              <div className="p-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
-                  <User size={20} />
+                  <User size={18} />
                   <div>
-                    <p className="text-[10px] font-bold uppercase text-indigo-200">Cliente Selecionado</p>
-                    <p className="font-black uppercase">{selectedClient.nome}</p>
+                    <p className="text-[9px] font-bold uppercase text-indigo-200">Cliente Selecionado</p>
+                    <p className="text-sm font-black uppercase">{selectedClient.nome}</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10" onClick={() => setSelectedClient(null)}>Trocar Cliente</Button>
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 h-8 text-xs" onClick={() => setSelectedClient(null)}>Trocar Cliente</Button>
               </div>
 
               <div className="flex-1 flex overflow-hidden">
                 {/* Lista de Pendências */}
-                <div className={cn("flex-1 overflow-auto p-4", payingEntry && "hidden md:block border-r")}>
+                <div className={cn("flex-1 overflow-auto p-2", payingEntry && "hidden md:block border-r")}>
                   <Table>
-                    <TableHeader className="bg-slate-50">
+                    <TableHeader className="bg-slate-50 sticky top-0 z-10">
                       <TableRow>
-                        <TableHead className="text-[10px] font-bold uppercase">Vencimento</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase">Descrição</TableHead>
-                        <TableHead className="text-right text-[10px] font-bold uppercase">Valor</TableHead>
-                        <TableHead className="text-center text-[10px] font-bold uppercase">Ação</TableHead>
+                        <TableHead className="text-[9px] font-bold uppercase h-8">Vencimento</TableHead>
+                        <TableHead className="text-[9px] font-bold uppercase h-8">Descrição</TableHead>
+                        <TableHead className="text-right text-[9px] font-bold uppercase h-8">Valor</TableHead>
+                        <TableHead className="text-center text-[9px] font-bold uppercase h-8">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pendencias.map((p) => (
-                        <TableRow key={p.cd_lancamento} className={cn(payingEntry?.cd_lancamento === p.cd_lancamento && "bg-emerald-50")}>
-                          <TableCell className="text-xs font-bold">{new Date(p.data_vencimento).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-xs">{p.descricao}</TableCell>
-                          <TableCell className="text-right font-black text-rose-600">R$ {p.valor.toFixed(2)}</TableCell>
-                          <TableCell className="text-center">
+                        <TableRow key={p.cd_lancamento} className={cn("h-10", payingEntry?.cd_lancamento === p.cd_lancamento && "bg-emerald-50")}>
+                          <TableCell className="py-1 text-[11px] font-bold">{new Date(p.data_vencimento).toLocaleDateString()}</TableCell>
+                          <TableCell className="py-1 text-[11px]">{p.descricao}</TableCell>
+                          <TableCell className="py-1 text-right font-black text-rose-600 text-[11px]">R$ {p.valor.toFixed(2)}</TableCell>
+                          <TableCell className="py-1 text-center">
                             <Button 
                               size="sm" 
-                              className="bg-emerald-600 hover:bg-emerald-700 h-8 gap-1 font-bold text-[10px]"
+                              className="bg-emerald-600 hover:bg-emerald-700 h-7 gap-1 font-bold text-[9px] px-2"
                               onClick={() => startPayment(p)}
                             >
-                              <CheckCircle2 size={14} /> RECEBER
+                              <CheckCircle2 size={12} /> RECEBER
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -168,7 +167,7 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-20 text-slate-400">
                             <CheckCircle2 size={48} className="mx-auto mb-2 opacity-10" />
-                            <p className="font-bold">Nenhuma conta pendente para este cliente.</p>
+                            <p className="font-bold">Nenhuma conta pendente.</p>
                           </TableCell>
                         </TableRow>
                       )}
@@ -176,67 +175,66 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
                   </Table>
                 </div>
 
-                {/* Formulário de Recebimento (Lateral ou Modal-like) */}
+                {/* Formulário de Recebimento */}
                 {payingEntry && (
-                  <div className="w-full md:w-80 bg-slate-50 p-6 animate-in slide-in-from-right-4">
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="font-black text-slate-900 uppercase text-sm">Confirmar Recebimento</h3>
-                      <button onClick={() => setPayingEntry(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                  <div className="w-full md:w-72 bg-slate-50 p-4 animate-in slide-in-from-right-4 border-l flex flex-col overflow-y-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-black text-slate-900 uppercase text-[11px]">Confirmar Recebimento</h3>
+                      <button onClick={() => setPayingEntry(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       <div className="p-3 bg-white rounded-xl border border-slate-200">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Valor da Dívida</p>
-                        <p className="text-xl font-black text-rose-600">R$ {payingEntry.valor.toFixed(2)}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Valor da Dívida</p>
+                        <p className="text-lg font-black text-rose-600">R$ {payingEntry.valor.toFixed(2)}</p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500">Valor a Receber (R$)</Label>
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-bold uppercase text-slate-500">Valor a Receber (R$)</Label>
                         <Input 
-                          className="h-12 text-xl font-black text-emerald-600 border-2 border-emerald-100 focus-visible:ring-emerald-500"
+                          className="h-10 text-lg font-black text-emerald-600 border-2 border-emerald-100 focus-visible:ring-emerald-500"
                           value={receiveValue}
                           onChange={(e) => setReceiveValue(e.target.value)}
                           autoFocus
                         />
-                        <p className="text-[9px] text-slate-400 italic">Altere para receber valor parcial.</p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500">Forma de Recebimento</Label>
-                        <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-bold uppercase text-slate-500">Forma de Recebimento</Label>
+                        <div className="grid grid-cols-2 gap-1.5">
                           <Button 
                             variant={receiveMethod === 'Dinheiro' ? 'default' : 'outline'} 
-                            className={cn("h-12 flex-col gap-1 text-[9px] font-bold", receiveMethod === 'Dinheiro' && "bg-emerald-600")}
+                            className={cn("h-10 flex-col gap-0.5 text-[8px] font-bold px-1", receiveMethod === 'Dinheiro' && "bg-emerald-600")}
                             onClick={() => setReceiveMethod('Dinheiro')}
                           >
-                            <Banknote size={16} /> DINHEIRO
+                            <Banknote size={14} /> DINHEIRO
                           </Button>
                           <Button 
                             variant={receiveMethod === 'PIX' ? 'default' : 'outline'} 
-                            className={cn("h-12 flex-col gap-1 text-[9px] font-bold", receiveMethod === 'PIX' && "bg-indigo-600")}
+                            className={cn("h-10 flex-col gap-0.5 text-[8px] font-bold px-1", receiveMethod === 'PIX' && "bg-indigo-600")}
                             onClick={() => setReceiveMethod('PIX')}
                           >
-                            <QrCode size={16} /> PIX
+                            <QrCode size={14} /> PIX
                           </Button>
                           <Button 
                             variant={receiveMethod === 'Cartão Crédito' ? 'default' : 'outline'} 
-                            className={cn("h-12 flex-col gap-1 text-[9px] font-bold", receiveMethod === 'Cartão Crédito' && "bg-blue-600")}
+                            className={cn("h-10 flex-col gap-0.5 text-[8px] font-bold px-1", receiveMethod === 'Cartão Crédito' && "bg-blue-600")}
                             onClick={() => setReceiveMethod('Cartão Crédito')}
                           >
-                            <CreditCard size={16} /> C. CRÉDITO
+                            <CreditCard size={14} /> C. CRÉDITO
                           </Button>
                           <Button 
                             variant={receiveMethod === 'Cartão Débito' ? 'default' : 'outline'} 
-                            className={cn("h-12 flex-col gap-1 text-[9px] font-bold", receiveMethod === 'Cartão Débito' && "bg-sky-600")}
+                            className={cn("h-10 flex-col gap-0.5 text-[8px] font-bold px-1", receiveMethod === 'Cartão Débito' && "bg-sky-600")}
                             onClick={() => setReceiveMethod('Cartão Débito')}
                           >
-                            <CreditCard size={16} /> C. DÉBITO
+                            <CreditCard size={14} /> C. DÉBITO
                           </Button>
                         </div>
                       </div>
 
                       <Button 
-                        className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-lg shadow-emerald-100 rounded-xl mt-4"
+                        className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base shadow-lg shadow-emerald-100 rounded-xl mt-2"
                         onClick={handlePay}
                       >
                         CONFIRMAR
