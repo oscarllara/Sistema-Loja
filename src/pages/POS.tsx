@@ -89,7 +89,6 @@ const POS = () => {
   const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
   const [isEditItemOpen, setIsEditItemOpen] = React.useState(false);
   
-  // Novos Modais
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
@@ -111,7 +110,6 @@ const POS = () => {
 
   const entities = mode === 'VENDA' ? clientes : fornecedores;
 
-  // Foco automático no bipe após selecionar o usuário
   React.useEffect(() => {
     if (selectedSellerId) {
       codeRef.current?.focus();
@@ -281,7 +279,7 @@ const POS = () => {
       return;
     }
 
-    // Busca instantânea por código exato ou código com zeros à esquerda
+    // Busca instantânea apenas por código exato ou código com zeros à esquerda
     const paddedVal = val.padStart(5, '0');
     const product = products.find(p => 
       p.id_manual === val || 
@@ -294,10 +292,6 @@ const POS = () => {
       setInputUnit(product.un);
     } else {
       setPendingProduct(null);
-      // Se for texto longo, prepara para abrir a pesquisa ao dar Enter
-      if (val.length >= 3 && /[a-zA-Z]/.test(val)) {
-        // Apenas aguarda o Enter
-      }
     }
   };
 
@@ -306,10 +300,9 @@ const POS = () => {
     if (!inputCode.trim()) return;
 
     if (pendingProduct) {
-      // Se já puxou o produto, foca na quantidade para confirmar
       qtyRef.current?.focus();
     } else {
-      // Se não puxou nada, abre a pesquisa com o termo digitado
+      // Se não for código, abre a pesquisa com o termo digitado
       setSearchInitialTerm(inputCode);
       setIsSearchOpen(true);
     }
@@ -424,7 +417,7 @@ const POS = () => {
       setIsPrintOpen(true);
     } catch (err) {
       console.error("Erro ao finalizar venda:", err);
-      showError("Erro ao processar a venda. Verifique os dados.");
+      showError("Erro ao processar a venda.");
     }
   };
 
@@ -451,7 +444,7 @@ const POS = () => {
     setCart(newCart);
     setSelectedEntityId(quote.cd_clientes);
     setIsQuotesOpen(false);
-    showSuccess("Orçamento carregado no carrinho!");
+    showSuccess("Orçamento carregado!");
   };
 
   const themeColor = mode === 'VENDA' ? 'indigo' : 'emerald';
@@ -647,19 +640,15 @@ const POS = () => {
 
         {/* Barra Inferior de Inserção Sequencial */}
         <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800">
-          <form onSubmit={pendingProduct ? commitToCart : handleCodeSubmit} className="flex items-end gap-4 h-full">
+          <form onSubmit={handleCodeSubmit} className="flex items-end gap-4 h-full">
             <div className="flex-1 space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[9px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
-                <Button 
-                  type="button"
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setIsSearchOpen(true)}
-                  className="h-4 text-[8px] text-indigo-400 hover:text-indigo-300 p-0"
-                >
-                  <Search size={10} className="mr-1" /> PESQUISAR (F1)
-                </Button>
+                {pendingProduct && (
+                  <span className="text-[10px] font-black text-emerald-400 uppercase animate-in fade-in slide-in-from-left-2">
+                    {pendingProduct.nome}
+                  </span>
+                )}
               </div>
               <Input 
                 ref={codeRef}
@@ -669,7 +658,7 @@ const POS = () => {
                   "h-10 border-none text-lg font-black focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors",
                   pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900"
                 )}
-                placeholder={pendingProduct ? pendingProduct.nome : "Bipe o produto ou digite o nome..."}
+                placeholder="Bipe o produto ou digite o nome..."
               />
             </div>
             <div className="w-24 space-y-1">
