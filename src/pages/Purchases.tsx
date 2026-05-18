@@ -32,7 +32,7 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { showSuccess, showLoading, dismissToast } from '@/utils/toast';
+import { showSuccess, showLoading, dismissToast, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const Purchases = () => {
@@ -47,43 +47,75 @@ const Purchases = () => {
     setEditingCompra(null);
   };
 
-  // ESTA É A FUNÇÃO QUE TRATA O XML
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const loadingId = showLoading("Lendo arquivo XML...");
+    const reader = new FileReader();
 
-    // Simulação de processamento de XML (Aqui entraria um parser de XML real)
-    setTimeout(() => {
-      const mockXMLData = {
-        cd_compra: Date.now(),
-        nota_fiscal: (Math.floor(Math.random() * 900000) + 100000).toString(),
-        cd_fornecedores: 1, 
-        nome_fornecedor: "DISTRIBUIDORA EXEMPLO LTDA",
-        total: 1250.00,
-        status: 'Rascunho' as const,
-        itens: [
-          { 
-            codigo_fornecedor: "REF-1020", 
-            nome_fornecedor: "PRODUTO IMPORTADO XML 01", 
-            un: "UN", 
-            qtde: 10, 
-            valor_unit: 50.00, 
-            margem: 40, 
-            valor_venda: 70.00, 
-            subtotal: 500.00 
-          }
-        ]
-      };
+    reader.onload = (e) => {
+      try {
+        const xmlText = e.target?.result as string;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-      dismissToast(loadingId);
-      setEditingCompra(mockXMLData);
-      setIsModalOpen(true);
-      showSuccess("XML processado com sucesso!");
-      
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }, 1500);
+        // Extrair dados básicos da nota
+        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
+        const xNomeFornecedor = xmlDoc.getElementsByTagName("xNome")[0]?.textContent || "FORNECEDOR DESCONHECIDO";
+        const vNF = parseFloat(xmlDoc.getElementsByTagName("vNF")[0]?.textContent || "0");
+
+        // Extrair itens (det)
+        const itensNodes = xmlDoc.getElementsByTagName("det");
+        const itens: any[] = [];
+
+        for (let i = 0; i < itensNodes.length; i++) {
+          const prod = itensNodes[i].getElementsByTagName("prod")[0];
+          const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
+          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
+          const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
+          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
+          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
+          const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
+
+          // Tenta encontrar vínculo automático pelo código do fornecedor
+          const cd_produto_vinculado = db.mappings.get(1, cProd); // 1 é placeholder para fornecedor
+
+          itens.push({
+            codigo_fornecedor: cProd,
+            nome_fornecedor: xProd,
+            un: uCom,
+            qtde: qCom,
+            valor_unit: vUnCom,
+            subtotal: vProd,
+            margem: 40, // Sugestão padrão
+            valor_venda: vUnCom * 1.4,
+            cd_produto: cd_produto_vinculado || undefined
+          });
+        }
+
+        const compraData = {
+          cd_compra: Date.now(),
+          nota_fiscal: nNF,
+          cd_fornecedores: 0, // Será selecionado no form
+          nome_fornecedor: xNomeFornecedor,
+          total: vNF,
+          status: 'Rascunho' as const,
+          itens: itens
+        };
+
+        dismissToast(loadingId);
+        setEditingCompra(compraData);
+        setIsModalOpen(true);
+        showSuccess("XML importado! Agora vincule os produtos ao seu estoque.");
+      } catch (err) {
+        dismissToast(loadingId);
+        showError("Erro ao processar o XML. Verifique se é um arquivo de NF-e válido.");
+      }
+    };
+
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleEdit = (compra: any) => {
@@ -107,7 +139,6 @@ const Purchases = () => {
             <p className="text-slate-500">Gerencie entradas manuais ou via XML de fornecedores.</p>
           </div>
           <div className="flex gap-2">
-            {/* Input invisível para seleção de arquivo */}
             <input 
               type="file" 
               ref={fileInputRef} 

@@ -58,14 +58,12 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const [isNewProductOpen, setIsNewProductOpen] = React.useState(false);
   const [activeItemIndex, setActiveItemIndex] = React.useState<number | null>(null);
   
-  // Estados de Pagamento
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState<MeioPagamento>('Boleto');
   const [numInstallments, setNumInstallments] = React.useState(1);
   const [installments, setInstallments] = React.useState<any[]>([]);
 
   const suppliers = db.clientes.getAll().filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
-
   const total = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
 
   const formatCurrency = (value: number | string) => {
@@ -81,10 +79,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
 
   const parseCurrency = (value: string) => {
     return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
-  };
-
-  const addItem = () => {
-    setItems([...items, { qtde: 1, valor_unit: 0, margem: 0, valor_venda: 0, subtotal: 0, un: 'UN' }]);
   };
 
   const removeItem = (index: number) => {
@@ -123,26 +117,30 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         ...originalItem,
         cd_produto: product.cd_produto,
         un: product.un,
-        // Mantém os valores que vieram do XML se existirem
         valor_unit: originalItem.valor_unit || product.compra || 0,
         valor_venda: originalItem.valor_venda || product.venda || 0,
         margem: originalItem.margem || (product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0),
         subtotal: (originalItem.qtde || 1) * (originalItem.valor_unit || product.compra || 0)
       };
+
+      // Salva o mapeamento para futuras importações deste fornecedor
+      if (originalItem.codigo_fornecedor && supplierId) {
+        db.mappings.save(supplierId, originalItem.codigo_fornecedor, product.cd_produto);
+      }
+
       setItems(newItems);
       setActiveItemIndex(null);
-    } else {
-      setItems([...items, { 
-        cd_produto: product.cd_produto, 
-        qtde: 1, 
-        valor_unit: product.compra || 0, 
-        margem: product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0,
-        valor_venda: product.venda || 0,
-        subtotal: product.compra || 0,
-        un: product.un
-      }]);
     }
     setIsSearchOpen(false);
+  };
+
+  const handleNewProductSuccess = () => {
+    const allProducts = db.produtos.getAll();
+    const lastProduct = allProducts[allProducts.length - 1];
+    if (lastProduct) {
+      handleProductSelect(lastProduct);
+    }
+    setIsNewProductOpen(false);
   };
 
   const generateInstallments = () => {
@@ -172,7 +170,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const handleFinalize = () => {
     if (!supplierId) { showError("Selecione um fornecedor."); return; }
     if (items.length === 0) { showError("Adicione pelo menos um item."); return; }
-    if (items.some(i => !i.cd_produto)) { showError("Existem itens no XML não vinculados ao estoque."); return; }
+    if (items.some(i => !i.cd_produto)) { showError("Existem itens não vinculados ao estoque."); return; }
     
     const supplier = suppliers.find(s => s.cd_clientes === supplierId);
     const compra: Compra = {
@@ -200,16 +198,11 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         categoria: 'Fornecedor',
         meio_pagamento: paymentMethod,
         num_documento: inst.documento,
-        banco_nome: inst.banco_nome,
-        banco_num: inst.banco_num,
-        agencia: inst.agencia,
-        conta_num: inst.conta_num,
-        cheque_num: inst.cheque_num,
         cd_compra: compra.cd_compra
       });
     });
 
-    showSuccess("Compra confirmada e parcelas geradas no financeiro!");
+    showSuccess("Compra confirmada e estoque atualizado!");
     onSuccess();
   };
 
@@ -239,20 +232,10 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
           />
         </div>
         <div className="flex items-end gap-2">
-          <Button 
-            onClick={() => setIsSearchOpen(true)} 
-            className="flex-1 h-10 bg-indigo-600 hover:bg-indigo-700 gap-2 font-bold"
-          >
-            <Search size={18} /> Pesquisar Produto (F1)
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => setIsNewProductOpen(true)}
-            className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-            title="Cadastrar Novo Produto"
-          >
-            <PackagePlus size={18} />
-          </Button>
+          <div className="flex-1 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-indigo-600 uppercase">Total da Nota</span>
+            <span className="text-lg font-black text-indigo-700">R$ {total.toFixed(2)}</span>
+          </div>
         </div>
       </div>
 
@@ -271,134 +254,121 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-20 text-slate-400">
-                  Nenhum item adicionado. Use a pesquisa ou importe um XML.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((item, index) => {
-                const product = db.produtos.getAll().find(p => p.cd_produto === item.cd_produto);
-                return (
-                  <TableRow key={index} className={cn(!item.cd_produto && "bg-rose-50/50")}>
-                    <TableCell className="text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
-                    <TableCell>
-                      {item.cd_produto ? (
+            {items.map((item, index) => {
+              const product = db.produtos.getAll().find(p => p.cd_produto === item.cd_produto);
+              return (
+                <TableRow key={index} className={cn(!item.cd_produto && "bg-rose-50/50")}>
+                  <TableCell className="text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
+                  <TableCell>
+                    {item.cd_produto ? (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={14} className="text-emerald-500" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p>
+                          <p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p>
+                          {item.nome_fornecedor && <p className="text-[8px] text-indigo-500 font-bold">XML: {item.nome_fornecedor}</p>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 size={14} className="text-emerald-500" />
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p>
-                            <p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p>
-                            {item.nome_fornecedor && <p className="text-[8px] text-indigo-500 font-bold">XML: {item.nome_fornecedor}</p>}
-                          </div>
+                          <AlertCircle size={14} className="text-rose-500" />
+                          <p className="text-xs font-bold text-rose-600 uppercase">{item.nome_fornecedor || "PRODUTO NÃO VINCULADO"}</p>
                         </div>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <AlertCircle size={14} className="text-rose-500" />
-                            <p className="text-xs font-bold text-rose-600 uppercase">{item.nome_fornecedor || "PRODUTO NÃO VINCULADO"}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="link" 
-                              className="p-0 h-auto text-indigo-600 text-[10px] font-bold underline"
-                              onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}
-                            >
-                              VINCULAR EXISTENTE
-                            </Button>
-                            <span className="text-slate-300">|</span>
-                            <Button 
-                              variant="link" 
-                              className="p-0 h-auto text-emerald-600 text-[10px] font-bold underline"
-                              onClick={() => { setActiveItemIndex(index); setIsNewProductOpen(true); }}
-                            >
-                              CADASTRAR NOVO
-                            </Button>
-                          </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="link" 
+                            className="p-0 h-auto text-indigo-600 text-[10px] font-bold underline"
+                            onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}
+                          >
+                            VINCULAR EXISTENTE
+                          </Button>
+                          <span className="text-slate-300">|</span>
+                          <Button 
+                            variant="link" 
+                            className="p-0 h-auto text-emerald-600 text-[10px] font-bold underline"
+                            onClick={() => { setActiveItemIndex(index); setIsNewProductOpen(true); }}
+                          >
+                            CADASTRAR NOVO
+                          </Button>
                         </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        type="text" 
-                        value={item.qtde} 
-                        onChange={(e) => updateItem(index, 'qtde', Number(e.target.value))}
-                        className="h-8 text-center text-xs font-bold"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        type="text" 
-                        value={formatCurrency(item.valor_unit)} 
-                        onChange={(e) => updateItem(index, 'valor_unit', e.target.value)}
-                        className="h-8 text-right text-xs font-bold"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        type="text" 
-                        value={item.margem.toFixed(1)} 
-                        onChange={(e) => updateItem(index, 'margem', e.target.value)}
-                        className="h-8 text-center text-xs font-bold text-indigo-600"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        type="text" 
-                        value={formatCurrency(item.valor_venda)} 
-                        onChange={(e) => updateItem(index, 'valor_venda', e.target.value)}
-                        className="h-8 text-right text-xs font-bold text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-slate-900">
-                      R$ {item.subtotal.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeItem(index)}>
-                        <Trash2 size={16} />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Input 
+                      type="text" 
+                      value={item.qtde} 
+                      onChange={(e) => updateItem(index, 'qtde', Number(e.target.value))}
+                      className="h-8 text-center text-xs font-bold"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input 
+                      type="text" 
+                      value={formatCurrency(item.valor_unit)} 
+                      onChange={(e) => updateItem(index, 'valor_unit', e.target.value)}
+                      className="h-8 text-right text-xs font-bold"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input 
+                      type="text" 
+                      value={item.margem.toFixed(1)} 
+                      onChange={(e) => updateItem(index, 'margem', e.target.value)}
+                      className="h-8 text-center text-xs font-bold text-indigo-600"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input 
+                      type="text" 
+                      value={formatCurrency(item.valor_venda)} 
+                      onChange={(e) => updateItem(index, 'valor_venda', e.target.value)}
+                      className="h-8 text-right text-xs font-bold text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500"
+                    />
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-slate-900">
+                    R$ {item.subtotal.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeItem(index)}>
+                      <Trash2 size={16} />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-4 border-t">
-        <div className="text-2xl font-black text-slate-900">
-          TOTAL DA NOTA: <span className="text-indigo-600">R$ {total.toFixed(2)}</span>
-        </div>
-        <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              db.compras.save({
-                cd_compra: initialData?.cd_compra || Date.now(),
-                data: new Date().toISOString(),
-                nota_fiscal: nf,
-                cd_fornecedores: supplierId,
-                nome_fornecedor: suppliers.find(s => s.cd_clientes === supplierId)?.nome,
-                total: total,
-                status: 'Rascunho',
-                itens: items
-              });
-              showSuccess("Rascunho salvo!");
-              onSuccess();
-            }}
-            className="h-12 px-8 rounded-xl font-bold gap-2"
-          >
-            <Save size={20} /> Salvar Rascunho
-          </Button>
-          <Button 
-            onClick={() => setIsCheckoutOpen(true)}
-            className="h-12 px-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black gap-2 shadow-lg shadow-emerald-100"
-          >
-            <CheckCircle2 size={20} /> CONCLUIR COMPRA
-          </Button>
-        </div>
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            db.compras.save({
+              cd_compra: initialData?.cd_compra || Date.now(),
+              data: new Date().toISOString(),
+              nota_fiscal: nf,
+              cd_fornecedores: supplierId,
+              nome_fornecedor: suppliers.find(s => s.cd_clientes === supplierId)?.nome,
+              total: total,
+              status: 'Rascunho',
+              itens: items
+            });
+            showSuccess("Rascunho salvo!");
+            onSuccess();
+          }}
+          className="h-12 px-8 rounded-xl font-bold gap-2"
+        >
+          <Save size={20} /> Salvar Rascunho
+        </Button>
+        <Button 
+          onClick={() => setIsCheckoutOpen(true)}
+          className="h-12 px-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black gap-2 shadow-lg shadow-emerald-100"
+        >
+          <CheckCircle2 size={20} /> CONCLUIR COMPRA
+        </Button>
       </div>
 
       <ProductSearchModal 
@@ -410,7 +380,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader>
-          <ProductForm onSuccess={() => { setIsNewProductOpen(false); }} />
+          <ProductForm onSuccess={handleNewProductSuccess} />
         </DialogContent>
       </Dialog>
 
@@ -439,11 +409,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                   <span className="text-xl font-black w-10 text-center">{numInstallments}x</span>
                   <Button variant="outline" size="icon" onClick={() => setNumInstallments(numInstallments + 1)}><Plus size={16} /></Button>
                 </div>
-              </div>
-
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Total a Pagar</p>
-                <p className="text-2xl font-black text-indigo-600">R$ {total.toFixed(2)}</p>
               </div>
             </div>
 
