@@ -44,7 +44,8 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogTrigger 
+  DialogTrigger,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { db } from '@/services/api';
 import { LancamentoFinanceiro, ContaBancaria, Patrimonio, Cliente } from '@/types/database';
@@ -396,7 +397,7 @@ const Financial = () => {
             </DialogHeader>
             {selectedClientForDetails && <ClientDetails client={selectedClientForDetails} />}
           </DialogContent>
-        </div>
+        </Dialog>
       </div>
     </Layout>
   );
