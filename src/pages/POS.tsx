@@ -195,6 +195,7 @@ const POS = () => {
     setPendingProduct(product);
     setInputUnit(product.un);
     setInputQty("1");
+    setInputCode(product.id_manual);
     setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
@@ -275,10 +276,28 @@ const POS = () => {
     const val = e.target.value;
     setInputCode(val);
 
-    if (val.length >= 2 && /[a-zA-Z]/.test(val)) {
-      setSearchInitialTerm(val);
-      setIsSearchOpen(true);
-      setInputCode("");
+    if (!val) {
+      setPendingProduct(null);
+      return;
+    }
+
+    // Busca instantânea por código exato ou código com zeros à esquerda
+    const paddedVal = val.padStart(5, '0');
+    const product = products.find(p => 
+      p.id_manual === val || 
+      p.id_manual === paddedVal || 
+      p.cod_barras === val
+    );
+
+    if (product) {
+      setPendingProduct(product);
+      setInputUnit(product.un);
+    } else {
+      setPendingProduct(null);
+      // Se for texto longo, prepara para abrir a pesquisa ao dar Enter
+      if (val.length >= 3 && /[a-zA-Z]/.test(val)) {
+        // Apenas aguarda o Enter
+      }
     }
   };
 
@@ -286,11 +305,11 @@ const POS = () => {
     e.preventDefault();
     if (!inputCode.trim()) return;
 
-    const product = products.find(p => p.id_manual === inputCode || p.cod_barras === inputCode);
-    
-    if (product) {
-      startInsertion(product);
+    if (pendingProduct) {
+      // Se já puxou o produto, foca na quantidade para confirmar
+      qtyRef.current?.focus();
     } else {
+      // Se não puxou nada, abre a pesquisa com o termo digitado
       setSearchInitialTerm(inputCode);
       setIsSearchOpen(true);
     }
@@ -486,47 +505,17 @@ const POS = () => {
             <div className="space-y-4">
               <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Controles do Carrinho</h3>
               <div className="space-y-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full h-12 justify-start gap-3 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold"
-                  onClick={() => handleShortcut('CtrlL')}
-                >
-                  <Edit3 size={18} /> EDITAR ITEM (CTRL+L)
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-12 justify-start gap-3 border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl font-bold"
-                  onClick={() => handleShortcut('F3')}
-                >
-                  <Trash2 size={18} /> ZERAR OPERAÇÃO (F3)
-                </Button>
+                <ShortcutItem keyName="CTRL+L" label="EDITAR ITEM" onClick={() => handleShortcut('CtrlL')} icon={<Edit3 size={14} />} />
+                <ShortcutItem keyName="F3" label="ZERAR OPERAÇÃO" onClick={() => handleShortcut('F3')} icon={<Trash2 size={14} />} color="rose" />
               </div>
             </div>
 
             <div className="space-y-4">
               <h3 className="text-[10px] font-black text-slate-400 uppercase border-b pb-1">Consultas e Recebimentos</h3>
               <div className="space-y-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full h-10 justify-start gap-3 border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl font-bold text-xs"
-                  onClick={() => setIsHistoryOpen(true)}
-                >
-                  <History size={16} /> HISTÓRICO / REIMPRIMIR
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-10 justify-start gap-3 border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl font-bold text-xs"
-                  onClick={() => setIsQuotesOpen(true)}
-                >
-                  <FileText size={16} /> PUXAR ORÇAMENTOS
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-10 justify-start gap-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl font-bold text-xs"
-                  onClick={() => setIsPaymentsOpen(true)}
-                >
-                  <Wallet size={16} /> RECEBER CREDIÁRIO
-                </Button>
+                <ShortcutItem keyName="F5" label="HISTÓRICO / REIMPRIMIR" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
+                <ShortcutItem keyName="F6" label="PUXAR ORÇAMENTOS" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} />
+                <ShortcutItem keyName="F7" label="RECEBER CREDIÁRIO" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
               </div>
             </div>
           </div>
@@ -676,7 +665,10 @@ const POS = () => {
                 ref={codeRef}
                 value={inputCode}
                 onChange={handleCodeChange}
-                className="h-10 bg-[#E1FFFF] border-none text-lg font-black text-slate-900 focus-visible:ring-2 focus-visible:ring-amber-400"
+                className={cn(
+                  "h-10 border-none text-lg font-black focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors",
+                  pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900"
+                )}
                 placeholder={pendingProduct ? pendingProduct.nome : "Bipe o produto ou digite o nome..."}
               />
             </div>
@@ -912,5 +904,30 @@ const POS = () => {
     </div>
   );
 };
+
+const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { keyName: string, label: string, onClick: () => void, icon?: React.ReactNode, color?: string }) => (
+  <Button 
+    variant="outline" 
+    className={cn(
+      "w-full h-12 justify-between gap-3 border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-xs group transition-all",
+      color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50",
+      color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50"
+    )}
+    onClick={onClick}
+  >
+    <div className="flex items-center gap-2">
+      <div className={cn(
+        "p-1.5 rounded-lg bg-slate-100 group-hover:bg-white transition-colors",
+        color === 'rose' && "bg-rose-50 text-rose-600",
+        color === 'emerald' && "bg-emerald-50 text-emerald-600",
+        color === 'indigo' && "bg-indigo-50 text-indigo-600"
+      )}>
+        {icon}
+      </div>
+      <span className="uppercase">{label}</span>
+    </div>
+    <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-black text-slate-500 border border-slate-200">{keyName}</span>
+  </Button>
+);
 
 export default POS;
