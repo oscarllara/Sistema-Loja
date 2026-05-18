@@ -64,6 +64,7 @@ const Financial = () => {
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
   const [activeTab, setActiveTab] = React.useState("receivable");
+  const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
   const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
   
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -92,6 +93,11 @@ const Financial = () => {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Resetar filtro de status ao trocar de aba
+  React.useEffect(() => {
+    setStatusFilter('All');
+  }, [activeTab]);
 
   const handleBaixa = (id: number) => {
     if (contas.length === 0) {
@@ -138,7 +144,9 @@ const Financial = () => {
       const matchesType = l.tipo === tipo;
       const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesDate && matchesType && matchesSearch;
+      const matchesStatus = statusFilter === 'All' ? true : l.status === statusFilter;
+      
+      return matchesDate && matchesType && matchesSearch && matchesStatus;
     });
   };
 
@@ -249,7 +257,12 @@ const Financial = () => {
           </TabsList>
 
           <TabsContent value="receivable" className="space-y-6">
-            <FinancialSummary totals={calculateTotals(filterData('R'))} type="R" />
+            <FinancialSummary 
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'R' && (l.data_pagamento || l.data_vencimento).split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento).split('T')[0] <= endDate))} 
+              type="R" 
+              currentFilter={statusFilter}
+              onFilterChange={setStatusFilter}
+            />
             <FinancialTable 
               data={filterData('R')} 
               onBaixa={handleBaixa}
@@ -258,7 +271,12 @@ const Financial = () => {
           </TabsContent>
 
           <TabsContent value="payable" className="space-y-6">
-            <FinancialSummary totals={calculateTotals(filterData('P'))} type="P" />
+            <FinancialSummary 
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento).split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento).split('T')[0] <= endDate))} 
+              type="P" 
+              currentFilter={statusFilter}
+              onFilterChange={setStatusFilter}
+            />
             <FinancialTable 
               data={filterData('P')} 
               onBaixa={handleBaixa}
@@ -463,21 +481,39 @@ const PatrimonyStatCard = ({ title, value, icon: Icon, color, isActive, onClick 
   </Card>
 );
 
-const FinancialSummary = ({ totals, type }: { totals: any, type: 'R' | 'P' }) => (
+const FinancialSummary = ({ totals, type, currentFilter, onFilterChange }: { totals: any, type: 'R' | 'P', currentFilter: string, onFilterChange: (f: any) => void }) => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <Card className="border-none shadow-sm bg-slate-50">
+    <Card 
+      className={cn(
+        "border-none shadow-sm bg-slate-50 cursor-pointer transition-all hover:shadow-md",
+        currentFilter === 'All' && "ring-4 ring-indigo-500 ring-offset-2"
+      )}
+      onClick={() => onFilterChange('All')}
+    >
       <CardContent className="p-4">
         <p className="text-[10px] font-bold uppercase text-slate-500">Total Previsto</p>
         <p className="text-xl font-black text-slate-900">R$ {totals.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
     </Card>
-    <Card className="border-none shadow-sm bg-emerald-50">
+    <Card 
+      className={cn(
+        "border-none shadow-sm bg-emerald-50 cursor-pointer transition-all hover:shadow-md",
+        currentFilter === 'Pago' && "ring-4 ring-emerald-500 ring-offset-2"
+      )}
+      onClick={() => onFilterChange('Pago')}
+    >
       <CardContent className="p-4">
         <p className="text-[10px] font-bold uppercase text-emerald-600">Valores {type === 'R' ? 'Recebidos' : 'Pagos'}</p>
         <p className="text-xl font-black text-emerald-700">R$ {totals.pagos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
     </Card>
-    <Card className="border-none shadow-sm bg-rose-50">
+    <Card 
+      className={cn(
+        "border-none shadow-sm bg-rose-50 cursor-pointer transition-all hover:shadow-md",
+        currentFilter === 'Pendente' && "ring-4 ring-rose-500 ring-offset-2"
+      )}
+      onClick={() => onFilterChange('Pendente')}
+    >
       <CardContent className="p-4">
         <p className="text-[10px] font-bold uppercase text-rose-600">Valores a {type === 'R' ? 'Receber' : 'Pagar'}</p>
         <p className="text-xl font-black text-rose-700">R$ {totals.pendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
