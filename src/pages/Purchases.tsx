@@ -47,13 +47,14 @@ const Purchases = () => {
     setEditingCompra(null);
   };
 
+  // ESTA É A FUNÇÃO QUE TRATA O XML
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const loadingId = showLoading("Lendo arquivo XML...");
 
-    // Simulação de processamento de XML
+    // Simulação de processamento de XML (Aqui entraria um parser de XML real)
     setTimeout(() => {
       const mockXMLData = {
         cd_compra: Date.now(),
@@ -106,6 +107,7 @@ const Purchases = () => {
             <p className="text-slate-500">Gerencie entradas manuais ou via XML de fornecedores.</p>
           </div>
           <div className="flex gap-2">
+            {/* Input invisível para seleção de arquivo */}
             <input 
               type="file" 
               ref={fileInputRef} 
