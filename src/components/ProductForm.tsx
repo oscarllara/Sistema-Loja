@@ -38,7 +38,7 @@ const productSchema = z.object({
   un: z.string().default("UN"),
   cod_barras: z.string().optional(),
   compra: z.string().optional(),
-  venda: z.string().min(1, "Preço de venda obrigatório"),
+  venda: z.string().optional(),
   venda_vista: z.string().optional(),
   venda_fracionada: z.string().optional(),
   desconto_vista_tipo: z.enum(['P', 'V']).default('P'),
@@ -68,6 +68,15 @@ const productSchema = z.object({
   imagem_url: z.string().optional(),
   link_externo: z.string().optional(),
   descricao_site: z.string().optional(),
+}).refine((data) => {
+  // Se não for locação, o preço de venda é obrigatório
+  if (!data.is_locacao && (!data.venda || data.venda === "0,00" || data.venda === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Preço de venda obrigatório para produtos de venda",
+  path: ["venda"],
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -135,7 +144,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   };
 
   React.useEffect(() => {
-    const venda = parseCurrencyToNumber(vendaStr);
+    const venda = parseCurrencyToNumber(vendaStr || "0");
     const descValor = parseFloat(descValorStr || "0");
     
     let calculado = 0;
@@ -161,7 +170,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         nome: data.nome.toUpperCase(),
         un: data.un.toUpperCase(),
         compra: parseCurrencyToNumber(data.compra || ""),
-        venda: parseCurrencyToNumber(data.venda),
+        venda: parseCurrencyToNumber(data.venda || "0"),
         venda_vista: parseCurrencyToNumber(data.venda_vista || ""),
         venda_fracionada: parseCurrencyToNumber(data.venda_fracionada || ""),
         valor_diaria: parseCurrencyToNumber(data.valor_diaria || ""),
@@ -181,11 +190,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       } else {
         const newProd = db.produtos.add(payload);
         
-        // Se for locação, envia para o patrimônio
         if (payload.is_locacao) {
           db.patrimonio.add({
             descricao: `EQUIPAMENTO: ${payload.nome}`,
-            valor: payload.compra || payload.venda,
+            valor: payload.compra || payload.venda || 0,
             tipo: 'Equipamento',
             proprietário: 'Empresa',
             cd_produto_vinculado: newProd.cd_produto
@@ -270,12 +278,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
                 <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
                 <div className="space-y-2">
-                  <Label>Valor de Venda (A Prazo) <span className="text-rose-500">*</span></Label>
+                  <Label>
+                    Valor de Venda (A Prazo) {!isLocacao && <span className="text-rose-500">*</span>}
+                  </Label>
                   <Input 
                     {...register("venda")} 
                     onChange={(e) => handleCurrencyChange(e, "venda")} 
                     className={cn("text-lg font-black", errors.venda && "border-rose-500")} 
                   />
+                  {errors.venda && <p className="text-[10px] text-rose-500 font-bold">{errors.venda.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>Preço de Custo (Valor do Bem)</Label>
