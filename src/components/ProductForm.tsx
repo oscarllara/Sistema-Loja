@@ -139,8 +139,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const isFracionado = watch("fracionado");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
-  const unFracionada = watch("un_fracionada");
-  const fatorConversao = watch("fator_conversao");
 
   React.useEffect(() => {
     const venda = parseCurrencyToNumber(vendaStr);
@@ -189,8 +187,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         showSuccess("Produto atualizado!");
       } else {
         db.produtos.add(payload);
-        
-        // Se for locação, adiciona automaticamente ao patrimônio
         if (payload.is_locacao) {
           db.patrimonio.add({
             descricao: `EQUIPAMENTO: ${payload.nome}`,
@@ -200,7 +196,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             cd_produto_vinculado: payload.cd_produto
           } as any);
         }
-        
         showSuccess("Produto cadastrado!");
       }
       onSuccess();
@@ -221,147 +216,146 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <TabsTrigger value="kit">Kit</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="geral" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2"><Hash size={14} /> Código (ID)</Label>
-              <Input {...register("id_manual")} placeholder="Vazio para automático" className="font-bold text-indigo-600" />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label className="flex items-center gap-2"><Package size={14} /> Nome do Produto *</Label>
-              <Input {...register("nome")} className="uppercase" onChange={(e) => setValue("nome", e.target.value.toUpperCase())} />
-            </div>
-            <div className="space-y-2">
-              <Label>Código de Barras</Label>
-              <Input {...register("cod_barras")} />
-            </div>
-            <div className="space-y-2">
-              <Label>NCM</Label>
-              <Input {...register("ncm")} />
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="estoque" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Unidade Principal</Label>
-              <Input {...register("un")} placeholder="Ex: UN" className="uppercase" />
-            </div>
-            <div className="space-y-2">
-              <Label>Estoque Atual</Label>
-              <Input type="number" step="0.001" {...register("estoque")} />
-            </div>
-            <div className="space-y-2">
-              <Label>Estoque Mínimo</Label>
-              <Input type="number" step="0.001" {...register("minimo")} />
-            </div>
-          </div>
-          <div className="flex items-center space-x-2 p-4 bg-slate-50 rounded-lg border">
-            <Checkbox id="fracionado" onCheckedChange={(checked) => setValue("fracionado", checked as boolean)} defaultChecked={product?.fracionado} />
-            <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável</Label>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="precos" className="mt-4 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-              <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
+        {/* Container com altura fixa para evitar que o modal mude de tamanho */}
+        <div className="min-h-[380px] mt-4">
+          <TabsContent value="geral" className="space-y-4 m-0">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Valor de Venda ({watch("un")})</Label>
-                <Input {...register("venda")} onChange={(e) => handleCurrencyChange(e, "venda")} className="text-lg font-bold" />
+                <Label className="flex items-center gap-2"><Hash size={14} /> Código (ID)</Label>
+                <Input {...register("id_manual")} placeholder="Vazio para automático" className="font-bold text-indigo-600" />
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <Label className="flex items-center gap-2"><Package size={14} /> Nome do Produto *</Label>
+                <Input {...register("nome")} className="uppercase" onChange={(e) => setValue("nome", e.target.value.toUpperCase())} />
               </div>
               <div className="space-y-2">
-                <Label>Preço de Custo</Label>
-                <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} />
+                <Label>Código de Barras</Label>
+                <Input {...register("cod_barras")} />
+              </div>
+              <div className="space-y-2">
+                <Label>NCM</Label>
+                <Input {...register("ncm")} />
               </div>
             </div>
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
-              <h4 className="font-bold text-emerald-900 flex items-center gap-2"><Percent size={16} /> Configuração À Vista</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Desconto (%)</Label>
-                  <Input {...register("desconto_vista_valor")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Preço Final</Label>
-                  <Input {...register("venda_vista")} readOnly className="bg-white font-bold text-emerald-700" />
-                </div>
+          </TabsContent>
+
+          <TabsContent value="estoque" className="space-y-4 m-0">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Unidade Principal</Label>
+                <Input {...register("un")} placeholder="Ex: UN" className="uppercase" />
+              </div>
+              <div className="space-y-2">
+                <Label>Estoque Atual</Label>
+                <Input type="number" step="0.001" {...register("estoque")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Estoque Mínimo</Label>
+                <Input type="number" step="0.001" {...register("minimo")} />
               </div>
             </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="locacao" className="mt-4 space-y-4">
-          <div className={cn("p-4 rounded-xl border transition-all", isLocacao ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200")}>
-            <div className="flex items-center space-x-2 mb-6">
-              <Checkbox id="is_locacao" onCheckedChange={(checked) => setValue("is_locacao", checked as boolean)} defaultChecked={product?.is_locacao} />
-              <Label htmlFor="is_locacao" className="font-bold text-lg cursor-pointer">Disponível para Locação (Aluguel)</Label>
+            <div className="flex items-center space-x-2 p-4 bg-slate-50 rounded-lg border">
+              <Checkbox id="fracionado" onCheckedChange={(checked) => setValue("fracionado", checked as boolean)} defaultChecked={product?.fracionado} />
+              <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável</Label>
             </div>
+          </TabsContent>
 
-            {isLocacao && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
+          <TabsContent value="precos" className="space-y-6 m-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
                 <div className="space-y-2">
-                  <Label>Valor Diária</Label>
-                  <Input {...register("valor_diaria")} onChange={(e) => handleCurrencyChange(e, "valor_diaria")} className="font-bold" />
+                  <Label>Valor de Venda ({watch("un")})</Label>
+                  <Input {...register("venda")} onChange={(e) => handleCurrencyChange(e, "venda")} className="text-lg font-bold" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Valor Semana</Label>
-                  <Input {...register("valor_semana")} onChange={(e) => handleCurrencyChange(e, "valor_semana")} className="font-bold" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor Quinzena</Label>
-                  <Input {...register("valor_quinzena")} onChange={(e) => handleCurrencyChange(e, "valor_quinzena")} className="font-bold" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor Mês</Label>
-                  <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
+                  <Label>Preço de Custo</Label>
+                  <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} />
                 </div>
               </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="site" className="mt-4 space-y-4">
-          <div className={cn("p-4 rounded-xl border transition-all", disponivelSite ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200")}>
-            <div className="flex items-center space-x-2 mb-6">
-              <Checkbox id="disponivel_site" onCheckedChange={(checked) => setValue("disponivel_site", checked as boolean)} defaultChecked={product?.disponivel_site} />
-              <Label htmlFor="disponivel_site" className="font-bold text-lg cursor-pointer">Exibir no Site de Vendas/Locação</Label>
-            </div>
-
-            {disponivelSite && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
+                <h4 className="font-bold text-emerald-900 flex items-center gap-2"><Percent size={16} /> Configuração À Vista</h4>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2"><DollarSign size={14} /> Preço Diferenciado no Site (Opcional)</Label>
-                    <Input {...register("preco_site")} onChange={(e) => handleCurrencyChange(e, "preco_site")} placeholder="Deixe vazio para usar preço da loja" />
+                    <Label>Desconto (%)</Label>
+                    <Input {...register("desconto_vista_valor")} />
                   </div>
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2"><ImageIcon size={14} /> URL da Imagem</Label>
-                    <Input {...register("imagem_url")} placeholder="https://link-da-imagem.jpg" />
+                    <Label>Preço Final</Label>
+                    <Input {...register("venda_vista")} readOnly className="bg-white font-bold text-emerald-700" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2"><LinkIcon size={14} /> Link Externo (Botão Comprar/Saiba Mais)</Label>
-                  <Input {...register("link_externo")} placeholder="Link para o WhatsApp ou Checkout do Site" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Descrição Curta para o Site</Label>
-                  <Textarea {...register("descricao_site")} placeholder="Destaque as principais características do produto..." />
-                </div>
               </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="kit" className="mt-4">
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center space-x-2 mb-4">
-              <Checkbox id="is_kit" onCheckedChange={(checked) => setValue("is_kit", checked as boolean)} defaultChecked={product?.is_kit} />
-              <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
             </div>
-          </div>
-        </TabsContent>
+          </TabsContent>
+
+          <TabsContent value="locacao" className="space-y-4 m-0">
+            <div className={cn("p-4 rounded-xl border transition-all", isLocacao ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200")}>
+              <div className="flex items-center space-x-2 mb-6">
+                <Checkbox id="is_locacao" onCheckedChange={(checked) => setValue("is_locacao", checked as boolean)} defaultChecked={product?.is_locacao} />
+                <Label htmlFor="is_locacao" className="font-bold text-lg cursor-pointer">Disponível para Locação (Aluguel)</Label>
+              </div>
+
+              {isLocacao && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <Label>Valor Diária</Label>
+                    <Input {...register("valor_diaria")} onChange={(e) => handleCurrencyChange(e, "valor_diaria")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor Semana</Label>
+                    <Input {...register("valor_semana")} onChange={(e) => handleCurrencyChange(e, "valor_semana")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor Quinzena</Label>
+                    <Input {...register("valor_quinzena")} onChange={(e) => handleCurrencyChange(e, "valor_quinzena")} className="font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor Mês</Label>
+                    <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="site" className="space-y-4 m-0">
+            <div className={cn("p-4 rounded-xl border transition-all", disponivelSite ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200")}>
+              <div className="flex items-center space-x-2 mb-6">
+                <Checkbox id="disponivel_site" onCheckedChange={(checked) => setValue("disponivel_site", checked as boolean)} defaultChecked={product?.disponivel_site} />
+                <Label htmlFor="disponivel_site" className="font-bold text-lg cursor-pointer">Exibir no Site (construlara.com.br)</Label>
+              </div>
+
+              {disponivelSite && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2"><DollarSign size={14} /> Preço no Site (Opcional)</Label>
+                      <Input {...register("preco_site")} onChange={(e) => handleCurrencyChange(e, "preco_site")} placeholder="Vazio = preço da loja" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2"><ImageIcon size={14} /> URL da Imagem</Label>
+                      <Input {...register("imagem_url")} placeholder="https://link-da-imagem.jpg" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Descrição para o Site</Label>
+                    <Textarea {...register("descricao_site")} placeholder="Destaque as principais características..." className="min-h-[100px]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="kit" className="m-0">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center space-x-2 mb-4">
+                <Checkbox id="is_kit" onCheckedChange={(checked) => setValue("is_kit", checked as boolean)} defaultChecked={product?.is_kit} />
+                <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
+              </div>
+            </div>
+          </TabsContent>
+        </div>
       </Tabs>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
