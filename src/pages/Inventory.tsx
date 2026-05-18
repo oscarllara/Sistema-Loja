@@ -42,11 +42,17 @@ const Inventory = () => {
     loadData();
   }, []);
 
-  const filteredProducts = products.filter(p => 
-    p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.id_manual.includes(searchTerm) ||
-    (p.cod_barras && p.cod_barras.includes(searchTerm))
-  );
+  const filteredProducts = products.filter(p => {
+    const term = searchTerm.toLowerCase();
+    const paddedTerm = searchTerm.padStart(5, '0');
+    
+    return (
+      p.nome.toLowerCase().includes(term) ||
+      p.id_manual === paddedTerm || // Busca exata pelo código com zeros
+      p.id_manual.includes(term) || // Busca parcial
+      (p.cod_barras && p.cod_barras.includes(term))
+    );
+  });
 
   const handleQuickUpdate = (id: number, field: keyof Produto, value: string) => {
     try {
@@ -153,7 +159,7 @@ const Inventory = () => {
                   filteredProducts.map((product) => (
                     <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors group">
                       <TableCell className="font-bold text-indigo-600 text-xs">
-                        {product.id_manual}
+                        {product.id_manual.padStart(5, '0')}
                       </TableCell>
                       <TableCell>
                         <div>

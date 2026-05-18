@@ -35,8 +35,11 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: P
   const filtered = products.filter(p => {
     if (!p) return false;
     const term = search.toLowerCase();
+    const paddedTerm = search.padStart(5, '0');
+    
     return (
       (p.nome || "").toLowerCase().includes(term) ||
+      (p.id_manual || "") === paddedTerm || // Busca exata pelo código com zeros
       (p.id_manual || "").includes(search) ||
       (p.id_importado || "").includes(search) ||
       (p.cod_barras || "").includes(search)
@@ -119,7 +122,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: P
                     )}
                     onClick={() => { onSelect(p); onClose(); }}
                   >
-                    <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold">{p.id_manual || "-"}</TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold">{p.id_manual?.padStart(5, '0') || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.cod_barras || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold uppercase">{p.nome || "SEM NOME"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 text-right font-bold">
