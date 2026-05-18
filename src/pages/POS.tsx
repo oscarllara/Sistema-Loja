@@ -102,7 +102,7 @@ const POS = () => {
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
-  const [editData, setEditData] = React.useState({ qtde: 1, valor: 0, total: 0 });
+  const [editData, setEditData] = React.useState({ qtde: 1, valor: "0,00", total: "0,00" });
   const [showMargin, setShowMargin] = React.useState(false);
   const [marginPassword, setMarginPassword] = React.useState("");
   const [isMarginAuthOpen, setIsMarginAuthOpen] = React.useState(false);
@@ -118,6 +118,24 @@ const POS = () => {
 
   const entities = mode === 'COMPRA' ? fornecedores : clientes;
 
+  // Funções de Formatação de Moeda
+  const formatCurrency = (value: number | string) => {
+    const val = typeof value === 'number' ? value.toFixed(2) : value;
+    const digits = val.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "0,00";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
+
+  const parseCurrency = (value: string) => {
+    if (!value) return 0;
+    const cleanValue = value.replace(/\./g, "").replace(",", ".");
+    return parseFloat(cleanValue) || 0;
+  };
+
   const getDays = React.useCallback(() => {
     const start = new Date(rentalStart);
     const end = new Date(rentalEnd);
@@ -126,20 +144,21 @@ const POS = () => {
     return Math.max(1, diffDays);
   }, [rentalStart, rentalEnd]);
 
-  // Função de cálculo de locação por períodos estritos
   const calculateRentalPrice = React.useCallback((days: number, p: any) => {
     if (!p) return 0;
     if (days <= 0) return 0;
     
+    let price = 0;
     if (days >= 1 && days <= 3) {
-      return p.valor_diaria || p.venda || 0;
+      price = p.valor_diaria || p.venda || 0;
     } else if (days >= 4 && days <= 10) {
-      return p.valor_semana || p.valor_diaria || p.venda || 0;
+      price = p.valor_semana || p.valor_diaria || p.venda || 0;
     } else if (days >= 11 && days <= 18) {
-      return p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
+      price = p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
     } else {
-      return p.valor_mes || p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
+      price = p.valor_mes || p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
     }
+    return Number(price.toFixed(2));
   }, []);
 
   const getRentalUnit = React.useCallback((days: number) => {
@@ -149,7 +168,6 @@ const POS = () => {
     return "MENSAL";
   }, []);
 
-  // Atualiza unidade e preço quando as datas mudam em modo locação
   React.useEffect(() => {
     if (mode === 'LOCACAO' && pendingProduct) {
       const days = getDays();
@@ -158,7 +176,6 @@ const POS = () => {
     }
   }, [rentalStart, rentalEnd, mode, pendingProduct, getDays, getRentalUnit]);
 
-  // Foco automático ao selecionar vendedor
   React.useEffect(() => {
     if (selectedSellerId) {
       setTimeout(() => codeRef.current?.focus(), 100);
@@ -240,7 +257,7 @@ const POS = () => {
       return;
     }
     setPendingProduct(product);
-    setInputCode(product.nome); // Coloca o nome no input
+    setInputCode(product.nome);
     
     if (mode === 'LOCACAO') {
       const days = getDays();
@@ -272,7 +289,7 @@ const POS = () => {
       ...pendingProduct, 
       quantity: qty, 
       selectedUnit: inputUnit,
-      finalPrice: price,
+      finalPrice: Number(price.toFixed(2)),
       costPrice: pendingProduct.compra || 0,
       isRental: mode === 'LOCACAO',
       rentalStart: mode === 'LOCACAO' ? rentalStart : undefined,
@@ -308,7 +325,7 @@ const POS = () => {
       if (!product) return item;
       return {
         ...item,
-        finalPrice: getProductPrice(product, item.selectedUnit, newMode)
+        finalPrice: Number(getProductPrice(product, item.selectedUnit, newMode).toFixed(2))
       };
     }));
     
@@ -327,7 +344,7 @@ const POS = () => {
         const newUnit = isSwitchingToFractional ? product.un_fracionada : product.un;
         
         item.selectedUnit = newUnit;
-        item.finalPrice = getProductPrice(product, newUnit, priceMode);
+        item.finalPrice = Number(getProductPrice(product, newUnit, priceMode).toFixed(2));
         newCart[index] = item;
         showSuccess(`Unidade alterada para ${newUnit}`);
       }
@@ -349,7 +366,6 @@ const POS = () => {
       return;
     }
 
-    // Se digitar texto (nome), abre a pesquisa automática após 2 caracteres
     if (val.length > 2 && !/^\d+$/.test(val) && !pendingProduct) {
       setSearchInitialTerm(val);
       setIsSearchOpen(true);
@@ -393,8 +409,8 @@ const POS = () => {
     setEditingIndex(index);
     setEditData({
       qtde: item.quantity,
-      valor: item.finalPrice,
-      total: item.quantity * item.finalPrice
+      valor: formatCurrency(item.finalPrice),
+      total: formatCurrency(item.quantity * item.finalPrice)
     });
     setShowMargin(false);
     setIsEditItemOpen(true);
@@ -407,7 +423,7 @@ const POS = () => {
       const newCart = [...prev];
       const item = { ...newCart[editingIndex] };
       item.quantity = editData.qtde;
-      item.finalPrice = editData.valor;
+      item.finalPrice = parseCurrency(editData.valor);
       newCart[editingIndex] = item;
       return newCart;
     });
@@ -428,7 +444,7 @@ const POS = () => {
       
       const payload = {
         data: new Date().toISOString(),
-        total: total,
+        total: Number(total.toFixed(2)),
         custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
         cd_clientes: selectedEntityId || 1,
         nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
@@ -441,7 +457,7 @@ const POS = () => {
           valor: item?.finalPrice || 0,
           custo: item?.costPrice || 0,
           qtde: item?.quantity || 0,
-          subtotal: (item?.finalPrice || 0) * (item?.quantity || 0),
+          subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
           un: item?.selectedUnit || 'UN',
           isRental: item.isRental,
           rentalStart: item.rentalStart,
@@ -737,7 +753,7 @@ const POS = () => {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item?.finalPrice?.toFixed(2)}</TableCell>
+                  <TableCell className="py-0 text-xs text-right border-r border-slate-200">{item?.finalPrice?.toFixed(2).replace('.', ',')}</TableCell>
                   <TableCell className="py-0 text-xs text-center border-r border-slate-200">
                     {Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </TableCell>
@@ -750,7 +766,7 @@ const POS = () => {
                   >
                     {item?.selectedUnit}
                   </TableCell>
-                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)}</TableCell>
+                  <TableCell className="py-0 text-xs text-right font-bold border-r border-slate-200">{((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2).replace('.', ',')}</TableCell>
                   <TableCell className="py-0 text-center">
                     <Button 
                       variant="ghost" 
@@ -866,8 +882,8 @@ const POS = () => {
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
                 {pendingProduct ? (
                   mode === 'LOCACAO' 
-                    ? calculateRentalPrice(getDays(), pendingProduct).toFixed(2)
-                    : getProductPrice(pendingProduct, inputUnit, priceMode).toFixed(2)
+                    ? calculateRentalPrice(getDays(), pendingProduct).toFixed(2).replace('.', ',')
+                    : getProductPrice(pendingProduct, inputUnit, priceMode).toFixed(2).replace('.', ',')
                 ) : "0,00"}
               </div>
             </div>
@@ -875,10 +891,10 @@ const POS = () => {
               <label className="text-[9px] font-bold text-slate-400 uppercase">Sub Total</label>
               <div className="h-10 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900">
                 {pendingProduct ? (
-                  (mode === 'LOCACAO' 
+                  ((mode === 'LOCACAO' 
                     ? calculateRentalPrice(getDays(), pendingProduct)
-                    : getProductPrice(pendingProduct, inputUnit, priceMode)) * (parseFloat(inputQty.replace(',', '.')) || 1)
-                ).toFixed(2) : "0,00"}
+                    : getProductPrice(pendingProduct, inputUnit, priceMode)) * (parseFloat(inputQty.replace(',', '.')) || 1)).toFixed(2).replace('.', ',')
+                ).toFixed(2).replace('.', ',') : "0,00"}
               </div>
             </div>
           </form>
@@ -915,7 +931,7 @@ const POS = () => {
               <div className="p-3 bg-slate-50 rounded-lg border mb-4">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Produto</p>
                 <p className="text-sm font-bold text-slate-900">{cart[editingIndex]?.nome}</p>
-                <p className="text-[10px] text-indigo-600 font-bold">Custo Base: R$ {(cart[editingIndex]?.costPrice || 0).toFixed(2)}</p>
+                <p className="text-[10px] text-indigo-600 font-bold">Custo Base: R$ {(cart[editingIndex]?.costPrice || 0).toFixed(2).replace('.', ',')}</p>
               </div>
             )}
             
@@ -927,18 +943,19 @@ const POS = () => {
                   value={editData.qtde} 
                   onChange={(e) => {
                     const q = parseFloat(e.target.value) || 0;
-                    setEditData({ ...editData, qtde: q, total: q * editData.valor });
+                    const v = parseCurrency(editData.valor);
+                    setEditData({ ...editData, qtde: q, total: formatCurrency(q * v) });
                   }}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Valor Unitário (R$)</Label>
                 <Input 
-                  type="number" 
                   value={editData.valor} 
                   onChange={(e) => {
-                    const v = parseFloat(e.target.value) || 0;
-                    setEditData({ ...editData, valor: v, total: editData.qtde * v });
+                    const vStr = formatCurrency(e.target.value);
+                    const v = parseCurrency(vStr);
+                    setEditData({ ...editData, valor: vStr, total: formatCurrency(editData.qtde * v) });
                   }}
                 />
               </div>
@@ -947,17 +964,17 @@ const POS = () => {
             <div className="space-y-2">
               <Label>Valor Total do Item (R$)</Label>
               <Input 
-                type="number" 
                 value={editData.total} 
                 onChange={(e) => {
-                  const t = parseFloat(e.target.value) || 0;
+                  const tStr = formatCurrency(e.target.value);
+                  const t = parseCurrency(tStr);
                   const v = editData.qtde > 0 ? t / editData.qtde : 0;
-                  setEditData({ ...editData, total: t, valor: v });
+                  setEditData({ ...editData, total: tStr, valor: formatCurrency(v) });
                 }}
               />
             </div>
 
-            {editingIndex !== null && editData.valor > 0 && (
+            {editingIndex !== null && parseCurrency(editData.valor) > 0 && (
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 transition-all">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-bold text-indigo-600 uppercase">Margem de Lucro</p>
@@ -983,7 +1000,7 @@ const POS = () => {
                 </div>
                 {showMargin ? (
                   <p className="text-2xl font-black text-indigo-700 animate-in fade-in zoom-in-95">
-                    {(((editData.valor / (cart[editingIndex]?.costPrice || 1)) - 1) * 100).toFixed(1)}%
+                    {(((parseCurrency(editData.valor) / (cart[editingIndex]?.costPrice || 1)) - 1) * 100).toFixed(1)}%
                   </p>
                 ) : (
                   <div className="h-8 flex items-center gap-1">
