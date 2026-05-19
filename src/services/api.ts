@@ -5,7 +5,12 @@ import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Transfere
 const STORAGE_KEY = 'dyaderp_db';
 const AUTH_KEY = 'dyaderp_auth';
 
+// Cache em memória para evitar leituras constantes do localStorage
+let dbCache: any = null;
+
 const getDB = () => {
+  if (dbCache) return dbCache;
+
   const data = localStorage.getItem(STORAGE_KEY);
   let database: any;
 
@@ -97,10 +102,12 @@ const getDB = () => {
       ];
     }
   }
+  dbCache = database;
   return database;
 };
 
 const saveDB = (db: any) => {
+  dbCache = db;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 };
 
@@ -258,7 +265,6 @@ export const db = {
         const isParcial = valorFinal < lanc.valor;
 
         if (isParcial) {
-          // Cria um novo registro de pagamento (PAGO)
           database.financeiro.push({
             cd_lancamento: Date.now(),
             tipo: lanc.tipo,
@@ -274,18 +280,14 @@ export const db = {
             cd_conta: cd_conta,
             cd_venda: lanc.cd_venda
           });
-
-          // Abate o valor da dívida original
           lanc.valor -= valorFinal;
         } else {
-          // Baixa total
           lanc.status = 'Pago';
           lanc.cd_conta = cd_conta;
           lanc.meio_pagamento = meio || lanc.meio_pagamento || 'Dinheiro';
           lanc.data_pagamento = new Date().toISOString();
         }
 
-        // Atualiza saldo da conta
         if (lanc.tipo === 'R') database.contas[cIdx].saldo += valorFinal;
         else database.contas[cIdx].saldo -= valorFinal;
         
