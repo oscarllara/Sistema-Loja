@@ -66,6 +66,7 @@ import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
 import PurchaseForm from '@/components/PurchaseForm';
+import { Produto, Cliente, Configuracoes } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
 
@@ -75,6 +76,13 @@ const POS = () => {
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
   const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
   
+  // Estados para dados do Banco
+  const [products, setProducts] = React.useState<Produto[]>([]);
+  const [clients, setClients] = React.useState<Cliente[]>([]);
+  const [sellers, setSellers] = React.useState<Cliente[]>([]);
+  const [config, setConfig] = React.useState<Configuracoes | null>(null);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
+
   const xmlInputRef = React.useRef<HTMLInputElement>(null);
 
   // Estados Multi-Carrinho
@@ -92,6 +100,30 @@ const POS = () => {
 
   const cart = carts[mode];
   const selectedEntityId = entitiesIds[mode];
+
+  // Carregamento Inicial de Dados
+  const loadAllData = React.useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const [p, c, cfg] = await Promise.all([
+        db.produtos.getAll(),
+        db.clientes.getAll(),
+        db.config.get()
+      ]);
+      setProducts(p);
+      setClients(c.filter(item => item.tipo_entidade === 'C' || item.tipo_entidade === 'A'));
+      setSellers(c.filter(item => item.is_funcionario || item.usuario === 'admin'));
+      setConfig(cfg);
+    } catch (err) {
+      showError("Erro ao carregar dados do sistema.");
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
 
   const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
     setCarts(prev => ({
@@ -129,26 +161,13 @@ const POS = () => {
   const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
-  // Novo estado para o modal de conferência de XML no PDV
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = React.useState(false);
   const [xmlPurchaseData, setXmlPurchaseData] = React.useState<any>(null);
 
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
   const [editData, setEditData] = React.useState({ qtde: 1, valor: "0,00", total: "0,00" });
-  const [showMargin, setShowMargin] = React.useState(false);
-  const [marginPassword, setMarginPassword] = React.useState("");
-  const [isMarginAuthOpen, setIsMarginAuthOpen] = React.useState(false);
-
   const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
-
-  const config = db.config.get();
-  const products = db.produtos.getAll() || [];
-  const usuarios = (db.clientes.getAll() || []).filter(c => c.is_funcionario || c.usuario === 'admin');
-  const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
-  const fornecedores = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
-
-  const entities = mode === 'COMPRA' ? fornecedores : clientes;
 
   const formatCurrency = (value: number | string) => {
     const val = typeof value === 'number' ? value.toFixed(2) : value;
@@ -202,7 +221,6 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
-    if (key === 'F12' && mode === 'COMPRA') xmlInputRef.current?.click();
     if (key === 'CtrlL') { if (cart.length > 0) handleOpenEdit(cart.length - 1); }
   }, [cart, selectedSellerId, mode]);
 
@@ -210,7 +228,6 @@ const POS = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['F1', 'F3', 'F4', 'F10', 'F12'].includes(e.key)) {
         e.preventDefault();
-        e.stopPropagation();
         handleShortcut(e.key);
       }
       if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
@@ -221,80 +238,6 @@ const POS = () => {
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [handleShortcut]);
-
-  const handleXMLImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const loadingId = showLoading("Lendo arquivo XML...");
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      try {
-        const xmlText = e.target?.result as string;
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-
-        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
-        const xNomeFornecedor = xmlDoc.getElementsByTagName("xNome")[0]?.textContent || "FORNECEDOR DESCONHECIDO";
-        const vNF = parseFloat(xmlDoc.getElementsByTagName("vNF")[0]?.textContent || "0");
-
-        const itensNodes = xmlDoc.getElementsByTagName("det");
-        const itens: any[] = [];
-
-        for (let i = 0; i < itensNodes.length; i++) {
-          const prod = itensNodes[i].getElementsByTagName("prod")[0];
-          const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
-          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
-          const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
-          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
-          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
-          const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
-
-          const cd_produto_vinculado = db.mappings.get(1, cProd);
-
-          itens.push({
-            codigo_fornecedor: cProd,
-            nome_fornecedor: xProd,
-            un: uCom,
-            qtde: qCom,
-            valor_unit: vUnCom,
-            subtotal: vProd,
-            margem: 40,
-            valor_venda: vUnCom * 1.4,
-            cd_produto: cd_produto_vinculado || undefined
-          });
-        }
-
-        const compraData = {
-          cd_compra: Date.now(),
-          nota_fiscal: nNF,
-          cd_fornecedores: 0,
-          nome_fornecedor: xNomeFornecedor,
-          total: vNF,
-          status: 'Rascunho' as const,
-          itens: itens
-        };
-
-        dismissToast(loadingId);
-        setXmlPurchaseData(compraData);
-        setIsPurchaseModalOpen(true);
-        showSuccess("XML importado! Agora vincule os produtos.");
-      } catch (err) {
-        dismissToast(loadingId);
-        showError("Erro ao processar o XML.");
-      }
-    };
-
-    reader.readAsText(file);
-    if (xmlInputRef.current) xmlInputRef.current.value = "";
-  };
-
-  const handlePurchaseSuccess = () => {
-    setIsPurchaseModalOpen(false);
-    setXmlPurchaseData(null);
-    showSuccess("Compra processada e estoque atualizado!");
-  };
 
   const startInsertion = (product: any) => {
     if (!selectedSellerId) { showError("Selecione o Usuário antes de iniciar!"); return; }
@@ -310,6 +253,13 @@ const POS = () => {
       setInputQty("1");
       setTimeout(() => qtyRef.current?.focus(), 50);
     }
+  };
+
+  const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
+    if (mode === 'COMPRA') return product.compra || 0;
+    if (product.fracionado && unit === product.un_fracionada) return product.venda_fracionada || product.venda;
+    const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
+    return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
   };
 
   const commitToCart = (e?: React.FormEvent) => {
@@ -335,13 +285,6 @@ const POS = () => {
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
-  const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
-    if (mode === 'COMPRA') return product.compra || 0;
-    if (product.fracionado && unit === product.un_fracionada) return product.venda_fracionada || product.venda;
-    const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
-    return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
-  };
-
   const togglePriceMode = () => {
     const newMode = priceMode === 'PRAZO' ? 'VISTA' : 'PRAZO';
     setPriceMode(newMode);
@@ -351,12 +294,6 @@ const POS = () => {
       if (!product) return item;
       return { ...item, finalPrice: Number(getProductPrice(product, item.selectedUnit, newMode).toFixed(2)) };
     }));
-  };
-
-  const togglePendingUnit = () => {
-    if (!pendingProduct || !pendingProduct.fracionado || !pendingProduct.un_fracionada) return;
-    const newUnit = inputUnit === pendingProduct.un ? pendingProduct.un_fracionada : pendingProduct.un;
-    setInputUnit(newUnit);
   };
 
   const toggleItemUnit = (index: number) => {
@@ -405,7 +342,6 @@ const POS = () => {
     const item = cart[index];
     setEditingIndex(index);
     setEditData({ qtde: item.quantity, valor: formatCurrency(item.finalPrice), total: formatCurrency(item.quantity * item.finalPrice) });
-    setShowMargin(false);
     setIsEditItemOpen(true);
   };
 
@@ -425,15 +361,13 @@ const POS = () => {
 
   const total = React.useMemo(() => cart.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0), [cart]);
 
-  const confirmCheckout = (payments: any[]) => {
+  const confirmCheckout = async (payments: any[]) => {
     try {
-      const id = Date.now();
-      const entity = entities.find(e => e.cd_clientes === selectedEntityId) || entities[0] || { nome: 'CONSUMIDOR FINAL' };
+      const entity = (mode === 'COMPRA' ? clients.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A') : clients).find(e => e.cd_clientes === selectedEntityId) || { nome: 'CONSUMIDOR FINAL' };
       const payload = {
-        data: new Date().toISOString(),
         total: Number(total.toFixed(2)),
         custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
-        cd_clientes: selectedEntityId || 1,
+        cd_clientes: selectedEntityId || null,
         nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
         cd_func: Number(selectedSellerId),
         tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
@@ -445,64 +379,32 @@ const POS = () => {
           custo: item?.costPrice || 0,
           qtde: item?.quantity || 0,
           subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
-          un: item?.selectedUnit || 'UN',
-          isRental: item.isRental,
-          rentalStart: item.rentalStart,
-          rentalEnd: item.rentalEnd,
-          rentalDays: item.rentalDays
+          un: item?.selectedUnit || 'UN'
         }))
       };
 
-      if (mode === 'VENDA' || mode === 'LOCACAO') {
-        db.vendas.add({ ...payload, cd_venda: id });
-        payments.forEach(p => {
-          if (p.method === 'Crediário' && p.installments) {
-            p.installments.forEach((inst, idx) => {
-              db.financeiro.add({
-                tipo: 'R',
-                descricao: `${mode === 'LOCACAO' ? 'Locação' : 'Venda'} PDV #${id} (${idx + 1}/${p.installments?.length})`,
-                valor: inst.amount,
-                data_vencimento: inst.date,
-                status: 'Pendente',
-                categoria: mode === 'LOCACAO' ? 'Locação' : 'Venda',
-                meio_pagamento: 'Crediário',
-                cd_entidade: Number(selectedEntityId),
-                cd_venda: id
-              });
-            });
-          } else {
-            db.financeiro.add({
-              tipo: 'R',
-              descricao: `${mode === 'LOCACAO' ? 'Locação' : 'Venda'} PDV #${id}`,
-              valor: p.amount,
-              data_vencimento: new Date().toISOString(),
-              status: p.method === 'Crediário' ? 'Pendente' : 'Pago',
-              categoria: mode === 'LOCACAO' ? 'Locação' : 'Venda',
-              meio_pagamento: p.method,
-              cd_entidade: Number(selectedEntityId) || 1,
-              cd_conta: p.method === 'Crediário' ? undefined : 1,
-              cd_venda: id
-            });
-          }
-        });
-        if (mode === 'VENDA') {
-          cart.forEach(item => {
-            const prod = products.find(p => p.cd_produto === item.cd_produto);
-            if (prod) {
-              let abate = item.quantity;
-              if (prod.fracionado && item.selectedUnit === prod.un_fracionada && prod.fator_conversao) abate = item.quantity * prod.fator_conversao;
-              db.produtos.update(prod.cd_produto, { estoque: prod.estoque - abate });
-            }
-          });
+      await db.vendas.add(payload);
+      
+      // Atualizar estoque
+      for (const item of cart) {
+        const prod = products.find(p => p.cd_produto === item.cd_produto);
+        if (prod) {
+          await db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
         }
       }
-      setLastActionData({ ...payload, cd_venda: id, type: mode === 'VENDA' ? 'Venda' : mode === 'LOCACAO' ? 'Locação' : 'Compra' });
+
+      setLastActionData({ ...payload, type: 'Venda' });
       showSuccess("Operação finalizada!");
       setCart([]);
       setIsCheckoutOpen(false);
       setIsPrintOpen(true);
+      loadAllData(); // Recarregar dados para atualizar estoque local
     } catch (err) { showError("Erro ao processar a operação."); }
   };
+
+  if (isLoadingData) {
+    return <div className="h-screen w-screen bg-slate-900 flex items-center justify-center text-white font-bold">CARREGANDO PDV...</div>;
+  }
 
   const themeColor = mode === 'VENDA' ? 'indigo' : mode === 'COMPRA' ? 'emerald' : 'amber';
 
@@ -510,23 +412,20 @@ const POS = () => {
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
       <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-100 flex flex-col items-center text-center">
-          <div className="w-24 h-24 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-2 overflow-hidden">
-            <img src="/placeholder.svg" alt="Logo" className="w-16 h-16 opacity-20" />
-          </div>
-          <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>{config.nome_empresa}</h2>
-          <p className="text-[9px] text-slate-500 font-bold">{config.slogan}</p>
+          <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>{config?.nome_empresa || 'DyadERP'}</h2>
+          <p className="text-[9px] text-slate-500 font-bold">{config?.slogan}</p>
         </div>
 
         <div className={cn("p-3 text-white space-y-2", mode === 'VENDA' ? "bg-slate-900" : mode === 'COMPRA' ? "bg-emerald-900" : "bg-amber-900")}>
           <div className="space-y-1">
             <label className="text-[8px] font-bold text-slate-500 uppercase">Usuário do Sistema *</label>
             <select 
-              className={cn("w-full border-none text-[10px] font-bold h-9 rounded px-2 transition-all duration-300", !selectedSellerId ? "bg-rose-600 text-white animate-pulse ring-2 ring-rose-400 ring-offset-2 ring-offset-slate-900" : "bg-white/10 text-white")}
+              className={cn("w-full border-none text-[10px] font-bold h-9 rounded px-2", !selectedSellerId ? "bg-rose-600 text-white animate-pulse" : "bg-white/10 text-white")}
               value={selectedSellerId}
               onChange={(e) => setSelectedSellerId(e.target.value ? Number(e.target.value) : "")}
             >
               <option value="" className="bg-white text-slate-900">SELECIONE O USUÁRIO...</option>
-              {usuarios.map(v => <option key={v.cd_clientes} value={v.cd_clientes} className="bg-white text-slate-900">{v.nome}</option>)}
+              {sellers.map(v => <option key={v.cd_clientes} value={v.cd_clientes} className="bg-white text-slate-900">{v.nome}</option>)}
             </select>
           </div>
         </div>
@@ -535,30 +434,14 @@ const POS = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Ações Principais</h3>
-              <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100" : mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100" : "bg-amber-600 hover:bg-amber-700 shadow-amber-100")} onClick={() => handleShortcut('F10')}>
+              <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700" : mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700")} onClick={() => handleShortcut('F10')}>
                 <CheckCircle size={20} /> FINALIZAR (F10)
               </Button>
-              {mode === 'COMPRA' && (
-                <>
-                  <input type="file" ref={xmlInputRef} className="hidden" accept=".xml" onChange={handleXMLImport} />
-                  <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs gap-2 rounded-xl shadow-lg shadow-blue-100" onClick={() => handleShortcut('F12')}>
-                    <FileCode size={18} /> IMPORTAR XML (F12)
-                  </Button>
-                </>
-              )}
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Controles</h3>
-              <div className="space-y-1.5">
-                <ShortcutItem keyName="CTRL+L" label="EDITAR ITEM" onClick={() => handleShortcut('CtrlL')} icon={<Edit3 size={12} />} />
-                <ShortcutItem keyName="F3" label="ZERAR TUDO" onClick={() => handleShortcut('F3')} icon={<Trash2 size={12} />} color="rose" />
-              </div>
             </div>
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
               <div className="space-y-1.5">
                 <ShortcutItem keyName="F5" label="HISTÓRICO" onClick={() => setIsHistoryOpen(true)} icon={<History size={12} />} />
-                <ShortcutItem keyName="F6" label="ORÇAMENTOS" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={12} />} />
                 <ShortcutItem keyName="F7" label="RECEBER" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={12} />} color="emerald" />
               </div>
             </div>
@@ -576,30 +459,16 @@ const POS = () => {
         <header className={cn("h-16 text-white flex items-center justify-between px-6 shrink-0 border-b", mode === 'VENDA' ? "bg-slate-900 border-slate-800" : mode === 'COMPRA' ? "bg-emerald-900 border-emerald-800" : "bg-amber-900 border-amber-800")}>
           <div className="flex items-center gap-6">
             <div className="flex bg-white/10 p-1 rounded-lg">
-              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")} onClick={() => setMode('VENDA')}>VENDA</Button>
-              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
-              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-sm" : "text-white hover:bg-white/5")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
+              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'VENDA' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('VENDA')}>VENDA</Button>
+              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'COMPRA' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
+              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'LOCACAO' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
             </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div><p className="text-[8px] font-bold text-slate-400 uppercase">Carrinho</p><p className="text-xl font-black">{cart.length} Itens</p></div>
-            <div className="h-8 w-px bg-white/10" />
             <div className="space-y-0.5">
               <p className="text-[8px] font-bold text-slate-400 uppercase">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
-              <div className="flex items-center gap-2">
-                <select className="bg-transparent border-none text-xs font-bold focus:ring-0 p-0 h-auto min-w-[150px]" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
-                  <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
-                  {entities.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
-                </select>
-                <Button variant="ghost" size="icon" className="h-5 w-5 text-indigo-400 hover:text-white hover:bg-white/10" onClick={() => setIsAddEntityOpen(true)}><UserPlus size={14} /></Button>
-              </div>
-            </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div className="flex flex-col gap-0.5">
-              <p className="text-[8px] font-bold text-slate-400 uppercase">Preço</p>
-              <Button variant="outline" size="sm" onClick={togglePriceMode} className={cn("h-7 gap-1.5 font-black text-[9px] border-none transition-all duration-300", priceMode === 'VISTA' ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-900/20" : "bg-slate-700 text-slate-300 hover:bg-slate-600")}>
-                {priceMode === 'VISTA' ? <Zap size={12} fill="currentColor" /> : <CreditCard size={12} />}
-                {priceMode === 'VISTA' ? 'À VISTA' : 'A PRAZO'}
-              </Button>
+              <select className="bg-transparent border-none text-xs font-bold focus:ring-0 p-0 h-auto min-w-[150px]" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
+                <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
+                {(mode === 'COMPRA' ? clients.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A') : clients).map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
+              </select>
             </div>
           </div>
           <div className="text-right"><p className="text-[9px] font-bold uppercase text-indigo-400">Total Geral</p><p className="text-4xl font-black text-white tracking-tighter">{total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div>
@@ -622,10 +491,10 @@ const POS = () => {
               {cart.map((item, idx) => (
                 <TableRow key={idx} className="h-7 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer" onClick={() => handleOpenEdit(idx)}>
                   <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200">{item?.id_manual?.padStart(5, '0')}</TableCell>
-                  <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}{item.isRental && <span className="ml-2 text-[8px] bg-amber-100 text-amber-700 px-1 rounded">LOCAÇÃO ({item.rentalDays} DIAS)</span>}</TableCell>
+                  <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
                   <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
                   <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold cursor-pointer hover:bg-indigo-100 transition-colors" onClick={(e) => { e.stopPropagation(); toggleItemUnit(idx); }}>{item?.selectedUnit}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold" onClick={(e) => { e.stopPropagation(); toggleItemUnit(idx); }}>{item?.selectedUnit}</TableCell>
                   <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
                   <TableCell className="py-0 text-center"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
                 </TableRow>
@@ -638,50 +507,23 @@ const POS = () => {
           <form onSubmit={handleCodeSubmit} className="flex items-end gap-3 h-full">
             <div className="flex-1 space-y-1">
               <label className="text-[8px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
-              <Input ref={codeRef} value={inputCode} onChange={handleCodeChange} onKeyDown={(e) => { if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); handleCodeSubmit(e); } }} className={cn("h-9 border-none text-base font-black focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors", pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900")} placeholder="Bipe o produto ou digite o nome..." />
+              <Input ref={codeRef} value={inputCode} onChange={handleCodeChange} onKeyDown={(e) => { if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); handleCodeSubmit(e); } }} className={cn("h-9 border-none text-base font-black", pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900")} placeholder="Bipe o produto ou digite o nome..." />
             </div>
-            {mode === 'LOCACAO' ? (
-              <>
-                <div className="w-32 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Início Locação</label><Input ref={rentalStartRef} type="date" value={rentalStart} onChange={(e) => setRentalStart(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); rentalEndRef.current?.focus(); } }} className="h-9 bg-[#E1FFFF] border-none text-[11px] font-black text-slate-900" /></div>
-                <div className="w-32 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Devolução Prevista</label><Input ref={rentalEndRef} type="date" value={rentalEnd} onChange={(e) => setRentalEnd(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); commitToCart(); } }} className="h-9 bg-[#E1FFFF] border-none text-[11px] font-black text-slate-900" /></div>
-                <div className="w-16 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Dias</label><div className="h-9 bg-amber-500 rounded flex items-center justify-center font-black text-white text-sm">{getDays()}</div></div>
-              </>
-            ) : (
-              <div className="w-20 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Qtde</label><Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-9 bg-[#E1FFFF] border-none text-base font-black text-slate-900 text-center" /></div>
-            )}
-            <div className="w-28 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Unidade</label><button type="button" onClick={togglePendingUnit} className={cn("w-full h-9 rounded flex items-center justify-center font-black text-[10px] uppercase transition-colors", pendingProduct?.fracionado ? "bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" : "bg-[#E1FFFF] text-slate-900 cursor-default")}>{mode === 'LOCACAO' ? getRentalUnit(getDays()) : (inputUnit || "UN")}</button></div>
-            <div className="w-32 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Valor Unitário</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(mode === 'LOCACAO' ? calculateRentalPrice(getDays(), pendingProduct) : getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}</div></div>
-            <div className="w-40 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Sub Total</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency((mode === 'LOCACAO' ? calculateRentalPrice(getDays(), pendingProduct) : getProductPrice(pendingProduct, inputUnit, priceMode)) * (parseFloat(inputQty.replace(',', '.')) || 1)) : "0,00"}</div></div>
+            <div className="w-20 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Qtde</label><Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-9 bg-[#E1FFFF] border-none text-base font-black text-slate-900 text-center" /></div>
+            <div className="w-28 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Unidade</label><div className="w-full h-9 rounded flex items-center justify-center font-black text-[10px] uppercase bg-[#E1FFFF] text-slate-900">{inputUnit || "UN"}</div></div>
+            <div className="w-32 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Valor Unitário</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}</div></div>
+            <div className="w-40 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Sub Total</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseFloat(inputQty.replace(',', '.')) || 1)) : "0,00"}</div></div>
           </form>
         </footer>
       </main>
 
-      {/* Modal de Conferência de XML no PDV */}
-      <Dialog open={isPurchaseModalOpen} onOpenChange={setIsPurchaseModalOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileSearch className="text-indigo-600" />
-              Conferência de Compra / XML (PDV)
-            </DialogTitle>
-          </DialogHeader>
-          {xmlPurchaseData && (
-            <PurchaseForm 
-              initialData={xmlPurchaseData} 
-              onSuccess={handlePurchaseSuccess} 
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} />
-      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { const newCart = q.itens.map((item: any) => { const product = products.find(p => p.cd_produto === item.cd_produto); return { ...product, quantity: item.qtde, selectedUnit: item.un, finalPrice: item.valor, costPrice: item.custo }; }); setCart(newCart); setSelectedEntityId(q.cd_clientes); setIsQuotesOpen(false); }} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
-      <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={entities.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
+      <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
-      <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => setIsAddEntityOpen(false)} /></DialogContent></Dialog>
-      <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); const admin = db.clientes.getAll().find(c => c.usuario === 'admin' && c.senha === adminPassword); if (admin) { showSuccess("Acesso autorizado!"); navigate("/"); } else { showError("Senha incorreta."); setAdminPassword(""); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
+      <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><Edit3 className="text-indigo-600" />Editar Item</DialogTitle></DialogHeader><div className="space-y-4 py-4">{editingIndex !== null && <div className="p-3 bg-slate-50 rounded-lg border mb-4"><p className="text-[10px] font-bold text-slate-400 uppercase">Produto</p><p className="text-sm font-bold text-slate-900">{cart[editingIndex]?.nome}</p></div>}<div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label>Quantidade</Label><Input type="number" value={editData.qtde} onChange={(e) => { const q = parseFloat(e.target.value) || 0; const v = parseCurrency(editData.valor); setEditData({ ...editData, qtde: q, total: formatCurrency(q * v) }); }} /></div><div className="space-y-2"><Label>Valor Unitário (R$)</Label><Input value={editData.valor} onChange={(e) => { const vStr = formatCurrency(e.target.value); const v = parseCurrency(vStr); setEditData({ ...editData, valor: vStr, total: formatCurrency(editData.qtde * v) }); }} /></div></div><div className="space-y-2"><Label>Valor Total (R$)</Label><Input value={editData.total} onChange={(e) => { const tStr = formatCurrency(e.target.value); const t = parseCurrency(tStr); const v = editData.qtde > 0 ? t / editData.qtde : 0; setEditData({ ...editData, total: tStr, valor: formatCurrency(v) }); }} /></div></div><DialogFooter><Button variant="outline" onClick={() => setIsEditItemOpen(false)}>Cancelar</Button><Button onClick={saveEdit} className="bg-indigo-600">Salvar</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
