@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, AlertTriangle, Package, Save, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, AlertTriangle, Package, CheckCircle2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -33,37 +33,43 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingProduct, setEditingProduct] = React.useState<Produto | undefined>(undefined);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const loadData = () => {
-    setProducts(db.produtos.getAll());
-  };
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await db.produtos.getAll();
+      setProducts(data);
+    } catch (err) {
+      showError("Erro ao carregar produtos.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const filteredProducts = products.filter(p => {
     const term = searchTerm.toLowerCase();
-    const paddedTerm = searchTerm.padStart(5, '0');
-    
     return (
       p.nome.toLowerCase().includes(term) ||
-      p.id_manual === paddedTerm || // Busca exata pelo código com zeros
-      p.id_manual.includes(term) || // Busca parcial
-      (p.cod_barras && p.cod_barras.includes(term))
+      p.id_manual?.includes(term) ||
+      p.cod_barras?.includes(term)
     );
   });
 
-  const handleQuickUpdate = (id: number, field: keyof Produto, value: string) => {
+  const handleQuickUpdate = async (id: number, field: keyof Produto, value: string) => {
     try {
       const numValue = parseFloat(value.replace(',', '.'));
       if (isNaN(numValue)) return;
 
-      db.produtos.update(id, { [field]: numValue });
+      await db.produtos.update(id, { [field]: numValue });
       setProducts(prev => prev.map(p => p.cd_produto === id ? { ...p, [field]: numValue } : p));
       showSuccess("Alteração salva!");
     } catch (err: any) {
-      showError(err.message);
+      showError("Erro ao atualizar.");
     }
   };
 
@@ -77,9 +83,9 @@ const Inventory = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm("Tem certeza que deseja excluir este produto?")) {
-      db.produtos.delete(id);
+      await db.produtos.delete(id);
       loadData();
     }
   };
@@ -90,7 +96,7 @@ const Inventory = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
-            <p className="text-slate-500">Manutenção rápida de preços, custos e quantidades.</p>
+            <p className="text-slate-500">Manutenção rápida de preços e quantidades no banco de dados.</p>
           </div>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -127,7 +133,7 @@ const Inventory = () => {
             </div>
             <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               <CheckCircle2 size={14} className="text-emerald-500" />
-              Alterações são salvas ao sair do campo
+              Dados sincronizados com a nuvem
             </div>
           </div>
 
@@ -140,104 +146,49 @@ const Inventory = () => {
                   <TableHead className="font-bold w-24">Estoque</TableHead>
                   <TableHead className="font-bold w-28">À Vista (R$)</TableHead>
                   <TableHead className="font-bold w-28">A Prazo (R$)</TableHead>
-                  <TableHead className="font-bold w-24">UN Frac.</TableHead>
-                  <TableHead className="font-bold w-28">Vlr Frac.</TableHead>
                   <TableHead className="text-right font-bold w-28">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-slate-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <Package size={32} className="opacity-20" />
-                        <p>Nenhum produto encontrado.</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                {isLoading ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-12">Carregando produtos...</TableCell></TableRow>
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-400">Nenhum produto encontrado.</TableCell></TableRow>
                 ) : (
                   filteredProducts.map((product) => (
                     <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors group">
-                      <TableCell className="font-bold text-indigo-600 text-xs">
-                        {product.id_manual.padStart(5, '0')}
-                      </TableCell>
+                      <TableCell className="font-bold text-indigo-600 text-xs">{product.id_manual}</TableCell>
                       <TableCell>
                         <div>
                           <p className="font-bold text-slate-900 text-sm truncate max-w-[200px]">{product.nome}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">
-                              {product.un.toUpperCase()}
-                            </span>
-                            {product.fracionado && <Badge variant="outline" className="text-[8px] h-3.5 px-1 border-indigo-200 text-indigo-600 bg-indigo-50">FRAC.</Badge>}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="relative">
-                          <Input 
-                            type="text"
-                            defaultValue={product.estoque}
-                            onBlur={(e) => handleQuickUpdate(product.cd_produto, 'estoque', e.target.value)}
-                            className={cn(
-                              "h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-indigo-500 bg-transparent focus:bg-white transition-all",
-                              product.estoque <= (product.minimo || 0) ? "text-rose-600" : "text-slate-900"
-                            )}
-                          />
-                          {product.estoque <= (product.minimo || 0) && (
-                            <AlertTriangle size={10} className="absolute right-1 top-1/2 -translate-y-1/2 text-amber-500 pointer-events-none" />
-                          )}
+                          <span className="text-[9px] text-slate-500 uppercase font-bold bg-slate-100 px-1.5 rounded">{product.un}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <Input 
-                          type="text"
+                          defaultValue={product.estoque}
+                          onBlur={(e) => handleQuickUpdate(product.cd_produto, 'estoque', e.target.value)}
+                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:bg-white"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input 
                           defaultValue={product.venda_vista?.toFixed(2).replace('.', ',')}
                           onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda_vista', e.target.value)}
-                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-emerald-500 bg-transparent focus:bg-white transition-all text-emerald-600"
+                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 text-emerald-600"
                         />
                       </TableCell>
                       <TableCell>
                         <Input 
-                          type="text"
                           defaultValue={product.venda.toFixed(2).replace('.', ',')}
                           onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda', e.target.value)}
-                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-indigo-500 bg-transparent focus:bg-white transition-all text-slate-900"
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-[10px] font-bold text-indigo-600 uppercase">
-                          {product.un_fracionada || "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Input 
-                          type="text"
-                          disabled={!product.fracionado}
-                          defaultValue={product.venda_fracionada?.toFixed(2).replace('.', ',')}
-                          onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda_fracionada', e.target.value)}
-                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200 focus:border-indigo-500 bg-transparent focus:bg-white transition-all text-indigo-600 disabled:opacity-30"
+                          className="h-8 text-xs font-bold text-center border-transparent hover:border-slate-200"
                         />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                            onClick={() => handleEdit(product)}
-                            title="Editar completo"
-                          >
-                            <Edit size={14} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                            onClick={() => handleDelete(product.cd_produto)}
-                            title="Excluir produto"
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(product)}><Edit size={14} /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500" onClick={() => handleDelete(product.cd_produto)}><Trash2 size={14} /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
