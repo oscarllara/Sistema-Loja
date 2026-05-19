@@ -16,9 +16,8 @@ const ImportData = () => {
 
   const findKey = (obj: any, keywords: string[]) => {
     const keys = Object.keys(obj);
-    // Tenta encontrar uma chave que contenha qualquer uma das palavras-chave
     return keys.find(k => {
-      const upperK = k.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove acentos para comparar
+      const upperK = k.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       return keywords.some(kw => upperK.includes(kw.toUpperCase()));
     });
   };
@@ -64,74 +63,68 @@ const ImportData = () => {
   const importProdutos = (data: any[]) => {
     const first = data[0];
     
-    // Busca inteligente expandida
-    const kNome = findKey(first, ['NOME', 'DESCRICAO', 'PRODUTO', 'ITEM', 'DESC', 'PROD', 'DETALHE']);
-    const kCod = findKey(first, ['CODIGO', 'ID', 'REF', 'COD']);
-    const kPreco = findKey(first, ['PRECO', 'VALOR', 'VENDA', 'VLR', 'UNITARIO']);
-    const kCusto = findKey(first, ['CUSTO', 'COMPRA', 'ENTRADA']);
-    const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QTD', 'QUANTIDADE', 'ATUAL']);
-    const kUn = findKey(first, ['UNIDADE', 'UN', 'MEDIDA', 'TIPO']);
-    const kBarras = findKey(first, ['BARRAS', 'EAN', 'GTIN', 'BARRA']);
+    // Mapeamento conforme solicitado
+    const kNome = findKey(first, ['DESCRICAO', 'PRODUTO', 'NOME']);
+    const kCodOriginal = findKey(first, ['ID_IMPORTADO', 'CODIGO_ORIGINAL', 'CODIGO', 'REF', 'ID']);
+    const kPrecoVenda = findKey(first, ['PRECO_VENDA', 'VENDA', 'PRECO', 'VLR_VENDA']);
+    const kPrecoCusto = findKey(first, ['PRECO_CUSTO', 'CUSTO', 'COMPRA', 'VLR_CUSTO']);
+    const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QTD', 'QUANTIDADE']);
+    const kUn = findKey(first, ['UNIDADE', 'UN', 'MEDIDA']);
 
-    addLog(`Mapeamento: Nome->${kNome || 'NÃO ENCONTRADO'}, Preço->${kPreco || 'NÃO ENCONTRADO'}`);
+    addLog(`Mapeamento Identificado:`);
+    addLog(`- Descrição: ${kNome || 'NÃO ENCONTRADO'}`);
+    addLog(`- Cód. Original: ${kCodOriginal || 'NÃO ENCONTRADO'}`);
+    addLog(`- Preço Venda: ${kPrecoVenda || 'NÃO ENCONTRADO'}`);
+    addLog(`- Preço Custo: ${kPrecoCusto || 'NÃO ENCONTRADO'}`);
+    addLog(`- Estoque: ${kEstoque || 'NÃO ENCONTRADO'}`);
 
     if (!kNome) {
-      addLog("ERRO CRÍTICO: Não encontrei nenhuma coluna de Nome/Descrição. Verifique o log de colunas acima.");
-      throw new Error("Coluna de Nome/Descrição não identificada.");
+      addLog("ERRO: Coluna de descrição/produto não encontrada.");
+      throw new Error("Coluna de Descrição não identificada.");
     }
 
-    const mapped = data.map(item => {
-      const nome = (item[kNome] || "").toString().trim().toUpperCase();
-      const id_importado = kCod ? (item[kCod] || "").toString() : "";
-      
-      // Tratamento de números (remove R$, pontos de milhar e troca vírgula por ponto)
-      const parseNum = (val: any) => {
-        if (val === undefined || val === null) return 0;
-        const s = val.toString().replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        return parseFloat(s) || 0;
-      };
+    const parseNum = (val: any) => {
+      if (val === undefined || val === null) return 0;
+      const s = val.toString().replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+      return parseFloat(s) || 0;
+    };
 
-      const venda = parseNum(item[kPreco]);
-      const compra = kCusto ? parseNum(item[kCusto]) : 0;
-      const estoque = kEstoque ? parseNum(item[kEstoque]) : 0;
-      const un = kUn ? (item[kUn] || "UN").toString().toUpperCase() : "UN";
-      const cod_barras = kBarras ? (item[kBarras] || "").toString() : "";
+    // 1. Mapear dados brutos
+    const mapped = data.map(item => ({
+      nome: (item[kNome] || "").toString().trim().toUpperCase(),
+      id_importado: kCodOriginal ? (item[kCodOriginal] || "").toString() : "",
+      venda: parseNum(item[kPrecoVenda]),
+      compra: parseNum(item[kPrecoCusto]),
+      estoque: parseNum(item[kEstoque]),
+      un: kUn ? (item[kUn] || "UN").toString().toUpperCase() : "UN",
+      data_atualizacao: new Date().toISOString()
+    })).filter(p => p.nome && p.nome.length > 1);
 
-      return {
-        nome,
-        id_importado,
-        venda: venda,
-        venda_vista: venda,
-        compra: compra,
-        estoque: estoque,
-        un,
-        cod_barras,
-        data_atualizacao: new Date().toISOString()
-      };
-    }).filter(p => p.nome && p.nome.length > 1);
-
-    addLog(`${mapped.length} produtos processados com sucesso.`);
-
+    // 2. Ordenar por Nome (Ordem Alfabética)
     mapped.sort((a, b) => a.nome.localeCompare(b.nome));
 
+    // 3. Gerar novos códigos sequenciais (id_manual)
     const finalProducts = mapped.map((p, index) => ({
       ...p,
       cd_produto: Date.now() + index,
-      id_manual: (index + 1).toString().padStart(5, '0'),
+      id_manual: (index + 1).toString().padStart(5, '0'), // 00001, 00002...
+      venda_vista: p.venda // Inicializa preço à vista igual ao de venda
     }));
 
     const currentDB = JSON.parse(localStorage.getItem('dyaderp_db') || '{}');
+    // Substitui ou adiciona? Vamos adicionar para não perder o que já tem, 
+    // mas você pode limpar o banco antes se preferir.
     currentDB.produtos = [...(currentDB.produtos || []), ...finalProducts];
     localStorage.setItem('dyaderp_db', JSON.stringify(currentDB));
-    addLog(`Importação concluída e salva.`);
+    
+    addLog(`Sucesso: ${finalProducts.length} produtos importados e ordenados.`);
   };
 
   const importClientes = (data: any[]) => {
     const first = data[0];
-    const kNome = findKey(first, ['NOME', 'RAZAO', 'CLIENTE', 'NOME_CLIENTE']);
-    const kDoc = findKey(first, ['CPF', 'CNPJ', 'DOC', 'DOCUMENTO']);
-    const kTel = findKey(first, ['TEL', 'CEL', 'FONE', 'CONTATO', 'TELEFONE']);
-    const kEmail = findKey(first, ['EMAIL', 'CORREIO']);
+    const kNome = findKey(first, ['NOME', 'RAZAO', 'CLIENTE']);
+    const kDoc = findKey(first, ['CPF', 'CNPJ', 'DOC']);
+    const kTel = findKey(first, ['TEL', 'CEL', 'FONE', 'CONTATO']);
 
     if (!kNome) throw new Error("Coluna de Nome não identificada.");
 
@@ -140,7 +133,6 @@ const ImportData = () => {
       nome: (item[kNome] || "").toString().trim().toUpperCase(),
       cpf_cnpj: kDoc ? (item[kDoc] || "").toString() : "",
       cel: kTel ? (item[kTel] || "").toString() : "",
-      email: kEmail ? (item[kEmail] || "").toString().toLowerCase() : "",
       tipo_entidade: 'C' as const,
       is_funcionario: false,
       data: new Date().toISOString()
