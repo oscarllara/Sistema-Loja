@@ -16,8 +16,19 @@ const ImportData = () => {
 
   const findKey = (obj: any, keywords: string[]) => {
     const keys = Object.keys(obj);
+    
+    // 1. Tenta encontrar um match EXATO primeiro (mais seguro)
+    const exactMatch = keys.find(k => {
+      const upperK = k.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return keywords.some(kw => upperK === kw.toUpperCase());
+    });
+    if (exactMatch) return exactMatch;
+
+    // 2. Se não achar exato, tenta por inclusão, mas ignora colunas que começam com CD_ ou ID_ 
+    // para não confundir "CD_PRODUTO" com "PRODUTO" (Descrição)
     return keys.find(k => {
       const upperK = k.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (upperK.startsWith('CD_') || upperK.startsWith('ID_') || upperK.startsWith('COD_')) return false;
       return keywords.some(kw => upperK.includes(kw.toUpperCase()));
     });
   };
@@ -63,12 +74,12 @@ const ImportData = () => {
   const importProdutos = (data: any[]) => {
     const first = data[0];
     
-    // Mapeamento conforme solicitado
-    const kNome = findKey(first, ['DESCRICAO', 'PRODUTO', 'NOME']);
+    // Mapeamento ajustado para priorizar nomes comuns
+    const kNome = findKey(first, ['NOME', 'DESCRICAO', 'PRODUTO']);
     const kCodOriginal = findKey(first, ['ID_IMPORTADO', 'CODIGO_ORIGINAL', 'CODIGO', 'REF', 'ID']);
     const kPrecoVenda = findKey(first, ['PRECO_VENDA', 'VENDA', 'PRECO', 'VLR_VENDA']);
     const kPrecoCusto = findKey(first, ['PRECO_CUSTO', 'CUSTO', 'COMPRA', 'VLR_CUSTO']);
-    const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QTD', 'QUANTIDADE']);
+    const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QTD', 'QUANTIDADE', 'ESTOQUE_ST']);
     const kUn = findKey(first, ['UNIDADE', 'UN', 'MEDIDA']);
 
     addLog(`Mapeamento Identificado:`);
@@ -108,16 +119,19 @@ const ImportData = () => {
       ...p,
       cd_produto: Date.now() + index,
       id_manual: (index + 1).toString().padStart(5, '0'), // 00001, 00002...
-      venda_vista: p.venda // Inicializa preço à vista igual ao de venda
+      venda_vista: p.venda 
     }));
 
     const currentDB = JSON.parse(localStorage.getItem('dyaderp_db') || '{}');
-    // Substitui ou adiciona? Vamos adicionar para não perder o que já tem, 
-    // mas você pode limpar o banco antes se preferir.
     currentDB.produtos = [...(currentDB.produtos || []), ...finalProducts];
-    localStorage.setItem('dyaderp_db', JSON.stringify(currentDB));
     
-    addLog(`Sucesso: ${finalProducts.length} produtos importados e ordenados.`);
+    try {
+      localStorage.setItem('dyaderp_db', JSON.stringify(currentDB));
+      addLog(`Sucesso: ${finalProducts.length} produtos importados e ordenados.`);
+    } catch (e) {
+      addLog("ERRO CRÍTICO: Limite de memória do navegador excedido.");
+      throw new Error("O navegador não tem espaço para tantos produtos. Você precisa conectar um Banco de Dados (Supabase).");
+    }
   };
 
   const importClientes = (data: any[]) => {
