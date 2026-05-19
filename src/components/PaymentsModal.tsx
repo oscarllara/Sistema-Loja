@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Wallet, Search, CheckCircle2, User, Banknote, QrCode, CreditCard, X } from 'lucide-react';
+import { Wallet, Search, CheckCircle2, User, Banknote, QrCode, CreditCard, X, Loader2 } from 'lucide-react';
 import { db } from '@/services/api';
 import { LancamentoFinanceiro, Cliente, MeioPagamento } from '@/types/database';
 import { showSuccess, showError } from '@/utils/toast';
@@ -33,16 +33,32 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
   const [search, setSearch] = React.useState("");
   const [selectedClient, setSelectedClient] = React.useState<Cliente | null>(null);
   const [pendencias, setPendencias] = React.useState<LancamentoFinanceiro[]>([]);
+  const [clientes, setClientes] = React.useState<Cliente[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
   
   const [payingEntry, setPayingEntry] = React.useState<LancamentoFinanceiro | null>(null);
   const [receiveValue, setReceiveValue] = React.useState("");
   const [receiveMethod, setReceiveMethod] = React.useState<MeioPagamento>('Dinheiro');
 
-  const clientes = db.clientes.getAll().filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
+  const loadClientes = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await db.clientes.getAll();
+      setClientes(data.filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const handleSelectClient = (client: Cliente) => {
+  React.useEffect(() => {
+    if (isOpen) {
+      loadClientes();
+    }
+  }, [isOpen, loadClientes]);
+
+  const handleSelectClient = async (client: Cliente) => {
     setSelectedClient(client);
-    const financeiro = db.financeiro.getByEntidade(client.cd_clientes);
+    const financeiro = await db.financeiro.getByEntidade(client.cd_clientes);
     setPendencias(financeiro.filter(l => l.status === 'Pendente' && l.tipo === 'R'));
     setPayingEntry(null);
   };
@@ -53,7 +69,7 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
     setReceiveMethod('Dinheiro');
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!payingEntry) return;
     
     const valorNum = parseFloat(receiveValue.replace(',', '.'));
@@ -67,13 +83,13 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
       return;
     }
 
-    const contas = db.contas.getAll();
+    const contas = await db.contas.getAll();
     if (contas.length === 0) {
       showError("Nenhuma conta cadastrada para receber.");
       return;
     }
 
-    db.financeiro.baixar(payingEntry.cd_lancamento, contas[0].cd_conta, valorNum, receiveMethod);
+    await db.financeiro.baixar(payingEntry.cd_lancamento, contas[0].cd_conta, valorNum, receiveMethod);
     showSuccess(valorNum < payingEntry.valor ? "Recebimento parcial registrado!" : "Conta baixada com sucesso!");
     
     if (selectedClient) handleSelectClient(selectedClient);
@@ -103,22 +119,26 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
                 />
               </div>
               <div className="grid grid-cols-1 gap-2">
-                {clientes.filter(c => c.nome.toLowerCase().includes(search.toLowerCase())).slice(0, 6).map(c => (
-                  <Button 
-                    key={c.cd_clientes} 
-                    variant="outline" 
-                    className="justify-start gap-3 h-14 hover:bg-indigo-50 hover:border-indigo-200 transition-all"
-                    onClick={() => handleSelectClient(c)}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-                      {c.nome.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div className="text-left">
-                      <p className="font-black text-sm uppercase text-slate-900">{c.nome}</p>
-                      <p className="text-[10px] text-slate-500 font-bold">{c.cpf_cnpj || 'SEM CPF/CNPJ'}</p>
-                    </div>
-                  </Button>
-                ))}
+                {isLoading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-300" /></div>
+                ) : (
+                  clientes.filter(c => c.nome.toLowerCase().includes(search.toLowerCase())).slice(0, 6).map(c => (
+                    <Button 
+                      key={c.cd_clientes} 
+                      variant="outline" 
+                      className="justify-start gap-3 h-14 hover:bg-indigo-50 hover:border-indigo-200 transition-all"
+                      onClick={() => handleSelectClient(c)}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+                        {c.nome.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-black text-sm uppercase text-slate-900">{c.nome}</p>
+                        <p className="text-[10px] text-slate-500 font-bold">{c.cpf_cnpj || 'SEM CPF/CNPJ'}</p>
+                      </div>
+                    </Button>
+                  ))
+                )}
               </div>
             </div>
           ) : (
