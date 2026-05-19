@@ -169,7 +169,10 @@ const Financial = () => {
   const patrimonyStats = React.useMemo(() => {
     const stats = { Imóvel: 0, Veículo: 0, Equipamento: 0, Outros: 0, Total: 0 };
     patrimonio.forEach(p => {
-      stats[p.tipo] += p.valor;
+      const tipo = p.tipo as keyof typeof stats;
+      if (stats[tipo] !== undefined) {
+        stats[tipo] += p.valor;
+      }
       stats.Total += p.valor;
     });
     return stats;
@@ -476,7 +479,7 @@ const Financial = () => {
             </DialogHeader>
             {selectedClientForDetails && <ClientDetails client={selectedClientForDetails} />}
           </DialogContent>
-        </div>
+        </Dialog>
       </div>
     </Layout>
   );
