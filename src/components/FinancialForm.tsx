@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { ContaBancaria } from '@/types/database';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 
 const financialSchema = z.object({
   tipo: z.enum(['R', 'P']),
@@ -21,6 +22,7 @@ const financialSchema = z.object({
   categoria: z.string().min(1, "Categoria obrigatória"),
   cd_account: z.string().optional(),
   status: z.enum(['Pendente', 'Pago']),
+  is_non_operational: z.boolean().default(false),
 });
 
 type FinancialFormValues = z.infer<typeof financialSchema>;
@@ -41,11 +43,11 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
       status: 'Pago',
       data_vencimento: new Date().toISOString().split('T')[0],
       categoria: 'Outros',
-      valor: "0,00"
+      valor: "0,00",
+      is_non_operational: false
     }
   });
 
-  // Carregamento assíncrono das contas
   React.useEffect(() => {
     const loadContas = async () => {
       try {
@@ -62,10 +64,11 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
   }, []);
 
   const tipo = watch("tipo");
+  const isNonOperational = watch("is_non_operational");
 
   const categorias = tipo === 'R' 
-    ? ['Venda', 'Serviço', 'Rendimento', 'Aporte', 'Outros']
-    : ['Salário', 'Aluguel', 'Pro-labore', 'Imposto', 'Fornecedor', 'Energia', 'Água', 'Internet', 'Vale', 'Comissão', 'Outros'];
+    ? ['Venda', 'Serviço', 'Rendimento', 'Aporte', 'Ajuste', 'Outros']
+    : ['Salário', 'Aluguel', 'Pro-labore', 'Imposto', 'Fornecedor', 'Energia', 'Água', 'Internet', 'Vale', 'Comissão', 'Ajuste', 'Outros'];
 
   const toTitleCase = (str: string) => {
     return str.replace(/\w\S*/g, (txt) => {
@@ -109,7 +112,8 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
         status: data.status,
         categoria: data.categoria,
         cd_conta: data.status === 'Pago' ? Number(data.cd_account) : undefined,
-        meio_pagamento: 'Dinheiro'
+        meio_pagamento: 'Dinheiro',
+        is_non_operational: data.is_non_operational
       });
 
       showSuccess("Lançamento realizado com sucesso!");
@@ -121,23 +125,42 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
-      <div className="space-y-2">
-        <Label>Tipo de Lançamento</Label>
-        <RadioGroup 
-          value={tipo}
-          onValueChange={(v) => setValue("tipo", v as 'R' | 'P')}
-          className="flex gap-4"
-        >
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="R" id="tipo-r" />
-            <Label htmlFor="tipo-r" className="text-emerald-600 font-bold cursor-pointer">Receita (+)</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="P" id="tipo-p" />
-            <Label htmlFor="tipo-p" className="text-rose-600 font-bold cursor-pointer">Despesa (-)</Label>
-          </div>
-        </RadioGroup>
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="space-y-2">
+          <Label>Tipo de Lançamento</Label>
+          <RadioGroup 
+            value={tipo}
+            onValueChange={(v) => setValue("tipo", v as 'R' | 'P')}
+            className="flex gap-4"
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="R" id="tipo-r" />
+              <Label htmlFor="tipo-r" className="text-emerald-600 font-bold cursor-pointer">Receita (+)</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="P" id="tipo-p" />
+              <Label htmlFor="tipo-p" className="text-rose-600 font-bold cursor-pointer">Despesa (-)</Label>
+            </div>
+          </RadioGroup>
+        </div>
+
+        <div className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200">
+          <Checkbox 
+            id="non-op" 
+            checked={isNonOperational}
+            onCheckedChange={(checked) => setValue("is_non_operational", !!checked)}
+          />
+          <Label htmlFor="non-op" className="text-xs font-bold text-slate-600 cursor-pointer flex items-center gap-1">
+            Não Operacional <Info size={12} className="text-slate-400" />
+          </Label>
+        </div>
       </div>
+
+      {isNonOperational && (
+        <div className="p-3 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-medium border border-amber-100">
+          Este lançamento não afetará os indicadores de faturamento real e margem de lucro nos relatórios.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">

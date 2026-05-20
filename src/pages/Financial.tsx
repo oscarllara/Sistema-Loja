@@ -19,7 +19,8 @@ import {
   PlusCircle,
   Car,
   FileText,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -591,7 +592,12 @@ const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }
             <TableRow key={l.cd_lancamento} className="hover:bg-slate-50/50 transition-colors">
               <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
               <TableCell>
-                <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
+                  {l.is_non_operational && (
+                    <Badge variant="outline" className="text-[8px] h-4 px-1 border-amber-200 text-amber-600 bg-amber-50">NÃO OPERACIONAL</Badge>
+                  )}
+                </div>
                 <div className="text-[10px] text-slate-500 uppercase flex flex-wrap items-center gap-2">
                   {l.nome_entidade || 'Lançamento Avulso'}
                   <span className="text-slate-300">|</span>

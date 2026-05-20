@@ -127,6 +127,7 @@ export interface LancamentoFinanceiro {
   cd_venda?: number;
   cd_compra?: number;
   cd_aluguel?: number;
+  is_non_operational?: boolean;
   
   // Campos de Cheque / Boleto
   num_documento?: string;
