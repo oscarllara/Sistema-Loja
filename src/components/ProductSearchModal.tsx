@@ -34,8 +34,12 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
   const [products, setProducts] = React.useState<Produto[]>([]);
   
   const loadProducts = React.useCallback(async () => {
-    const data = await db.produtos.getAll();
-    setProducts(data || []);
+    try {
+      const data = await db.produtos.getAll();
+      setProducts(data || []);
+    } catch (e) {
+      console.error("Erro ao carregar produtos na busca:", e);
+    }
   }, []);
 
   React.useEffect(() => {
@@ -46,23 +50,41 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
     }
   }, [isOpen, initialSearch, loadProducts]);
 
-  const filtered = products.filter(p => {
-    if (!p) return false;
-    
-    // Filtro de integração
-    if (filterIntegratedOnly && !p.integrar_calculadora) return false;
+  const filtered = React.useMemo(() => {
+    const term = search.toLowerCase().trim();
+    if (!term) return products;
 
-    const term = search.toLowerCase();
-    const paddedTerm = search.padStart(5, '0');
-    
-    return (
-      (p.nome || "").toLowerCase().includes(term) ||
-      (p.id_manual || "") === paddedTerm || 
-      (p.id_manual || "").includes(search) ||
-      (p.id_importado || "").includes(search) ||
-      (p.cod_barras || "").includes(search)
-    );
-  });
+    const matches = products.filter(p => {
+      if (!p) return false;
+      if (filterIntegratedOnly && !p.integrar_calculadora) return false;
+
+      const paddedTerm = term.padStart(5, '0');
+      return (
+        (p.nome || "").toLowerCase().includes(term) ||
+        (p.id_manual || "") === paddedTerm || 
+        (p.id_manual || "").includes(term) ||
+        (p.id_importado || "").includes(term) ||
+        (p.cod_barras || "").includes(term)
+      );
+    });
+
+    // Lógica de Ordenação Prioritária
+    return matches.sort((a, b) => {
+      const nameA = (a.nome || "").toLowerCase();
+      const nameB = (b.nome || "").toLowerCase();
+
+      // 1. Correspondência Exata
+      if (nameA === term && nameB !== term) return -1;
+      if (nameB === term && nameA !== term) return 1;
+
+      // 2. Começa com o termo
+      if (nameA.startsWith(term) && !nameB.startsWith(term)) return -1;
+      if (nameB.startsWith(term) && !nameA.startsWith(term)) return 1;
+
+      // 3. Ordem Alfabética
+      return nameA.localeCompare(nameB);
+    });
+  }, [products, search, filterIntegratedOnly]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {

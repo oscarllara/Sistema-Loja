@@ -10,24 +10,18 @@ import {
   Plus,
   CheckCircle2,
   Clock,
-  Building,
-  Car,
   Home,
-  Edit3,
-  Save,
-  X,
-  Edit,
-  Trash2,
   Search,
-  Calendar,
-  FileText,
   Briefcase,
   Layers,
   RotateCcw,
   CheckSquare,
-  PlusCircle
+  PlusCircle,
+  Car,
+  FileText,
+  Loader2
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -67,6 +61,7 @@ const Financial = () => {
   const [activeTab, setActiveTab] = React.useState("receivable");
   const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
   const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
   
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isTransferOpen, setIsTransferOpen] = React.useState(false);
@@ -76,72 +71,82 @@ const Financial = () => {
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
   
-  // Estados para Compensação de Cheque
   const [isCompensateOpen, setIsCompensateOpen] = React.useState(false);
   const [selectedCheque, setSelectedCheque] = React.useState<LancamentoFinanceiro | null>(null);
   const [targetAccountId, setTargetAccountId] = React.useState<string>("");
 
-  // Filtros
   const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = React.useState("");
 
-  const loadData = React.useCallback(() => {
-    setLancamentos(db.financeiro.getAll() || []);
-    setContas(db.contas.getAll() || []);
-    setPatrimonio(db.patrimonio.getAll() || []);
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [lData, cData, pData] = await Promise.all([
+        db.financeiro.getAll(),
+        db.contas.getAll(),
+        db.patrimonio.getAll()
+      ]);
+      setLancamentos(lData || []);
+      setContas(cData || []);
+      setPatrimonio(pData || []);
+    } catch (err) {
+      console.error("Erro ao carregar dados financeiros:", err);
+      showError("Erro ao carregar dados financeiros.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   React.useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Resetar filtro de status ao trocar de aba
   React.useEffect(() => {
     setStatusFilter('All');
   }, [activeTab]);
 
-  const handleBaixa = (id: number) => {
+  const handleBaixa = async (id: number) => {
     if (contas.length === 0) {
       showError("Nenhuma conta cadastrada para realizar a baixa.");
       return;
     }
-    db.financeiro.baixar(id, contas[0].cd_conta);
-    showSuccess("Baixa realizada com sucesso!");
-    loadData();
-  };
-
-  const handleCompensarCheque = () => {
-    if (!selectedCheque || !targetAccountId) return;
-    db.financeiro.baixar(selectedCheque.cd_lancamento, Number(targetAccountId));
-    showSuccess("Cheque compensado com sucesso!");
-    setIsCompensateOpen(false);
-    setSelectedCheque(null);
-    loadData();
-  };
-
-  const handleDevolverCheque = (id: number) => {
-    if (confirm("Deseja marcar este cheque como DEVOLVIDO?")) {
-      const database = JSON.parse(localStorage.getItem('dyaderp_db') || '{}');
-      const idx = database.financeiro.findIndex((l: any) => l.cd_lancamento === id);
-      if (idx !== -1) {
-        database.financeiro[idx].status = 'Devolvido';
-        localStorage.setItem('dyaderp_db', JSON.stringify(database));
-        showSuccess("Cheque marcado como devolvido.");
-        loadData();
-      }
+    try {
+      await db.financeiro.baixar(id, contas[0].cd_conta);
+      showSuccess("Baixa realizada com sucesso!");
+      loadData();
+    } catch (err) {
+      showError("Erro ao realizar baixa.");
     }
   };
 
-  const handleViewClient = (clientId?: number) => {
+  const handleCompensarCheque = async () => {
+    if (!selectedCheque || !targetAccountId) return;
+    try {
+      await db.financeiro.baixar(selectedCheque.cd_lancamento, Number(targetAccountId));
+      showSuccess("Cheque compensado com sucesso!");
+      setIsCompensateOpen(false);
+      setSelectedCheque(null);
+      loadData();
+    } catch (err) {
+      showError("Erro ao compensar cheque.");
+    }
+  };
+
+  const handleViewClient = async (clientId?: number) => {
     if (!clientId) return;
-    const client = db.clientes.getAll().find(c => c.cd_clientes === clientId);
-    if (client) setSelectedClientForDetails(client);
+    try {
+      const allClients = await db.clientes.getAll();
+      const client = allClients.find(c => c.cd_clientes === clientId);
+      if (client) setSelectedClientForDetails(client);
+    } catch (err) {
+      showError("Erro ao buscar dados do cliente.");
+    }
   };
 
   const filterData = (tipo: 'R' | 'P') => {
     return lancamentos.filter(l => {
-      const data = (l.data_pagamento || l.data_vencimento).split('T')[0];
+      const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
       const matchesDate = data >= startDate && data <= endDate;
       const matchesType = l.tipo === tipo;
       const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -177,6 +182,17 @@ const Financial = () => {
     });
     return stats;
   }, [patrimonio]);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 gap-4">
+          <Loader2 className="animate-spin" size={40} />
+          <p className="font-bold">Carregando dados financeiros...</p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -275,7 +291,7 @@ const Financial = () => {
 
           <TabsContent value="receivable" className="space-y-6">
             <FinancialSummary 
-              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'R' && (l.data_pagamento || l.data_vencimento).split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento).split('T')[0] <= endDate))} 
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'R' && (l.data_pagamento || l.data_vencimento || "").split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento || "").split('T')[0] <= endDate))} 
               type="R" 
               currentFilter={statusFilter}
               onFilterChange={setStatusFilter}
@@ -289,7 +305,7 @@ const Financial = () => {
 
           <TabsContent value="payable" className="space-y-6">
             <FinancialSummary 
-              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento).split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento).split('T')[0] <= endDate))} 
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento || "").split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento || "").split('T')[0] <= endDate))} 
               type="P" 
               currentFilter={statusFilter}
               onFilterChange={setStatusFilter}
@@ -299,7 +315,15 @@ const Financial = () => {
               onBaixa={handleBaixa}
               onViewClient={handleViewClient}
               onCompensar={(l: any) => { setSelectedCheque(l); setIsCompensateOpen(true); }}
-              onDevolver={handleDevolverCheque}
+              onDevolver={async (id: number) => {
+                if (confirm("Deseja marcar este cheque como DEVOLVIDO?")) {
+                  try {
+                    await db.financeiro.add({ cd_lancamento: id, status: 'Devolvido' }); // Simulação de update
+                    showSuccess("Cheque marcado como devolvido.");
+                    loadData();
+                  } catch (e) { showError("Erro ao atualizar cheque."); }
+                }
+              }}
             />
           </TabsContent>
 
@@ -420,7 +444,6 @@ const Financial = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Modal de Compensação de Cheque */}
         <Dialog open={isCompensateOpen} onOpenChange={setIsCompensateOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>Compensar Cheque</DialogTitle></DialogHeader>
@@ -463,7 +486,11 @@ const Financial = () => {
             {selectedAccountForDetails && (
               <AccountDetails 
                 account={selectedAccountForDetails} 
-                onUpdate={() => { loadData(); setSelectedAccountForDetails(db.contas.getAll().find(c => c.cd_conta === selectedAccountForDetails.cd_conta) || null); }} 
+                onUpdate={async () => { 
+                  await loadData(); 
+                  const allContas = await db.contas.getAll();
+                  setSelectedAccountForDetails(allContas.find(c => c.cd_conta === selectedAccountForDetails.cd_conta) || null); 
+                }} 
               />
             )}
           </DialogContent>

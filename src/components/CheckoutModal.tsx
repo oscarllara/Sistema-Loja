@@ -5,8 +5,7 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle,
-  DialogFooter
+  DialogTitle
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,16 +17,16 @@ import {
   Wallet, 
   Trash2,
   CheckCircle2,
-  Calendar,
   Plus,
   Minus,
   AlertCircle,
-  UserPlus
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { db } from '@/services/api';
 import { showError } from '@/utils/toast';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Cliente, Configuracoes } from '@/types/database';
 
 interface Installment {
   date: string;
@@ -58,22 +57,40 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [tempInstallments, setTempInstallments] = React.useState<Installment[]>([]);
   const [isBlinking, setIsBlinking] = React.useState(false);
   
-  const config = db.config.get();
-  const clientes = (db.clientes.getAll() || []).filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A');
+  const [clientes, setClientes] = React.useState<Cliente[]>([]);
+  const [config, setConfig] = React.useState<Configuracoes | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
   
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remaining = Math.max(0, total - totalPaid);
   const change = Math.max(0, totalPaid - total);
 
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [cData, cfgData] = await Promise.all([
+        db.clientes.getAll(),
+        db.config.get()
+      ]);
+      setClientes(cData.filter(c => c.tipo_entidade === 'C' || c.tipo_entidade === 'A'));
+      setConfig(cfgData);
+    } catch (err) {
+      console.error("Erro ao carregar dados do checkout:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (isOpen) {
+      loadData();
       setPayments([]);
-      setInputValue(remaining.toFixed(2).replace('.', ','));
+      setInputValue(total.toFixed(2).replace('.', ','));
       setIsInstallmentMode(false);
       setNumInstallments(1);
       setIsBlinking(false);
     }
-  }, [isOpen, total]);
+  }, [isOpen, total, loadData]);
 
   const addPayment = (method: string) => {
     if (method === 'Crediário' && (!clientId || clientId === 1)) {
@@ -100,7 +117,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   };
 
   const generateInstallments = (amount: number, count: number) => {
-    const juros = config.juros_parcelamento || 0;
+    const juros = config?.juros_parcelamento || 0;
     const totalComJuros = count > 1 ? amount * (1 + juros / 100) : amount;
     const baseAmount = totalComJuros / count;
     
@@ -156,7 +173,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl">
         <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Lado Esquerdo: Resumo e Identificação */}
           <div className="p-6 bg-slate-50 border-r border-slate-200">
             <div className={cn(
               "mb-6 space-y-2 p-2 rounded-xl transition-all duration-300",
@@ -168,22 +184,28 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
               )}>
                 Identificar Cliente {isBlinking && " (OBRIGATÓRIO PARA CREDIÁRIO)"}
               </Label>
-              <select 
-                className={cn(
-                  "w-full h-10 rounded-lg border bg-white px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500",
-                  isBlinking ? "border-rose-500 text-rose-700" : "border-slate-200"
-                )}
-                value={clientId}
-                onChange={(e) => {
-                  onClientChange(e.target.value ? Number(e.target.value) : "");
-                  setIsBlinking(false);
-                }}
-              >
-                <option value="">CONSUMIDOR FINAL</option>
-                {clientes.map(c => (
-                  <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
-                ))}
-              </select>
+              {isLoading ? (
+                <div className="h-10 flex items-center gap-2 text-xs text-slate-400">
+                  <Loader2 className="animate-spin" size={14} /> Carregando clientes...
+                </div>
+              ) : (
+                <select 
+                  className={cn(
+                    "w-full h-10 rounded-lg border bg-white px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500",
+                    isBlinking ? "border-rose-500 text-rose-700" : "border-slate-200"
+                  )}
+                  value={clientId}
+                  onChange={(e) => {
+                    onClientChange(e.target.value ? Number(e.target.value) : "");
+                    setIsBlinking(false);
+                  }}
+                >
+                  <option value="">CONSUMIDOR FINAL</option>
+                  {clientes.map(c => (
+                    <option key={c.cd_clientes} value={c.cd_clientes}>{c.nome}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -238,7 +260,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
             </div>
           </div>
 
-          {/* Lado Direito: Teclado ou Parcelamento */}
           <div className="p-6 bg-white flex flex-col">
             <DialogHeader className="mb-6">
               <DialogTitle className="text-xl font-black text-slate-900">
@@ -251,7 +272,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                 <div className="flex items-center justify-between bg-amber-50 p-3 rounded-lg border border-amber-100">
                   <div className="flex items-center gap-2 text-amber-700">
                     <AlertCircle size={18} />
-                    <span className="text-xs font-bold">Juros de {config.juros_parcelamento}% aplicado</span>
+                    <span className="text-xs font-bold">Juros de {config?.juros_parcelamento || 0}% aplicado</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { const n = Math.max(1, numInstallments - 1); setNumInstallments(n); generateInstallments(remaining, n); }}><Minus size={14} /></Button>
