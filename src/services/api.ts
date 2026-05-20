@@ -5,6 +5,9 @@ import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configura
 
 const AUTH_KEY = 'dyaderp_auth';
 
+// Cache simples em memória para evitar requisições repetitivas
+let productsCache: Produto[] | null = null;
+
 export const db = {
   auth: {
     login: async (usuario: string, senha: string) => {
@@ -46,29 +49,36 @@ export const db = {
     }
   },
   produtos: {
-    getAll: async (): Promise<Produto[]> => {
+    getAll: async (forceRefresh = false): Promise<Produto[]> => {
+      if (productsCache && !forceRefresh) return productsCache;
+      
       const { data, error } = await supabase.from('produtos').select('*').order('nome');
       if (error) throw error;
-      return data || [];
+      productsCache = data || [];
+      return productsCache;
     },
     add: async (p: any) => {
       const { data: lastProd } = await supabase.from('produtos').select('id_manual').order('id_manual', { ascending: false }).limit(1).maybeSingle();
       const nextId = lastProd ? (parseInt(lastProd.id_manual) + 1).toString().padStart(5, '0') : '00001';
       const { data, error } = await supabase.from('produtos').insert([{ ...p, id_manual: nextId }]).select().single();
       if (error) throw error;
+      productsCache = null; // Limpa cache para forçar atualização
       return data;
     },
     bulkAdd: async (products: any[]) => {
       const { error } = await supabase.from('produtos').insert(products);
       if (error) throw error;
+      productsCache = null;
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
       if (error) throw error;
+      productsCache = null;
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);
       if (error) throw error;
+      productsCache = null;
     }
   },
   clientes: {
@@ -142,7 +152,6 @@ export const db = {
       if (error) throw error;
     },
     transferir: async (t: any) => {
-      // 1. Registrar saída
       await supabase.from('financeiro').insert([{
         tipo: 'P',
         descricao: `TRANSFERÊNCIA PARA CONTA #${t.cd_conta_destino} - ${t.obs || ''}`,
@@ -155,7 +164,6 @@ export const db = {
         meio_pagamento: 'Transferência'
       }]);
 
-      // 2. Registrar entrada
       await supabase.from('financeiro').insert([{
         tipo: 'R',
         descricao: `TRANSFERÊNCIA DE CONTA #${t.cd_conta_origem} - ${t.obs || ''}`,
@@ -168,7 +176,6 @@ export const db = {
         meio_pagamento: 'Transferência'
       }]);
 
-      // 3. Atualizar saldos
       const { data: cOrigem } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_origem).single();
       const { data: cDestino } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_destino).single();
       

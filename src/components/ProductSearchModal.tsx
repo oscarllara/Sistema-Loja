@@ -1,3 +1,4 @@
+Começa com > Contém.">
 "use client";
 
 import React from 'react';
@@ -52,7 +53,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
   const filtered = React.useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return products;
+    if (!term) return products.slice(0, 50); // Limita para performance inicial
 
     const matches = products.filter(p => {
       if (!p) return false;
@@ -83,7 +84,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
       // 3. Ordem Alfabética
       return nameA.localeCompare(nameB);
-    });
+    }).slice(0, 100); // Limita resultados para manter a interface fluida
   }, [products, search, filterIntegratedOnly]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

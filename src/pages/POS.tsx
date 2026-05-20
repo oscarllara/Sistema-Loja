@@ -83,6 +83,10 @@ const POS = () => {
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   const xmlInputRef = React.useRef<HTMLInputElement>(null);
+  const codeRef = React.useRef<HTMLInputElement>(null);
+  const qtyRef = React.useRef<HTMLInputElement>(null);
+  const rentalStartRef = React.useRef<HTMLInputElement>(null);
+  const rentalEndRef = React.useRef<HTMLInputElement>(null);
 
   const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
     VENDA: [],
@@ -122,6 +126,13 @@ const POS = () => {
     loadAllData();
   }, [loadAllData]);
 
+  // Foco automático no campo de código após selecionar o vendedor
+  React.useEffect(() => {
+    if (selectedSellerId) {
+      setTimeout(() => codeRef.current?.focus(), 100);
+    }
+  }, [selectedSellerId]);
+
   const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
     setCarts(prev => ({
       ...prev,
@@ -140,11 +151,6 @@ const POS = () => {
   
   const [rentalStart, setRentalStart] = React.useState(new Date().toISOString().split('T')[0]);
   const [rentalEnd, setRentalEnd] = React.useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
-  
-  const codeRef = React.useRef<HTMLInputElement>(null);
-  const qtyRef = React.useRef<HTMLInputElement>(null);
-  const rentalStartRef = React.useRef<HTMLInputElement>(null);
-  const rentalEndRef = React.useRef<HTMLInputElement>(null);
 
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchInitialTerm, setSearchInitialTerm] = React.useState("");
@@ -241,7 +247,6 @@ const POS = () => {
     }
     if (key === 'F4') setIsAddEntityOpen(true);
     if (key === 'F12' && mode === 'COMPRA') xmlInputRef.current?.click();
-    if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) { if (cart.length > 0) handleOpenEdit(cart.length - 1); }
   }, [cart, selectedSellerId, mode]);
 
   React.useEffect(() => {
@@ -250,10 +255,14 @@ const POS = () => {
         e.preventDefault();
         handleShortcut(e.key);
       }
+      if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) { 
+        e.preventDefault();
+        if (cart.length > 0) handleOpenEdit(cart.length - 1); 
+      }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [handleShortcut]);
+  }, [handleShortcut, cart]);
 
   const startInsertion = (product: any) => {
     if (!selectedSellerId) { showError("Selecione o Usuário antes de iniciar!"); return; }
@@ -335,8 +344,15 @@ const POS = () => {
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputCode(val);
+    
     if (!val) { setPendingProduct(null); return; }
-    if (val.length > 2 && !/^\d+$/.test(val) && !pendingProduct) { setSearchInitialTerm(val); setIsSearchOpen(true); }
+
+    // Se não for apenas números (leitor) e tiver 3 ou mais caracteres, abre a busca automática
+    if (val.length >= 3 && !/^\d+$/.test(val) && !pendingProduct) { 
+      setSearchInitialTerm(val); 
+      setIsSearchOpen(true); 
+    }
+    
     if (pendingProduct && val !== pendingProduct.nome) setPendingProduct(null);
   };
 
