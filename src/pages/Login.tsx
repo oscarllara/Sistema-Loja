@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Lock, User, Loader2 } from 'lucide-react';
+import { ShoppingCart, Lock, User, Loader2, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,22 @@ const Login = () => {
   const [usuario, setUsuario] = React.useState("");
   const [senha, setSenha] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [whatsapp, setWhatsapp] = React.useState<string | null>(null);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await db.config.get();
+        if (config?.whatsapp_suporte) {
+          setWhatsapp(config.whatsapp_suporte.replace(/\D/g, ''));
+        }
+      } catch (e) {
+        console.error("Erro ao carregar config de suporte");
+      }
+    };
+    loadConfig();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +46,13 @@ const Login = () => {
       showError("Erro ao conectar com o servidor.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSupportClick = () => {
+    if (whatsapp) {
+      const message = encodeURIComponent("Olá! Esqueci minha senha de acesso ao DyadERP e gostaria de solicitar uma nova.");
+      window.open(`https://wa.me/${whatsapp}?text=${message}`, '_blank');
     }
   };
 
@@ -82,7 +104,17 @@ const Login = () => {
             </Button>
           </form>
           <div className="mt-6 text-center">
-            <p className="text-xs text-slate-400">Esqueceu sua senha? Contate o administrador.</p>
+            {whatsapp ? (
+              <button 
+                onClick={handleSupportClick}
+                className="text-xs text-slate-500 hover:text-indigo-600 flex items-center justify-center gap-1 mx-auto transition-colors"
+              >
+                <MessageCircle size={14} className="text-emerald-500" />
+                Esqueceu sua senha? <span className="font-bold underline">Falar com suporte</span>
+              </button>
+            ) : (
+              <p className="text-xs text-slate-400">Esqueceu sua senha? Contate o administrador.</p>
+            )}
           </div>
         </CardContent>
       </Card>

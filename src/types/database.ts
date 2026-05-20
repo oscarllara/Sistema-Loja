@@ -229,6 +229,7 @@ export interface Orcamento extends Omit<Venda, 'cd_venda'> {
 }
 
 export interface Configuracoes {
+  id?: string;
   nome_empresa: string;
   slogan: string;
   telefone: string;
@@ -243,6 +244,7 @@ export interface Configuracoes {
   juros_parcelamento: number;
   juros_atraso: number;
   multa_atraso: number;
+  whatsapp_suporte?: string;
 }
 
 export interface Patrimonio {

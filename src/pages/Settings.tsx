@@ -7,17 +7,43 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Printer, Save, Layout as LayoutIcon, Percent, Wallet } from 'lucide-react';
+import { Printer, Save, Layout as LayoutIcon, Percent, Wallet, MessageCircle } from 'lucide-react';
 import { db } from '@/services/api';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
+import { Configuracoes } from '@/types/database';
 
 const Settings = () => {
-  const [config, setConfig] = React.useState(db.config.get());
+  const [config, setConfig] = React.useState<Configuracoes | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const handleSave = () => {
-    db.config.update(config);
-    showSuccess("Configurações salvas com sucesso!");
+  const loadConfig = React.useCallback(async () => {
+    try {
+      const data = await db.config.get();
+      setConfig(data);
+    } catch (err) {
+      showError("Erro ao carregar configurações.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  const handleSave = async () => {
+    if (!config) return;
+    try {
+      await db.config.update(config);
+      showSuccess("Configurações salvas com sucesso!");
+    } catch (err) {
+      showError("Erro ao salvar configurações.");
+    }
   };
+
+  if (isLoading || !config) {
+    return <div className="p-8 text-center font-bold">Carregando configurações...</div>;
+  }
 
   return (
     <Layout>
@@ -119,6 +145,25 @@ const Settings = () => {
             <Card className="border-none shadow-sm">
               <CardHeader className="border-b bg-slate-50/50">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <MessageCircle size={18} className="text-emerald-600" /> Suporte e Contato
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <Label>WhatsApp de Suporte</Label>
+                  <Input 
+                    value={config.whatsapp_suporte || ""} 
+                    onChange={(e) => setConfig({ ...config, whatsapp_suporte: e.target.value })}
+                    placeholder="Ex: 5511999999999"
+                  />
+                  <p className="text-[10px] text-slate-500">Número com DDD (apenas números) para o link de "Esqueci minha senha".</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardHeader className="border-b bg-slate-50/50">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <Percent size={18} className="text-indigo-600" /> Regras de Venda
                 </CardTitle>
               </CardHeader>
@@ -166,7 +211,6 @@ const Settings = () => {
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-500">Configurações para cálculo automático em contas a receber vencidas.</p>
               </CardContent>
             </Card>
           </div>
