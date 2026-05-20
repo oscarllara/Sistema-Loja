@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { 
   Calculator as CalcIcon, 
@@ -8,18 +9,24 @@ import {
   Container, 
   Grid3X3, 
   Info, 
-  ArrowRight,
-  Trash2,
-  Plus
+  ShoppingCart,
+  Search
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProductSearchModal from '@/components/ProductSearchModal';
+import { Produto } from '@/types/database';
+import { showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const Calculator = () => {
+  const navigate = useNavigate();
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [currentQty, setCurrentQty] = React.useState(0);
+
   // Estados para Piso
   const [piso, setPiso] = React.useState({ comp: "", larg: "", perda: "10", m2Caixa: "" });
   const [resPiso, setResPiso] = React.useState({ area: 0, areaTotal: 0, caixas: 0 });
@@ -38,7 +45,6 @@ const Calculator = () => {
     const l = parseFloat(piso.larg) || 0;
     const p = parseFloat(piso.perda) || 0;
     const m2c = parseFloat(piso.m2Caixa) || 0;
-    
     const area = c * l;
     const areaTotal = area * (1 + p / 100);
     const caixas = m2c > 0 ? Math.ceil(areaTotal / m2c) : 0;
@@ -49,7 +55,6 @@ const Calculator = () => {
     const a = parseFloat(arg.area) || 0;
     const c = parseFloat(arg.consumo) || 0;
     const ps = parseFloat(arg.pesoSaco) || 0;
-    
     const totalKg = a * c;
     const sacos = ps > 0 ? Math.ceil(totalKg / ps) : 0;
     setResArg({ totalKg, sacos });
@@ -60,23 +65,43 @@ const Calculator = () => {
     const l = parseFloat(forro.larg) || 0;
     const cl = parseFloat(forro.compLamina) || 0;
     const ll = parseFloat(forro.largLamina) || 0;
-    
     const area = c * l;
     const areaLamina = cl * ll;
     const laminas = areaLamina > 0 ? Math.ceil(area / areaLamina) : 0;
     setResForro({ area, laminas });
   }, [forro]);
 
+  const handleAddToSale = (qty: number) => {
+    setCurrentQty(qty);
+    setIsSearchOpen(true);
+  };
+
+  const handleProductSelect = (product: Produto) => {
+    // Salva o item pendente no sessionStorage para o PDV ler
+    const pendingItem = {
+      product,
+      quantity: currentQty
+    };
+    sessionStorage.setItem('dyaderp_pending_calc_item', JSON.stringify(pendingItem));
+    showSuccess(`${product.nome} vinculado com ${currentQty} unidades! Redirecionando para o PDV...`);
+    
+    setTimeout(() => {
+      navigate("/pos");
+    }, 1000);
+  };
+
   return (
     <Layout>
       <div className="space-y-6 max-w-5xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-            <CalcIcon size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Calculadora Técnica</h1>
-            <p className="text-slate-500">Calcule quantidades exatas para evitar desperdícios.</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
+              <CalcIcon size={24} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Calculadora Técnica</h1>
+              <p className="text-slate-500">Calcule e adicione direto ao carrinho de vendas.</p>
+            </div>
           </div>
         </div>
 
@@ -124,12 +149,20 @@ const Calculator = () => {
               <div className="space-y-4">
                 <ResultCard title="Área Líquida" value={`${resPiso.area.toFixed(2)} m²`} />
                 <ResultCard title="Área com Perda" value={`${resPiso.areaTotal.toFixed(2)} m²`} color="text-indigo-600" />
-                <ResultCard title="Total de Caixas" value={`${resPiso.caixas} CX`} isHighlight />
-                
-                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 flex gap-3 text-blue-700 text-xs">
-                  <Info size={18} className="shrink-0" />
-                  <p>Dica: Para assentamento diagonal, recomenda-se aumentar a perda para 15% ou 20%.</p>
-                </div>
+                <ResultCard 
+                  title="Total de Caixas" 
+                  value={`${resPiso.caixas} CX`} 
+                  isHighlight 
+                  action={
+                    <Button 
+                      onClick={() => handleAddToSale(resPiso.caixas)} 
+                      disabled={resPiso.caixas <= 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                    >
+                      <ShoppingCart size={16} /> Adicionar à Venda
+                    </Button>
+                  }
+                />
               </div>
             </div>
           </TabsContent>
@@ -166,12 +199,21 @@ const Calculator = () => {
 
               <div className="space-y-4">
                 <ResultCard title="Total de Massa" value={`${resArg.totalKg.toFixed(0)} kg`} />
-                <ResultCard title="Total de Sacos" value={`${resArg.sacos} UN`} isHighlight color="text-emerald-600" />
-                
-                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3 text-amber-700 text-xs">
-                  <Info size={18} className="shrink-0" />
-                  <p>Atenção: O consumo varia conforme o tamanho da desempenadeira e se o piso exige dupla camada (acima de 30x30cm).</p>
-                </div>
+                <ResultCard 
+                  title="Total de Sacos" 
+                  value={`${resArg.sacos} UN`} 
+                  isHighlight 
+                  color="text-emerald-600" 
+                  action={
+                    <Button 
+                      onClick={() => handleAddToSale(resArg.sacos)} 
+                      disabled={resArg.sacos <= 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                    >
+                      <ShoppingCart size={16} /> Adicionar à Venda
+                    </Button>
+                  }
+                />
               </div>
             </div>
           </TabsContent>
@@ -206,26 +248,45 @@ const Calculator = () => {
 
               <div className="space-y-4">
                 <ResultCard title="Área do Teto" value={`${resForro.area.toFixed(2)} m²`} />
-                <ResultCard title="Total de Lâminas" value={`${resForro.laminas} UN`} isHighlight color="text-blue-600" />
-                
-                <div className="p-4 bg-slate-100 rounded-xl border border-slate-200 flex gap-3 text-slate-600 text-xs">
-                  <Info size={18} className="shrink-0" />
-                  <p>Lembre-se de calcular também os acabamentos (molduras/cantoneiras) que acompanham o perímetro do ambiente.</p>
-                </div>
+                <ResultCard 
+                  title="Total de Lâminas" 
+                  value={`${resForro.laminas} UN`} 
+                  isHighlight 
+                  color="text-blue-600" 
+                  action={
+                    <Button 
+                      onClick={() => handleAddToSale(resForro.laminas)} 
+                      disabled={resForro.laminas <= 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                    >
+                      <ShoppingCart size={16} /> Adicionar à Venda
+                    </Button>
+                  }
+                />
               </div>
             </div>
           </TabsContent>
         </Tabs>
+
+        <ProductSearchModal 
+          isOpen={isSearchOpen} 
+          onClose={() => setIsSearchOpen(false)} 
+          onSelect={handleProductSelect}
+          filterIntegratedOnly={true}
+        />
       </div>
     </Layout>
   );
 };
 
-const ResultCard = ({ title, value, color = "text-slate-900", isHighlight = false }: any) => (
+const ResultCard = ({ title, value, color = "text-slate-900", isHighlight = false, action }: any) => (
   <Card className={cn("border-none shadow-sm", isHighlight && "bg-slate-900 text-white")}>
     <CardContent className="p-4 flex items-center justify-between">
-      <p className={cn("text-xs font-bold uppercase", isHighlight ? "text-slate-400" : "text-slate-500")}>{title}</p>
-      <p className={cn("text-2xl font-black", isHighlight ? "text-white" : color)}>{value}</p>
+      <div>
+        <p className={cn("text-xs font-bold uppercase", isHighlight ? "text-slate-400" : "text-slate-500")}>{title}</p>
+        <p className={cn("text-2xl font-black", isHighlight ? "text-white" : color)}>{value}</p>
+      </div>
+      {action}
     </CardContent>
   </Card>
 );

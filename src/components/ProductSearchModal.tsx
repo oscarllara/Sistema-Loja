@@ -25,33 +25,44 @@ interface ProductSearchModalProps {
   onClose: () => void;
   onSelect: (product: Produto) => void;
   initialSearch?: string;
+  filterIntegratedOnly?: boolean;
 }
 
-const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: ProductSearchModalProps) => {
+const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", filterIntegratedOnly = false }: ProductSearchModalProps) => {
   const [search, setSearch] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
-  const products = db.produtos.getAll() || [];
+  const [products, setProducts] = React.useState<Produto[]>([]);
   
+  const loadProducts = React.useCallback(async () => {
+    const data = await db.produtos.getAll();
+    setProducts(data || []);
+  }, []);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      loadProducts();
+      setSearch(initialSearch);
+      setSelectedIndex(0);
+    }
+  }, [isOpen, initialSearch, loadProducts]);
+
   const filtered = products.filter(p => {
     if (!p) return false;
+    
+    // Filtro de integração
+    if (filterIntegratedOnly && !p.integrar_calculadora) return false;
+
     const term = search.toLowerCase();
     const paddedTerm = search.padStart(5, '0');
     
     return (
       (p.nome || "").toLowerCase().includes(term) ||
-      (p.id_manual || "") === paddedTerm || // Busca exata pelo código com zeros
+      (p.id_manual || "") === paddedTerm || 
       (p.id_manual || "").includes(search) ||
       (p.id_importado || "").includes(search) ||
       (p.cod_barras || "").includes(search)
     );
   });
-
-  React.useEffect(() => {
-    if (isOpen) {
-      setSearch(initialSearch);
-      setSelectedIndex(0);
-    }
-  }, [isOpen, initialSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -72,9 +83,10 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: P
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
-        {/* Cabeçalho de Pesquisa Estilo ERP */}
         <div className="bg-[#FFFFE1] p-4 border-b border-slate-300">
-          <p className="text-[10px] text-slate-600 mb-1 font-bold uppercase">Pesquisa de Produtos (Setas para navegar, Enter para selecionar)</p>
+          <p className="text-[10px] text-slate-600 mb-1 font-bold uppercase">
+            {filterIntegratedOnly ? "Pesquisa de Produtos Integrados (Calculadora)" : "Pesquisa de Produtos"}
+          </p>
           <div className="flex gap-2">
             <Input 
               autoFocus
@@ -94,7 +106,6 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: P
           </div>
         </div>
 
-        {/* Tabela de Resultados */}
         <div className="flex-1 overflow-auto bg-[#FFFFE1]">
           <Table className="border-collapse">
             <TableHeader className="sticky top-0 z-10">
@@ -144,7 +155,6 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "" }: P
           </Table>
         </div>
         
-        {/* Rodapé Informativo */}
         <div className="bg-slate-100 p-2 text-[10px] text-slate-500 flex justify-between border-t border-slate-300 font-bold uppercase">
           <div className="flex gap-4">
             <span>[↑↓] Navegar</span>

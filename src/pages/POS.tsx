@@ -169,6 +169,33 @@ const POS = () => {
   const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
 
+  // Lógica para detectar item vindo da calculadora
+  React.useEffect(() => {
+    if (!isLoadingData && selectedSellerId) {
+      const pending = sessionStorage.getItem('dyaderp_pending_calc_item');
+      if (pending) {
+        try {
+          const { product, quantity } = JSON.parse(pending);
+          const preco = product.venda || 0;
+          
+          setCart(prev => [...prev, { 
+            ...product, 
+            quantity: quantity, 
+            selectedUnit: product.un,
+            finalPrice: Number(preco.toFixed(2)),
+            costPrice: product.compra || 0,
+            isRental: false
+          }]);
+          
+          sessionStorage.removeItem('dyaderp_pending_calc_item');
+          showSuccess(`Item da calculadora adicionado: ${product.nome}`);
+        } catch (e) {
+          console.error("Erro ao processar item da calculadora", e);
+        }
+      }
+    }
+  }, [isLoadingData, selectedSellerId]);
+
   const formatCurrency = (value: number | string) => {
     const val = typeof value === 'number' ? value.toFixed(2) : value;
     const digits = val.replace(/\D/g, "");

@@ -12,7 +12,8 @@ import {
   Boxes,
   Globe,
   CalendarClock,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Calculator
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,9 @@ const productSchema = z.object({
   imagem_url: z.string().optional(),
   link_externo: z.string().optional(),
   descricao_site: z.string().optional(),
+  
+  // Integração
+  integrar_calculadora: z.boolean().default(false),
 }).refine((data) => {
   if (!data.is_locacao && (!data.venda || data.venda === "0,00" || data.venda === "")) {
     return false;
@@ -97,6 +101,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       estoque: product.estoque?.toString() || "0",
       minimo: product.minimo?.toString() || "0",
       fator_conversao: product.fator_conversao?.toString() || "",
+      integrar_calculadora: product.integrar_calculadora || false,
     } : {
       id_manual: "",
       un: "UN",
@@ -109,6 +114,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       venda: "0,00",
       compra: "0,00",
       estoque: "0",
+      integrar_calculadora: false,
     }
   });
 
@@ -119,6 +125,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
   const isKit = watch("is_kit");
+  const integrarCalculadora = watch("integrar_calculadora");
 
   const parseCurrencyToNumber = (value: string) => {
     if (!value) return 0;
@@ -155,7 +162,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     setValue(fieldName, formatted as any);
   };
 
-  const onSubmit = (data: ProductFormValues) => {
+  const onSubmit = async (data: ProductFormValues) => {
     try {
       const payload = {
         ...data,
@@ -175,16 +182,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         estoque: parseFloat(data.estoque),
         minimo: parseFloat(data.minimo || "0"),
         fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : undefined,
+        integrar_calculadora: data.integrar_calculadora,
       } as any;
 
       if (product) {
-        db.produtos.update(product.cd_produto, payload);
+        await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado!");
       } else {
-        const newProd = db.produtos.add(payload);
+        const newProd = await db.produtos.add(payload);
         
         if (payload.is_locacao) {
-          db.patrimonio.add({
+          await db.patrimonio.add({
             descricao: `EQUIPAMENTO: ${payload.nome}`,
             valor: payload.compra || payload.venda || 0,
             tipo: 'Equipamento',
@@ -244,15 +252,28 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100 mt-4">
-              <Checkbox 
-                id="is_locacao_geral" 
-                checked={isLocacao}
-                onCheckedChange={(checked) => setValue("is_locacao", !!checked)} 
-              />
-              <Label htmlFor="is_locacao_geral" className="font-black text-sm cursor-pointer text-indigo-900">
-                Este item é para Locação (Aluguel de Equipamento)
-              </Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="flex items-center space-x-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                <Checkbox 
+                  id="is_locacao_geral" 
+                  checked={isLocacao}
+                  onCheckedChange={(checked) => setValue("is_locacao", !!checked)} 
+                />
+                <Label htmlFor="is_locacao_geral" className="font-black text-sm cursor-pointer text-indigo-900">
+                  Este item é para Locação
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <Checkbox 
+                  id="integrar_calc" 
+                  checked={integrarCalculadora}
+                  onCheckedChange={(checked) => setValue("integrar_calculadora", !!checked)} 
+                />
+                <Label htmlFor="integrar_calc" className="font-black text-sm cursor-pointer text-amber-900 flex items-center gap-2">
+                  <Calculator size={16} /> Integrar com Calculadora
+                </Label>
+              </div>
             </div>
           </TabsContent>
 

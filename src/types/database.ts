@@ -103,6 +103,7 @@ export interface Produto {
   imagem_url?: string;
   link_externo?: string;
   descricao_site?: string;
+  integrar_calculadora?: boolean;
 }
 
 export type TipoFinanceiro = 'R' | 'P';
