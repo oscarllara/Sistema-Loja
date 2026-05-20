@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Lock, User } from 'lucide-react';
+import { ShoppingCart, Lock, User, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,16 +12,25 @@ import { showError, showSuccess } from '@/utils/toast';
 const Login = () => {
   const [usuario, setUsuario] = React.useState("");
   const [senha, setSenha] = React.useState("");
+  const [isLoading, setIsLoading] = React.useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = db.auth.login(usuario, senha);
-    if (user) {
-      showSuccess(`Bem-vindo, ${user.nome}!`);
-      navigate("/");
-    } else {
-      showError("Usuário ou senha incorretos.");
+    setIsLoading(true);
+    
+    try {
+      const user = await db.auth.login(usuario, senha);
+      if (user) {
+        showSuccess(`Bem-vindo, ${user.nome}!`);
+        navigate("/");
+      } else {
+        showError("Usuário ou senha incorretos.");
+      }
+    } catch (error) {
+      showError("Erro ao conectar com o servidor.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -46,6 +55,7 @@ const Login = () => {
                   value={usuario}
                   onChange={(e) => setUsuario(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -59,11 +69,16 @@ const Login = () => {
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
             </div>
-            <Button type="submit" className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100">
-              Acessar Sistema
+            <Button 
+              type="submit" 
+              className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100"
+              disabled={isLoading}
+            >
+              {isLoading ? <Loader2 className="animate-spin" /> : "Acessar Sistema"}
             </Button>
           </form>
           <div className="mt-6 text-center">
