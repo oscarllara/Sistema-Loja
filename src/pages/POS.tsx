@@ -76,7 +76,6 @@ const POS = () => {
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
   const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
   
-  // Estados para dados do Banco
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [clients, setClients] = React.useState<Cliente[]>([]);
   const [sellers, setSellers] = React.useState<Cliente[]>([]);
@@ -85,7 +84,6 @@ const POS = () => {
 
   const xmlInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Estados Multi-Carrinho
   const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
     VENDA: [],
     COMPRA: [],
@@ -101,7 +99,6 @@ const POS = () => {
   const cart = carts[mode];
   const selectedEntityId = entitiesIds[mode];
 
-  // Carregamento Inicial de Dados
   const loadAllData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
@@ -169,75 +166,70 @@ const POS = () => {
   const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
 
-  // Lógica para detectar item vindo da calculadora
-  React.useEffect(() => {
-    if (!isLoadingData && selectedSellerId) {
-      const pending = sessionStorage.getItem('dyaderp_pending_calc_item');
-      if (pending) {
-        try {
-          const { product, quantity } = JSON.parse(pending);
-          const preco = product.venda || 0;
-          
-          setCart(prev => [...prev, { 
-            ...product, 
-            quantity: quantity, 
-            selectedUnit: product.un,
-            finalPrice: Number(preco.toFixed(2)),
-            costPrice: product.compra || 0,
-            isRental: false
-          }]);
-          
-          sessionStorage.removeItem('dyaderp_pending_calc_item');
-          showSuccess(`Item da calculadora adicionado: ${product.nome}`);
-        } catch (e) {
-          console.error("Erro ao processar item da calculadora", e);
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const loadingId = showLoading("Lendo arquivo XML...");
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const xmlText = e.target?.result as string;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
+        const xNomeFornecedor = xmlDoc.getElementsByTagName("xNome")[0]?.textContent || "FORNECEDOR DESCONHECIDO";
+        const vNF = parseFloat(xmlDoc.getElementsByTagName("vNF")[0]?.textContent || "0");
+
+        const itensNodes = xmlDoc.getElementsByTagName("det");
+        const itens: any[] = [];
+
+        for (let i = 0; i < itensNodes.length; i++) {
+          const prod = itensNodes[i].getElementsByTagName("prod")[0];
+          const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
+          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
+          const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
+          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
+          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
+          const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
+
+          itens.push({
+            codigo_fornecedor: cProd,
+            nome_fornecedor: xProd,
+            un: uCom,
+            qtde: qCom,
+            valor_unit: vUnCom,
+            subtotal: vProd,
+            margem: 40,
+            valor_venda: vUnCom * 1.4,
+          });
         }
+
+        const compraData = {
+          cd_compra: Date.now(),
+          nota_fiscal: nNF,
+          cd_fornecedores: 0,
+          nome_fornecedor: xNomeFornecedor,
+          total: vNF,
+          status: 'Rascunho' as const,
+          itens: itens
+        };
+
+        dismissToast(loadingId);
+        setXmlPurchaseData(compraData);
+        setIsPurchaseModalOpen(true);
+        showSuccess("XML importado com sucesso!");
+      } catch (err) {
+        dismissToast(loadingId);
+        showError("Erro ao processar o XML.");
       }
-    }
-  }, [isLoadingData, selectedSellerId]);
+    };
 
-  const formatCurrency = (value: number | string) => {
-    const val = typeof value === 'number' ? value.toFixed(2) : value;
-    const digits = val.replace(/\D/g, "");
-    const number = parseInt(digits) / 100;
-    if (isNaN(number)) return "0,00";
-    return new Intl.NumberFormat("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(number);
+    reader.readAsText(file);
+    if (xmlInputRef.current) xmlInputRef.current.value = "";
   };
-
-  const parseCurrency = (value: string) => {
-    if (!value) return 0;
-    const cleanValue = value.replace(/[^\d,]/g, "").replace(",", ".");
-    return parseFloat(cleanValue) || 0;
-  };
-
-  const getDays = React.useCallback(() => {
-    const start = new Date(rentalStart);
-    const end = new Date(rentalEnd);
-    const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(1, diffDays);
-  }, [rentalStart, rentalEnd]);
-
-  const calculateRentalPrice = React.useCallback((days: number, p: any) => {
-    if (!p) return 0;
-    if (days <= 0) return 0;
-    let price = 0;
-    if (days >= 1 && days <= 3) price = p.valor_diaria || p.venda || 0;
-    else if (days >= 4 && days <= 10) price = p.valor_semana || p.valor_diaria || p.venda || 0;
-    else if (days >= 11 && days <= 18) price = p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
-    else price = p.valor_mes || p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
-    return Number(price.toFixed(2));
-  }, []);
-
-  const getRentalUnit = React.useCallback((days: number) => {
-    if (days >= 1 && days <= 3) return "DIÁRIA(S)";
-    if (days >= 4 && days <= 10) return "SEMANAL";
-    if (days >= 11 && days <= 18) return "QUINZENAL";
-    return "MENSAL";
-  }, []);
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
@@ -248,7 +240,8 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
-    if (key === 'CtrlL') { if (cart.length > 0) handleOpenEdit(cart.length - 1); }
+    if (key === 'F12' && mode === 'COMPRA') xmlInputRef.current?.click();
+    if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) { if (cart.length > 0) handleOpenEdit(cart.length - 1); }
   }, [cart, selectedSellerId, mode]);
 
   React.useEffect(() => {
@@ -256,10 +249,6 @@ const POS = () => {
       if (['F1', 'F3', 'F4', 'F10', 'F12'].includes(e.key)) {
         e.preventDefault();
         handleShortcut(e.key);
-      }
-      if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
-        e.preventDefault();
-        handleShortcut('CtrlL');
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
@@ -412,7 +401,6 @@ const POS = () => {
 
       await db.vendas.add(payload);
       
-      // Atualizar estoque
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
@@ -425,9 +413,52 @@ const POS = () => {
       setCart([]);
       setIsCheckoutOpen(false);
       setIsPrintOpen(true);
-      loadAllData(); // Recarregar dados para atualizar estoque local
+      loadAllData();
     } catch (err) { showError("Erro ao processar a operação."); }
   };
+
+  const formatCurrency = (value: number | string) => {
+    const val = typeof value === 'number' ? value.toFixed(2) : value;
+    const digits = val.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "0,00";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
+
+  const parseCurrency = (value: string) => {
+    if (!value) return 0;
+    const cleanValue = value.replace(/[^\d,]/g, "").replace(",", ".");
+    return parseFloat(cleanValue) || 0;
+  };
+
+  const getDays = React.useCallback(() => {
+    const start = new Date(rentalStart);
+    const end = new Date(rentalEnd);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays);
+  }, [rentalStart, rentalEnd]);
+
+  const calculateRentalPrice = React.useCallback((days: number, p: any) => {
+    if (!p) return 0;
+    if (days <= 0) return 0;
+    let price = 0;
+    if (days >= 1 && days <= 3) price = p.valor_diaria || p.venda || 0;
+    else if (days >= 4 && days <= 10) price = p.valor_semana || p.valor_diaria || p.venda || 0;
+    else if (days >= 11 && days <= 18) price = p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
+    else price = p.valor_mes || p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
+    return Number(price.toFixed(2));
+  }, []);
+
+  const getRentalUnit = React.useCallback((days: number) => {
+    if (days >= 1 && days <= 3) return "DIÁRIA(S)";
+    if (days >= 4 && days <= 10) return "SEMANAL";
+    if (days >= 11 && days <= 18) return "QUINZENAL";
+    return "MENSAL";
+  }, []);
 
   if (isLoadingData) {
     return <div className="h-screen w-screen bg-slate-900 flex items-center justify-center text-white font-bold">CARREGANDO PDV...</div>;
@@ -464,6 +495,15 @@ const POS = () => {
               <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700" : mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700")} onClick={() => handleShortcut('F10')}>
                 <CheckCircle size={20} /> FINALIZAR (F10)
               </Button>
+              
+              {mode === 'COMPRA' && (
+                <>
+                  <input type="file" ref={xmlInputRef} className="hidden" accept=".xml" onChange={handleFileChange} />
+                  <Button variant="outline" className="w-full h-12 bg-blue-600 text-white hover:bg-blue-700 border-none rounded-xl gap-2 shadow-lg shadow-blue-100 font-bold text-xs" onClick={() => handleShortcut('F12')}>
+                    <Upload size={18} /> IMPORTAR XML (F12)
+                  </Button>
+                </>
+              )}
             </div>
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
@@ -552,6 +592,18 @@ const POS = () => {
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
       <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><Edit3 className="text-indigo-600" />Editar Item</DialogTitle></DialogHeader><div className="space-y-4 py-4">{editingIndex !== null && <div className="p-3 bg-slate-50 rounded-lg border mb-4"><p className="text-[10px] font-bold text-slate-400 uppercase">Produto</p><p className="text-sm font-bold text-slate-900">{cart[editingIndex]?.nome}</p></div>}<div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label>Quantidade</Label><Input type="number" value={editData.qtde} onChange={(e) => { const q = parseFloat(e.target.value) || 0; const v = parseCurrency(editData.valor); setEditData({ ...editData, qtde: q, total: formatCurrency(q * v) }); }} /></div><div className="space-y-2"><Label>Valor Unitário (R$)</Label><Input value={editData.valor} onChange={(e) => { const vStr = formatCurrency(e.target.value); const v = parseCurrency(vStr); setEditData({ ...editData, valor: vStr, total: formatCurrency(editData.qtde * v) }); }} /></div></div><div className="space-y-2"><Label>Valor Total (R$)</Label><Input value={editData.total} onChange={(e) => { const tStr = formatCurrency(e.target.value); const t = parseCurrency(tStr); const v = editData.qtde > 0 ? t / editData.qtde : 0; setEditData({ ...editData, total: tStr, valor: formatCurrency(v) }); }} /></div></div><DialogFooter><Button variant="outline" onClick={() => setIsEditItemOpen(false)}>Cancelar</Button><Button onClick={saveEdit} className="bg-indigo-600">Salvar</Button></DialogFooter></DialogContent></Dialog>
+      
+      <Dialog open={isPurchaseModalOpen} onOpenChange={setIsPurchaseModalOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSearch className="text-indigo-600" />
+              Conferência de Compra / XML
+            </DialogTitle>
+          </DialogHeader>
+          <PurchaseForm initialData={xmlPurchaseData} onSuccess={() => { setIsPurchaseModalOpen(false); loadAllData(); }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
