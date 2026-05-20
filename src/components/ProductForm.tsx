@@ -66,14 +66,6 @@ const productSchema = z.object({
   
   // Integração
   integrar_calculadora: z.boolean().default(false),
-}).refine((data) => {
-  if (!data.is_locacao && (!data.venda || data.venda === "0,00" || data.venda === "")) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Preço de venda obrigatório para produtos de venda",
-  path: ["venda"],
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -121,10 +113,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const vendaStr = watch("venda");
   const descTipo = watch("desconto_vista_tipo");
   const descValorStr = watch("desconto_vista_valor");
-  const isFracionado = watch("fracionado");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
-  const isKit = watch("is_kit");
   const integrarCalculadora = watch("integrar_calculadora");
 
   const parseCurrencyToNumber = (value: string | null | undefined) => {
@@ -164,9 +154,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const onSubmit = async (data: ProductFormValues) => {
     try {
+      const { id_manual, ...rest } = data;
+      
       const payload = {
-        ...data,
-        cd_produto: product?.cd_produto || Date.now(),
+        ...rest,
         nome: data.nome.toUpperCase(),
         un: data.un.toUpperCase(),
         compra: parseCurrencyToNumber(data.compra),
@@ -183,10 +174,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         minimo: parseFloat(data.minimo || "0"),
         fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : undefined,
         integrar_calculadora: data.integrar_calculadora,
+        data_atualizacao: new Date().toISOString()
       } as any;
 
       if (product) {
-        await db.produtos.update(product.cd_produto, payload);
+        // Se estiver editando, mantém o id_manual original
+        await db.produtos.update(product.cd_produto, { ...payload, id_manual: product.id_manual });
         showSuccess("Produto atualizado!");
       } else {
         const newProd = await db.produtos.add(payload);
@@ -204,12 +197,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       }
       onSuccess();
     } catch (err: any) {
-      showError("Erro ao salvar: " + err.message);
+      showError("Erro ao salvar no banco de dados.");
     }
   };
 
+  const onError = (errors: any) => {
+    console.error("Erros de validação:", errors);
+    showError("Verifique os campos obrigatórios em todas as abas.");
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-6">
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className="flex w-full bg-slate-100 p-1 rounded-xl h-auto overflow-x-auto">
           <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
@@ -217,7 +215,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           {!isLocacao && <TabsTrigger value="precos" className="flex-1">Preços</TabsTrigger>}
           {isLocacao && <TabsTrigger value="locacao" className="flex-1 gap-1"><CalendarClock size={14} /> Locação</TabsTrigger>}
           <TabsTrigger value="site" className="flex-1 gap-1"><Globe size={14} /> Site</TabsTrigger>
-          {!isLocacao && <TabsTrigger value="kit" className="flex-1">Kit</TabsTrigger>}
         </TabsList>
 
         <div className="min-h-[350px] mt-4">
@@ -225,7 +222,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2"><Hash size={14} /> Código (ID)</Label>
-                <Input {...register("id_manual")} placeholder="Automático" className="font-bold text-indigo-600" />
+                <Input {...register("id_manual")} readOnly placeholder="Automático" className="font-bold text-indigo-600 bg-slate-50" />
               </div>
               <div className="md:col-span-2 space-y-2">
                 <Label className="flex items-center gap-2">
@@ -290,14 +287,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     <Input type="number" step="0.001" {...register("minimo")} />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 p-4 bg-slate-50 rounded-lg border">
-                  <Checkbox 
-                    id="fracionado" 
-                    checked={isFracionado}
-                    onCheckedChange={(checked) => setValue("fracionado", !!checked)} 
-                  />
-                  <Label htmlFor="fracionado" className="font-bold cursor-pointer">Venda Fracionada / Pesável (Ex: Areia, Brita, Fio)</Label>
-                </div>
               </TabsContent>
 
               <TabsContent value="precos" className="space-y-6 m-0">
@@ -305,11 +294,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
                     <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
                     <div className="space-y-2">
-                      <Label>Valor de Venda (A Prazo) <span className="text-rose-500">*</span></Label>
+                      <Label>Valor de Venda (A Prazo)</Label>
                       <Input 
                         {...register("venda")} 
                         onChange={(e) => handleCurrencyChange(e, "venda")} 
-                        className={cn("text-lg font-black", errors.venda && "border-rose-500")} 
+                        className="text-lg font-black" 
                       />
                     </div>
                     <div className="space-y-2">
@@ -329,25 +318,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                         <Input {...register("venda_vista")} readOnly className="bg-white font-black text-emerald-700" />
                       </div>
                     </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="kit" className="m-0">
-                <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
-                    <Boxes className="text-slate-400" />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-center space-x-2">
-                      <Checkbox 
-                        id="is_kit" 
-                        checked={isKit}
-                        onCheckedChange={(checked) => setValue("is_kit", !!checked)} 
-                      />
-                      <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
-                    </div>
-                    <p className="text-xs text-slate-500 max-w-xs">Kits permitem vender vários produtos juntos com um único código.</p>
                   </div>
                 </div>
               </TabsContent>
@@ -377,11 +347,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     <Label className="text-[10px] font-bold uppercase">Valor Mês</Label>
                     <Input {...register("valor_mes")} onChange={(e) => handleCurrencyChange(e, "valor_mes")} className="font-bold" />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor do Bem (Custo de Reposição)</Label>
-                  <Input {...register("compra")} onChange={(e) => handleCurrencyChange(e, "compra")} placeholder="R$ 0,00" />
-                  <p className="text-[9px] text-slate-500">Valor usado para registro no patrimônio da empresa.</p>
                 </div>
               </div>
             </TabsContent>
