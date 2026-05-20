@@ -1,4 +1,3 @@
-Começa com > Contém.">
 "use client";
 
 import React from 'react';
@@ -53,7 +52,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
   const filtered = React.useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return products.slice(0, 50); // Limita para performance inicial
+    if (!term) return products.slice(0, 50);
 
     const matches = products.filter(p => {
       if (!p) return false;
@@ -69,22 +68,18 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
       );
     });
 
-    // Lógica de Ordenação Prioritária
     return matches.sort((a, b) => {
       const nameA = (a.nome || "").toLowerCase();
       const nameB = (b.nome || "").toLowerCase();
 
-      // 1. Correspondência Exata
       if (nameA === term && nameB !== term) return -1;
       if (nameB === term && nameA !== term) return 1;
 
-      // 2. Começa com o termo
       if (nameA.startsWith(term) && !nameB.startsWith(term)) return -1;
       if (nameB.startsWith(term) && !nameA.startsWith(term)) return 1;
 
-      // 3. Ordem Alfabética
       return nameA.localeCompare(nameB);
-    }).slice(0, 100); // Limita resultados para manter a interface fluida
+    }).slice(0, 100);
   }, [products, search, filterIntegratedOnly]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
