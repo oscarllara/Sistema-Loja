@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Lock, User, Loader2, MessageCircle } from 'lucide-react';
+import { ShoppingCart, Lock, User, Loader2, MessageCircle, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { showError, showSuccess } from '@/utils/toast';
 const Login = () => {
   const [usuario, setUsuario] = React.useState("");
   const [senha, setSenha] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [whatsapp, setWhatsapp] = React.useState<string | null>(null);
   const navigate = useNavigate();
@@ -85,14 +86,21 @@ const Login = () => {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <Input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   placeholder="Senha" 
-                  className="pl-10 h-12 rounded-xl"
+                  className="pl-10 pr-10 h-12 rounded-xl"
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   required
                   disabled={isLoading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
             <Button 
