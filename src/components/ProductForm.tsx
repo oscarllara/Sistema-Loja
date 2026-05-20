@@ -27,23 +27,23 @@ import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const productSchema = z.object({
-  id_manual: z.string().optional(),
+  id_manual: z.string().optional().nullable(),
   nome: z.string().min(2, "Nome obrigatório"),
-  id_importado: z.string().optional(),
+  id_importado: z.string().optional().nullable(),
   un: z.string().default("UN"),
-  cod_barras: z.string().optional(),
-  compra: z.string().optional(),
-  venda: z.string().optional(),
-  venda_vista: z.string().optional(),
-  venda_fracionada: z.string().optional(),
+  cod_barras: z.string().optional().nullable().or(z.literal("")),
+  compra: z.string().optional().nullable(),
+  venda: z.string().optional().nullable(),
+  venda_vista: z.string().optional().nullable(),
+  venda_fracionada: z.string().optional().nullable(),
   desconto_vista_tipo: z.enum(['P', 'V']).default('P'),
   desconto_vista_valor: z.string().default("0"),
   estoque: z.string().default("0"),
   minimo: z.string().default("0"),
-  ncm: z.string().optional(),
+  ncm: z.string().optional().nullable(),
   fracionado: z.boolean().default(false),
-  un_fracionada: z.string().optional(),
-  fator_conversao: z.string().optional(),
+  un_fracionada: z.string().optional().nullable(),
+  fator_conversao: z.string().optional().nullable(),
   is_kit: z.boolean().default(false),
   itens_kit: z.array(z.object({
     cd_produto_filho: z.number(),
@@ -52,17 +52,17 @@ const productSchema = z.object({
   
   // Locação
   is_locacao: z.boolean().default(false),
-  valor_diaria: z.string().optional(),
-  valor_semana: z.string().optional(),
-  valor_quinzena: z.string().optional(),
-  valor_mes: z.string().optional(),
+  valor_diaria: z.string().optional().nullable(),
+  valor_semana: z.string().optional().nullable(),
+  valor_quinzena: z.string().optional().nullable(),
+  valor_mes: z.string().optional().nullable(),
   
   // Site
   disponivel_site: z.boolean().default(false),
-  preco_site: z.string().optional(),
-  imagem_url: z.string().optional(),
-  link_externo: z.string().optional(),
-  descricao_site: z.string().optional(),
+  preco_site: z.string().optional().nullable(),
+  imagem_url: z.string().optional().nullable(),
+  link_externo: z.string().optional().nullable(),
+  descricao_site: z.string().optional().nullable(),
   
   // Integração
   integrar_calculadora: z.boolean().default(false),
@@ -127,7 +127,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const isKit = watch("is_kit");
   const integrarCalculadora = watch("integrar_calculadora");
 
-  const parseCurrencyToNumber = (value: string) => {
+  const parseCurrencyToNumber = (value: string | null | undefined) => {
     if (!value) return 0;
     const cleanValue = value.replace(/\./g, "").replace(",", ".");
     return parseFloat(cleanValue) || 0;
@@ -169,15 +169,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         cd_produto: product?.cd_produto || Date.now(),
         nome: data.nome.toUpperCase(),
         un: data.un.toUpperCase(),
-        compra: parseCurrencyToNumber(data.compra || ""),
-        venda: parseCurrencyToNumber(data.venda || "0"),
-        venda_vista: parseCurrencyToNumber(data.venda_vista || ""),
-        venda_fracionada: parseCurrencyToNumber(data.venda_fracionada || ""),
-        valor_diaria: parseCurrencyToNumber(data.valor_diaria || ""),
-        valor_semana: parseCurrencyToNumber(data.valor_semana || ""),
-        valor_quinzena: parseCurrencyToNumber(data.valor_quinzena || ""),
-        valor_mes: parseCurrencyToNumber(data.valor_mes || ""),
-        preco_site: parseCurrencyToNumber(data.preco_site || ""),
+        compra: parseCurrencyToNumber(data.compra),
+        venda: parseCurrencyToNumber(data.venda),
+        venda_vista: parseCurrencyToNumber(data.venda_vista),
+        venda_fracionada: parseCurrencyToNumber(data.venda_fracionada),
+        valor_diaria: parseCurrencyToNumber(data.valor_diaria),
+        valor_semana: parseCurrencyToNumber(data.valor_semana),
+        valor_quinzena: parseCurrencyToNumber(data.valor_quinzena),
+        valor_mes: parseCurrencyToNumber(data.valor_mes),
+        preco_site: parseCurrencyToNumber(data.preco_site),
         desconto_vista_valor: parseFloat(data.desconto_vista_valor),
         estoque: parseFloat(data.estoque),
         minimo: parseFloat(data.minimo || "0"),
