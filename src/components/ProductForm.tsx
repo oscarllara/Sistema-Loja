@@ -28,9 +28,9 @@ import { cn } from '@/lib/utils';
 
 const productSchema = z.object({
   id_manual: z.string().optional().nullable(),
-  nome: z.string().min(2, "Nome obrigatório"),
+  nome: z.string().min(2, "Nome é obrigatório"),
   id_importado: z.string().optional().nullable(),
-  un: z.string().default("UN"),
+  un: z.string().min(1, "Unidade é obrigatória").default("UN"),
   cod_barras: z.string().optional().nullable().or(z.literal("")),
   compra: z.string().optional().nullable(),
   venda: z.string().optional().nullable(),
@@ -115,6 +115,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const descValorStr = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
+  const isKit = watch("is_kit");
   const integrarCalculadora = watch("integrar_calculadora");
 
   const parseCurrencyToNumber = (value: string | null | undefined) => {
@@ -178,7 +179,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       } as any;
 
       if (product) {
-        // Se estiver editando, mantém o id_manual original
         await db.produtos.update(product.cd_produto, { ...payload, id_manual: product.id_manual });
         showSuccess("Produto atualizado!");
       } else {
@@ -215,6 +215,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           {!isLocacao && <TabsTrigger value="precos" className="flex-1">Preços</TabsTrigger>}
           {isLocacao && <TabsTrigger value="locacao" className="flex-1 gap-1"><CalendarClock size={14} /> Locação</TabsTrigger>}
           <TabsTrigger value="site" className="flex-1 gap-1"><Globe size={14} /> Site</TabsTrigger>
+          {!isLocacao && <TabsTrigger value="kit" className="flex-1 gap-1"><Boxes size={14} /> Kit</TabsTrigger>}
         </TabsList>
 
         <div className="min-h-[350px] mt-4">
@@ -225,12 +226,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Input {...register("id_manual")} readOnly placeholder="Automático" className="font-bold text-indigo-600 bg-slate-50" />
               </div>
               <div className="md:col-span-2 space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Package size={14} /> Nome do Produto <span className="text-rose-500">*</span>
+                <Label className={cn("flex items-center gap-2", errors.nome && "text-rose-600")}>
+                  <Package size={14} /> Nome do Produto <span className="text-rose-500 font-bold">*</span>
                 </Label>
                 <Input 
                   {...register("nome")} 
-                  className={cn("uppercase", errors.nome && "border-rose-500")} 
+                  className={cn("uppercase", errors.nome && "border-rose-500 focus-visible:ring-rose-500")} 
                   placeholder="EX: BETONEIRA 400L"
                 />
                 {errors.nome && <p className="text-[10px] text-rose-500 font-bold">{errors.nome.message}</p>}
@@ -244,8 +245,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Input {...register("ncm")} placeholder="0000.00.00" />
               </div>
               <div className="space-y-2">
-                <Label>Unidade Principal</Label>
-                <Input {...register("un")} placeholder="Ex: UN, PC, KG, MT" className="uppercase" />
+                <Label className={cn(errors.un && "text-rose-600")}>Unidade Principal <span className="text-rose-500 font-bold">*</span></Label>
+                <Input 
+                  {...register("un")} 
+                  placeholder="Ex: UN, PC, KG, MT" 
+                  className={cn("uppercase", errors.un && "border-rose-500")} 
+                />
               </div>
             </div>
 
@@ -318,6 +323,25 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                         <Input {...register("venda_vista")} readOnly className="bg-white font-black text-emerald-700" />
                       </div>
                     </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="kit" className="m-0">
+                <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                    <Boxes className="text-slate-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Checkbox 
+                        id="is_kit" 
+                        checked={isKit}
+                        onCheckedChange={(checked) => setValue("is_kit", !!checked)} 
+                      />
+                      <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
+                    </div>
+                    <p className="text-xs text-slate-500 max-w-xs">Kits permitem vender vários produtos juntos com um único código.</p>
                   </div>
                 </div>
               </TabsContent>
