@@ -13,6 +13,7 @@ export interface Permissoes {
   reports: boolean;
   settings: boolean;
   rentals: boolean;
+  calculator: boolean;
 }
 
 export interface Cliente {

@@ -22,7 +22,8 @@ import {
   LogOut,
   History,
   CalendarClock,
-  Database
+  Database,
+  Calculator
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         { icon: ClipboardList, label: 'Compras / XML', path: '/purchases', perm: 'purchases' },
         { icon: Wallet, label: 'Financeiro', path: '/financial', perm: 'financial' },
         { icon: History, label: 'Caixa Diário', path: '/daily-cash', perm: 'financial' },
+        { icon: Calculator, label: 'Calculadora Técnica', path: '/calculator', perm: 'dashboard' },
       ]
     },
     {
