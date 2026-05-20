@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
+import { ContaBancaria } from '@/types/database';
+import { Loader2 } from 'lucide-react';
 
 const financialSchema = z.object({
   tipo: z.enum(['R', 'P']),
@@ -17,7 +19,7 @@ const financialSchema = z.object({
   valor: z.string().min(1, "Valor obrigatório"),
   data_vencimento: z.string().min(1, "Data obrigatória"),
   categoria: z.string().min(1, "Categoria obrigatória"),
-  cd_conta: z.string().optional(),
+  cd_account: z.string().optional(),
   status: z.enum(['Pendente', 'Pago']),
 });
 
@@ -29,21 +31,37 @@ interface FinancialFormProps {
 }
 
 const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => {
-  const contas = db.contas.getAll() || [];
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
+  const [isLoadingContas, setIsLoadingContas] = React.useState(true);
   
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FinancialFormValues>({
     resolver: zodResolver(financialSchema),
     defaultValues: {
       tipo: defaultType,
-      status: 'Pago', // No caixa diário, geralmente já é algo pago/recebido
+      status: 'Pago',
       data_vencimento: new Date().toISOString().split('T')[0],
       categoria: 'Outros',
       valor: "0,00"
     }
   });
 
+  // Carregamento assíncrono das contas
+  React.useEffect(() => {
+    const loadContas = async () => {
+      try {
+        const data = await db.contas.getAll();
+        setContas(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Erro ao carregar contas:", err);
+        setContas([]);
+      } finally {
+        setIsLoadingContas(false);
+      }
+    };
+    loadContas();
+  }, []);
+
   const tipo = watch("tipo");
-  const status = watch("status");
 
   const categorias = tipo === 'R' 
     ? ['Venda', 'Serviço', 'Rendimento', 'Aporte', 'Outros']
@@ -73,16 +91,16 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
     setValue("valor", formatCurrency(e.target.value));
   };
 
-  const onSubmit = (data: FinancialFormValues) => {
+  const onSubmit = async (data: FinancialFormValues) => {
     try {
       const valorNum = parseFloat(data.valor.replace(/\./g, "").replace(",", "."));
       if (isNaN(valorNum) || valorNum <= 0) throw new Error("Informe um valor válido");
 
-      if (data.status === 'Pago' && !data.cd_conta) {
+      if (data.status === 'Pago' && !data.cd_account) {
         throw new Error("Selecione uma conta para o lançamento pago");
       }
 
-      db.financeiro.add({
+      await db.financeiro.add({
         tipo: data.tipo,
         descricao: data.descricao,
         valor: valorNum,
@@ -90,8 +108,8 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
         data_pagamento: data.status === 'Pago' ? new Date().toISOString() : undefined,
         status: data.status,
         categoria: data.categoria,
-        cd_conta: data.status === 'Pago' ? Number(data.cd_conta) : undefined,
-        meio_pagamento: 'Dinheiro' // Padrão para caixa diário
+        cd_conta: data.status === 'Pago' ? Number(data.cd_account) : undefined,
+        meio_pagamento: 'Dinheiro'
       });
 
       showSuccess("Lançamento realizado com sucesso!");
@@ -160,17 +178,23 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
       <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
         <div className="space-y-2">
           <Label>Conta / Caixa de Destino</Label>
-          <select 
-            {...register("cd_conta")}
-            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="">Selecione a conta...</option>
-            {contas.map(c => (
-              <option key={c.cd_conta} value={c.cd_conta}>
-                {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
-              </option>
-            ))}
-          </select>
+          {isLoadingContas ? (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Loader2 className="animate-spin" size={14} /> Carregando contas...
+            </div>
+          ) : (
+            <select 
+              {...register("cd_account")}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Selecione a conta...</option>
+              {(contas || []).map(c => (
+                <option key={c.cd_conta} value={c.cd_conta}>
+                  {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
