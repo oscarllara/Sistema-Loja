@@ -73,6 +73,26 @@ const ImportData = () => {
     reader.readAsArrayBuffer(file);
   };
 
+  const parseNum = (val: any) => {
+    if (val === undefined || val === null || val === "") return 0;
+    if (typeof val === 'number') return val;
+    
+    let s = val.toString().replace('R$', '').trim();
+    
+    // Lógica robusta para números brasileiros:
+    // 1. Se tem vírgula e ponto (ex: 1.200,50), remove o ponto e troca vírgula por ponto
+    if (s.includes(',') && s.includes('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } 
+    // 2. Se tem apenas vírgula (ex: 10,50), troca por ponto
+    else if (s.includes(',')) {
+      s = s.replace(',', '.');
+    }
+    // 3. Se tem apenas ponto, assumimos que já é o formato decimal (ex: 10.50)
+    
+    return parseFloat(s) || 0;
+  };
+
   const importProdutos = async (data: any[]) => {
     const first = data[0];
     const kNome = findKey(first, ['NOME', 'DESCRICAO', 'PRODUTO']);
@@ -83,12 +103,6 @@ const ImportData = () => {
     const kUn = findKey(first, ['UNIDADE', 'UN', 'MEDIDA']);
 
     if (!kNome) throw new Error("Coluna de Descrição não identificada.");
-
-    const parseNum = (val: any) => {
-      if (val === undefined || val === null) return 0;
-      const s = val.toString().replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-      return parseFloat(s) || 0;
-    };
 
     addLog("Preparando dados para o banco de dados...");
 
@@ -104,7 +118,6 @@ const ImportData = () => {
       data_atualizacao: new Date().toISOString()
     })).filter(p => p.nome && p.nome.length > 1);
 
-    // Importar em lotes de 100 para não sobrecarregar a rede
     const chunkSize = 100;
     for (let i = 0; i < mapped.length; i += chunkSize) {
       const chunk = mapped.slice(i, i + chunkSize);
@@ -138,8 +151,7 @@ const ImportData = () => {
 
     addLog(`Enviando ${mapped.length} clientes para o banco...`);
     
-    // Para clientes, como costumam ser menos, podemos enviar em um lote maior ou usar a mesma lógica de chunk
-    const { error } = await db.produtos.bulkAdd(mapped as any); // Usando bulkAdd genérico
+    const { error } = await db.clientes.bulkAdd(mapped as any);
     if (error) throw error;
 
     addLog("Clientes importados com sucesso.");
