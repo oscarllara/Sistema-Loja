@@ -36,36 +36,33 @@ const productSchema = z.object({
   venda: z.string().optional().nullable(),
   venda_vista: z.string().optional().nullable(),
   venda_fracionada: z.string().optional().nullable(),
-  desconto_vista_tipo: z.enum(['P', 'V']).default('P'),
-  desconto_vista_valor: z.string().default("0"),
-  estoque: z.string().default("0"),
-  minimo: z.string().default("0"),
+  desconto_vista_tipo: z.enum(['P', 'V']).default('P').nullable(),
+  desconto_vista_valor: z.string().default("0").nullable(),
+  estoque: z.string().default("0").nullable(),
+  minimo: z.string().default("0").nullable(),
   ncm: z.string().optional().nullable(),
-  fracionado: z.boolean().default(false),
+  fracionado: z.boolean().default(false).nullable(),
   un_fracionada: z.string().optional().nullable(),
   fator_conversao: z.string().optional().nullable(),
-  is_kit: z.boolean().default(false),
-  itens_kit: z.array(z.object({
-    cd_produto_filho: z.number(),
-    qtde: z.number(),
-  })).optional(),
+  is_kit: z.boolean().default(false).nullable(),
+  itens_kit: z.array(z.any()).optional().nullable(),
   
   // Locação
-  is_locacao: z.boolean().default(false),
+  is_locacao: z.boolean().default(false).nullable(),
   valor_diaria: z.string().optional().nullable(),
   valor_semana: z.string().optional().nullable(),
   valor_quinzena: z.string().optional().nullable(),
   valor_mes: z.string().optional().nullable(),
   
   // Site
-  disponivel_site: z.boolean().default(false),
+  disponivel_site: z.boolean().default(false).nullable(),
   preco_site: z.string().optional().nullable(),
   imagem_url: z.string().optional().nullable(),
   link_externo: z.string().optional().nullable(),
   descricao_site: z.string().optional().nullable(),
   
   // Integração
-  integrar_calculadora: z.boolean().default(false),
+  integrar_calculadora: z.boolean().default(false).nullable(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -170,8 +167,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         valor_quinzena: parseCurrencyToNumber(data.valor_quinzena),
         valor_mes: parseCurrencyToNumber(data.valor_mes),
         preco_site: parseCurrencyToNumber(data.preco_site),
-        desconto_vista_valor: parseFloat(data.desconto_vista_valor),
-        estoque: parseFloat(data.estoque),
+        desconto_vista_valor: parseFloat(data.desconto_vista_valor || "0"),
+        estoque: parseFloat(data.estoque || "0"),
         minimo: parseFloat(data.minimo || "0"),
         fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : undefined,
         integrar_calculadora: data.integrar_calculadora,
@@ -197,12 +194,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       }
       onSuccess();
     } catch (err: any) {
+      console.error("Erro ao salvar produto:", err);
       showError("Erro ao salvar no banco de dados.");
     }
   };
 
   const onError = (errors: any) => {
-    console.error("Erros de validação:", errors);
+    console.error("Erros de validação do formulário:", errors);
     showError("Verifique os campos obrigatórios em todas as abas.");
   };
 
@@ -258,7 +256,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="flex items-center space-x-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                 <Checkbox 
                   id="is_locacao_geral" 
-                  checked={isLocacao}
+                  checked={!!isLocacao}
                   onCheckedChange={(checked) => setValue("is_locacao", !!checked)} 
                 />
                 <Label htmlFor="is_locacao_geral" className="font-black text-sm cursor-pointer text-indigo-900">
@@ -269,7 +267,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="flex items-center space-x-2 p-4 bg-amber-50 rounded-xl border border-amber-100">
                 <Checkbox 
                   id="integrar_calc" 
-                  checked={integrarCalculadora}
+                  checked={!!integrarCalculadora}
                   onCheckedChange={(checked) => setValue("integrar_calculadora", !!checked)} 
                 />
                 <Label htmlFor="integrar_calc" className="font-black text-sm cursor-pointer text-amber-900 flex items-center gap-2">
@@ -336,7 +334,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     <div className="flex items-center justify-center space-x-2">
                       <Checkbox 
                         id="is_kit" 
-                        checked={isKit}
+                        checked={!!isKit}
                         onCheckedChange={(checked) => setValue("is_kit", !!checked)} 
                       />
                       <Label htmlFor="is_kit" className="font-bold cursor-pointer">Este produto é um Kit / Composição</Label>
@@ -381,7 +379,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="flex items-center space-x-2 mb-6">
                 <Checkbox 
                   id="disponivel_site" 
-                  checked={disponivelSite}
+                  checked={!!disponivelSite}
                   onCheckedChange={(checked) => setValue("disponivel_site", !!checked)} 
                 />
                 <Label htmlFor="disponivel_site" className="font-black text-lg cursor-pointer text-blue-900">Exibir no Site</Label>
