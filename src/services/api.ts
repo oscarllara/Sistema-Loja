@@ -214,6 +214,11 @@ export const db = {
       if (error) throw error;
       return data || [];
     },
+    getByCliente: async (id: number): Promise<Venda[]> => {
+      const { data, error } = await supabase.from('vendas').select('*').eq('cd_clientes', id).order('data', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
     add: async (v: any) => {
       const { error } = await supabase.from('vendas').insert([v]);
       if (error) throw error;

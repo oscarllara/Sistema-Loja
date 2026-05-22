@@ -13,7 +13,8 @@ import {
   Package,
   ChevronDown,
   ChevronRight,
-  Filter
+  Filter,
+  Loader2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,16 +41,28 @@ interface ClientDetailsProps {
 const ClientDetails = ({ client }: ClientDetailsProps) => {
   const [vendas, setVendas] = React.useState<Venda[]>([]);
   const [financeiro, setFinanceiro] = React.useState<LancamentoFinanceiro[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [expandedVenda, setExpandedVenda] = React.useState<number | null>(null);
   
   // Filtros de Período
   const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = React.useState(new Date().toISOString().split('T')[0]);
 
-  const loadData = React.useCallback(() => {
+  const loadData = React.useCallback(async () => {
     if (!client?.cd_clientes) return;
-    setVendas(db.vendas.getByCliente(client.cd_clientes) || []);
-    setFinanceiro(db.financeiro.getByEntidade(client.cd_clientes) || []);
+    setIsLoading(true);
+    try {
+      const [vData, fData] = await Promise.all([
+        db.vendas.getByCliente(client.cd_clientes),
+        db.financeiro.getByEntidade(client.cd_clientes)
+      ]);
+      setVendas(vData || []);
+      setFinanceiro(fData || []);
+    } catch (err) {
+      showError("Erro ao carregar histórico do cliente.");
+    } finally {
+      setIsLoading(false);
+    }
   }, [client]);
 
   React.useEffect(() => {
@@ -70,13 +83,13 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
   const totalPago = filteredFinanceiro.filter(l => l.status === 'Pago' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
   const saldoDevedor = filteredFinanceiro.filter(l => l.status === 'Pendente' && l.tipo === 'R').reduce((acc, l) => acc + (l.valor || 0), 0);
 
-  const handleBaixa = (id: number) => {
-    const contas = db.contas.getAll();
+  const handleBaixa = async (id: number) => {
+    const contas = await db.contas.getAll();
     if (contas.length === 0) {
       showError("Nenhuma conta cadastrada para receber.");
       return;
     }
-    db.financeiro.baixar(id, contas[0].cd_conta);
+    await db.financeiro.baixar(id, contas[0].cd_conta);
     showSuccess("Pagamento registrado!");
     loadData();
   };
@@ -100,7 +113,14 @@ const ClientDetails = ({ client }: ClientDetailsProps) => {
     </div>
   );
 
-  if (!client) return null;
+  if (isLoading) {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-2">
+        <Loader2 className="animate-spin" />
+        <p className="text-sm font-bold">Carregando ficha do cliente...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
