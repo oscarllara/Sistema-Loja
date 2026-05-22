@@ -16,6 +16,7 @@ import {
   Legend
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { db } from '@/services/api';
 import { TrendingUp, DollarSign, PieChart as PieIcon, Calendar, Loader2 } from 'lucide-react';
 
