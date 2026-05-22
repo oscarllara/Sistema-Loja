@@ -9,17 +9,11 @@ import {
   Printer, 
   Plus, 
   Minus, 
-  ArrowLeftRight,
-  CreditCard,
-  Banknote,
-  QrCode,
   History,
-  Wallet
+  Loader2
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Table, 
   TableBody, 
@@ -39,7 +33,8 @@ import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
 import FinancialForm from '@/components/FinancialForm';
 import PrintPreview from '@/components/PrintPreview';
-import { showSuccess } from '@/utils/toast';
+import { showError } from '@/utils/toast';
+import { LancamentoFinanceiro, ContaBancaria } from '@/types/database';
 
 const DailyCash = () => {
   const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
@@ -47,17 +42,40 @@ const DailyCash = () => {
   const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
   const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
-
-  const lancamentos = db.financeiro.getAll() || [];
-  const contas = db.contas.getAll() || [];
   
+  const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [lData, cData] = await Promise.all([
+        db.financeiro.getAll(),
+        db.contas.getAll()
+      ]);
+      setLancamentos(Array.isArray(lData) ? lData : []);
+      setContas(Array.isArray(cData) ? cData : []);
+    } catch (err) {
+      console.error("Erro ao carregar caixa diário:", err);
+      showError("Erro ao carregar dados do caixa.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData, refreshKey]);
+
+  // Cálculos baseados nos dados carregados
   const movDia = lancamentos.filter(l => 
     l.status === 'Pago' && 
     (l.data_pagamento?.startsWith(selectedDate) || l.data_vencimento.startsWith(selectedDate))
   );
 
   const saldoAnterior = lancamentos
-    .filter(l => l.status === 'Pago' && (l.data_pagamento || l.data_vencimento) < selectedDate)
+    .filter(l => l.status === 'Pago' && (l.data_pagamento || l.data_vencimento).split('T')[0] < selectedDate)
     .reduce((acc, l) => l.tipo === 'R' ? acc + l.valor : acc - l.valor, 0);
 
   const totalEntradas = movDia.filter(l => l.tipo === 'R').reduce((acc, l) => acc + l.valor, 0);
@@ -105,7 +123,7 @@ const DailyCash = () => {
                   type="date" 
                   value={selectedDate} 
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="border-none p-0 focus:ring-0 font-medium cursor-pointer"
+                  className="border-none p-0 focus:ring-0 font-medium cursor-pointer bg-transparent"
                 />
               </div>
             </div>
@@ -142,47 +160,56 @@ const DailyCash = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <SummaryCard title="Saldo Anterior" value={saldoAnterior} color="text-slate-600" />
-          <SummaryCard title="Entradas" value={totalEntradas} color="text-emerald-600" />
-          <SummaryCard title="Saídas" value={totalSaidas} color="text-rose-600" />
-          <SummaryCard title="Movimentado" value={saldoDia} color={saldoDia >= 0 ? "text-indigo-600" : "text-rose-600"} />
-          <SummaryCard title="Saldo do Dia" value={saldoFinal} color="text-indigo-700" isHighlight />
-        </div>
+        {isLoading ? (
+          <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
+            <Loader2 className="animate-spin" size={40} />
+            <p className="font-bold">Carregando movimentações...</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <SummaryCard title="Saldo Anterior" value={saldoAnterior} color="text-slate-600" />
+              <SummaryCard title="Entradas" value={totalEntradas} color="text-emerald-600" />
+              <SummaryCard title="Saídas" value={totalSaidas} color="text-rose-600" />
+              <SummaryCard title="Movimentado" value={saldoDia} color={saldoDia >= 0 ? "text-indigo-600" : "text-rose-600"} />
+              <SummaryCard title="Saldo do Dia" value={saldoFinal} color="text-indigo-700" isHighlight />
+            </div>
 
-        <Card className="border-none shadow-sm overflow-hidden">
-          <Table>
-            <TableHeader className="bg-slate-50">
-              <TableRow>
-                <TableHead className="w-20">Hora</TableHead>
-                <TableHead>Descrição / Destino</TableHead>
-                <TableHead className="text-right">Entrada</TableHead>
-                <TableHead className="text-right">Saída</TableHead>
-                <TableHead className="text-right">Saldo Acum.</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {extrato.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhuma movimentação registrada.</TableCell></TableRow>
-              ) : (
-                extrato.map((item, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-[10px] font-mono text-slate-400">
-                      {item.data_pagamento ? new Date(item.data_pagamento).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs font-bold text-slate-800">{item.descricao}</div>
-                      <div className="text-[9px] text-slate-400 uppercase font-bold">{item.meio_pagamento} | {item.contaNome}</div>
-                    </TableCell>
-                    <TableCell className="text-right text-xs font-bold text-emerald-600">{item.tipo === 'R' ? item.valor.toFixed(2) : '0,00'}</TableCell>
-                    <TableCell className="text-right text-xs font-bold text-rose-600">{item.tipo === 'P' ? item.valor.toFixed(2) : '0,00'}</TableCell>
-                    <TableCell className="text-right text-xs font-bold text-slate-900">{item.atual.toFixed(2)}</TableCell>
+            <Card className="border-none shadow-sm overflow-hidden bg-white">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="w-20">Hora</TableHead>
+                    <TableHead>Descrição / Destino</TableHead>
+                    <TableHead className="text-right">Entrada</TableHead>
+                    <TableHead className="text-right">Saída</TableHead>
+                    <TableHead className="text-right">Saldo Acum.</TableHead>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {extrato.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhuma movimentação registrada.</TableCell></TableRow>
+                  ) : (
+                    extrato.map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-[10px] font-mono text-slate-400">
+                          {item.data_pagamento ? new Date(item.data_pagamento).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-xs font-bold text-slate-800">{item.descricao}</div>
+                          <div className="text-[9px] text-slate-400 uppercase font-bold">{item.meio_pagamento} | {item.contaNome}</div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-bold text-emerald-600">{item.tipo === 'R' ? item.valor.toFixed(2) : '0,00'}</TableCell>
+                        <TableCell className="text-right text-xs font-bold text-rose-600">{item.tipo === 'P' ? item.valor.toFixed(2) : '0,00'}</TableCell>
+                        <TableCell className="text-right text-xs font-bold text-slate-900">{item.atual.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </>
+        )}
 
         <PrintPreview 
           isOpen={isPrintOpen} 
