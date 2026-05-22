@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
+import { Loader2 } from 'lucide-react';
 
 const patrimonySchema = z.object({
   descricao: z.string().min(3, "Descrição obrigatória"),
@@ -20,6 +21,8 @@ const patrimonySchema = z.object({
 type PatrimonyFormValues = z.infer<typeof patrimonySchema>;
 
 const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
+  const [isSaving, setIsSaving] = React.useState(false);
+  
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<PatrimonyFormValues>({
     resolver: zodResolver(patrimonySchema),
     defaultValues: {
@@ -39,11 +42,12 @@ const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
     }).format(number);
   };
 
-  const onSubmit = (data: PatrimonyFormValues) => {
+  const onSubmit = async (data: PatrimonyFormValues) => {
+    setIsSaving(true);
     try {
       const valorNum = parseFloat(data.valor.replace(/\./g, "").replace(",", "."));
       
-      db.patrimonio.add({
+      await db.patrimonio.add({
         descricao: data.descricao.toUpperCase(),
         valor: valorNum,
         tipo: data.tipo,
@@ -53,7 +57,10 @@ const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
       showSuccess("Patrimônio registrado com sucesso!");
       onSuccess();
     } catch (err: any) {
-      showError("Erro ao registrar patrimônio.");
+      console.error("Erro ao salvar patrimônio:", err);
+      showError("Erro ao registrar patrimônio. Verifique se a tabela existe no banco.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -99,8 +106,8 @@ const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
         </select>
       </div>
 
-      <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold">
-        Registrar Patrimônio
+      <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold" disabled={isSaving}>
+        {isSaving ? <Loader2 className="animate-spin mr-2" /> : "Registrar Patrimônio"}
       </Button>
     </form>
   );

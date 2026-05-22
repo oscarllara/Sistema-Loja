@@ -84,9 +84,9 @@ const Financial = () => {
     setIsLoading(true);
     try {
       const [lData, cData, pData] = await Promise.all([
-        db.financeiro.getAll(),
-        db.contas.getAll(),
-        db.patrimonio.getAll()
+        db.financeiro.getAll().catch(() => []),
+        db.contas.getAll().catch(() => []),
+        db.patrimonio.getAll().catch(() => [])
       ]);
       setLancamentos(lData || []);
       setContas(cData || []);
@@ -146,11 +146,12 @@ const Financial = () => {
   };
 
   const filterData = (tipo: 'R' | 'P') => {
-    return lancamentos.filter(l => {
+    return (lancamentos || []).filter(l => {
+      if (!l) return false;
       const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
       const matchesDate = data >= startDate && data <= endDate;
       const matchesType = l.tipo === tipo;
-      const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
                            (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === 'All' ? true : l.status === statusFilter;
       
@@ -158,28 +159,31 @@ const Financial = () => {
     });
   };
 
-  const filteredPatrimony = patrimonio.filter(p => {
-    const matchesSearch = p.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         p.tipo.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredPatrimony = (patrimonio || []).filter(p => {
+    if (!p) return false;
+    const matchesSearch = (p.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (p.tipo || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = patrimonyFilter ? p.tipo === patrimonyFilter : true;
     return matchesSearch && matchesCategory;
   });
 
   const calculateTotals = (data: LancamentoFinanceiro[]) => {
-    const total = data.reduce((acc, l) => acc + l.valor, 0);
-    const pagos = data.filter(l => l.status === 'Pago').reduce((acc, l) => acc + l.valor, 0);
-    const pendentes = data.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + l.valor, 0);
+    if (!Array.isArray(data)) return { total: 0, pagos: 0, pendentes: 0 };
+    const total = data.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const pagos = data.filter(l => l.status === 'Pago').reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const pendentes = data.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
     return { total, pagos, pendentes };
   };
 
   const patrimonyStats = React.useMemo(() => {
     const stats = { Imóvel: 0, Veículo: 0, Equipamento: 0, Outros: 0, Total: 0 };
-    patrimonio.forEach(p => {
+    (patrimonio || []).forEach(p => {
+      if (!p) return;
       const tipo = p.tipo as keyof typeof stats;
       if (stats[tipo] !== undefined) {
-        stats[tipo] += p.valor;
+        stats[tipo] += (Number(p.valor) || 0);
       }
-      stats.Total += p.valor;
+      stats.Total += (Number(p.valor) || 0);
     });
     return stats;
   }, [patrimonio]);
@@ -319,7 +323,7 @@ const Financial = () => {
               onDevolver={async (id: number) => {
                 if (confirm("Deseja marcar este cheque como DEVOLVIDO?")) {
                   try {
-                    await db.financeiro.add({ cd_lancamento: id, status: 'Devolvido' }); // Simulação de update
+                    await db.financeiro.add({ cd_lancamento: id, status: 'Devolvido' }); 
                     showSuccess("Cheque marcado como devolvido.");
                     loadData();
                   } catch (e) { showError("Erro ao atualizar cheque."); }
@@ -343,7 +347,7 @@ const Financial = () => {
                     </div>
                     <h3 className="font-bold text-slate-900">{account.nome}</h3>
                     <p className="text-2xl font-bold text-indigo-600 mt-2">
-                      R$ {account.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(Number(account.saldo) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </CardContent>
                 </Card>
@@ -428,7 +432,7 @@ const Financial = () => {
                       <div>
                         <p className="text-[9px] text-slate-400 uppercase font-bold">Valor Estimado</p>
                         <p className="text-xl font-black text-slate-900">
-                          R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          R$ {(Number(item.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
                       <Badge variant="outline" className="text-[9px] font-bold">{item.tipo.toUpperCase()}</Badge>
@@ -452,7 +456,7 @@ const Financial = () => {
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                 <p className="text-[10px] font-bold text-indigo-600 uppercase">Cheque Selecionado</p>
                 <p className="text-sm font-bold text-slate-900">{selectedCheque?.descricao}</p>
-                <p className="text-lg font-black text-indigo-700">R$ {selectedCheque?.valor.toFixed(2)}</p>
+                <p className="text-lg font-black text-indigo-700">R$ {(Number(selectedCheque?.valor) || 0).toFixed(2)}</p>
                 <p className="text-[10px] text-slate-500 mt-1">Nº Cheque: {selectedCheque?.cheque_num} | Banco: {selectedCheque?.banco_nome}</p>
               </div>
               <div className="space-y-2">
@@ -463,7 +467,7 @@ const Financial = () => {
                   onChange={(e) => setTargetAccountId(e.target.value)}
                 >
                   <option value="">Selecione a conta...</option>
-                  {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome} (Saldo: R$ {c.saldo.toFixed(2)})</option>)}
+                  {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome} (Saldo: R$ {(Number(c.saldo) || 0).toFixed(2)})</option>)}
                 </select>
               </div>
             </div>
@@ -526,7 +530,7 @@ const PatrimonyStatCard = ({ title, value, icon: Icon, color, isActive, onClick 
         <Icon size={14} className={color} />
         <p className="text-[9px] font-bold uppercase text-slate-500">{title}</p>
       </div>
-      <p className="text-sm font-black text-slate-900">R$ {value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+      <p className="text-sm font-black text-slate-900">R$ {(Number(value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
     </CardContent>
   </Card>
 );
@@ -542,7 +546,7 @@ const FinancialSummary = ({ totals, type, currentFilter, onFilterChange }: { tot
     >
       <CardContent className="p-4">
         <p className="text-[10px] font-bold uppercase text-slate-500">Total Previsto</p>
-        <p className="text-xl font-black text-slate-900">R$ {totals.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        <p className="text-xl font-black text-slate-900">R$ {(Number(totals.total) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
     </Card>
     <Card 
@@ -554,7 +558,7 @@ const FinancialSummary = ({ totals, type, currentFilter, onFilterChange }: { tot
     >
       <CardContent className="p-4">
         <p className="text-[10px] font-bold uppercase text-emerald-600">Valores {type === 'R' ? 'Recebidos' : 'Pagos'}</p>
-        <p className="text-xl font-black text-emerald-700">R$ {totals.pagos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        <p className="text-xl font-black text-emerald-700">R$ {(Number(totals.pagos) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
     </Card>
     <Card 
@@ -566,7 +570,7 @@ const FinancialSummary = ({ totals, type, currentFilter, onFilterChange }: { tot
     >
       <CardContent className="p-4">
         <p className="text-[10px] font-bold uppercase text-rose-600">Valores a {type === 'R' ? 'Receber' : 'Pagar'}</p>
-        <p className="text-xl font-black text-rose-700">R$ {totals.pendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        <p className="text-xl font-black text-rose-700">R$ {(Number(totals.pendentes) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </CardContent>
     </Card>
   </div>
@@ -607,7 +611,7 @@ const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }
                 </div>
               </TableCell>
               <TableCell>
-                <span className="font-bold">R$ {l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-bold">R$ {(Number(l.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </TableCell>
               <TableCell>
                 <Badge className={cn(

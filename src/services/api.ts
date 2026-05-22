@@ -62,7 +62,7 @@ export const db = {
       const nextId = lastProd ? (parseInt(lastProd.id_manual) + 1).toString().padStart(5, '0') : '00001';
       const { data, error } = await supabase.from('produtos').insert([{ ...p, id_manual: nextId }]).select().single();
       if (error) throw error;
-      productsCache = null; // Limpa cache para forçar atualização
+      productsCache = null; 
       return data;
     },
     bulkAdd: async (products: any[]) => {
@@ -106,6 +106,10 @@ export const db = {
       if (error) throw error;
       return data || [];
     },
+    add: async (c: any) => {
+      const { error } = await supabase.from('contas').insert([c]);
+      if (error) throw error;
+    },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('contas').update(data).eq('cd_conta', id);
       if (error) throw error;
@@ -141,7 +145,7 @@ export const db = {
         
         if (conta) {
           const valorBaixa = valor || lanc.valor;
-          const novoSaldo = lanc.tipo === 'R' ? conta.saldo + valorBaixa : conta.saldo - valorBaixa;
+          const novoSaldo = lanc.tipo === 'R' ? Number(conta.saldo) + Number(valorBaixa) : Number(conta.saldo) - Number(valorBaixa);
           const { error: sError } = await supabase.from('contas').update({ saldo: novoSaldo }).eq('cd_conta', cd_conta);
           if (sError) throw sError;
         }
@@ -152,7 +156,7 @@ export const db = {
       if (error) throw error;
     },
     transferir: async (t: any) => {
-      await supabase.from('financeiro').insert([{
+      const { error: e1 } = await supabase.from('financeiro').insert([{
         tipo: 'P',
         descricao: `TRANSFERÊNCIA PARA CONTA #${t.cd_conta_destino} - ${t.obs || ''}`,
         valor: t.valor,
@@ -163,8 +167,9 @@ export const db = {
         cd_conta: t.cd_conta_origem,
         meio_pagamento: 'Transferência'
       }]);
+      if (e1) throw e1;
 
-      await supabase.from('financeiro').insert([{
+      const { error: e2 } = await supabase.from('financeiro').insert([{
         tipo: 'R',
         descricao: `TRANSFERÊNCIA DE CONTA #${t.cd_conta_origem} - ${t.obs || ''}`,
         valor: t.valor,
@@ -175,12 +180,13 @@ export const db = {
         cd_conta: t.cd_conta_destino,
         meio_pagamento: 'Transferência'
       }]);
+      if (e2) throw e2;
 
       const { data: cOrigem } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_origem).single();
       const { data: cDestino } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_destino).single();
       
-      if (cOrigem) await supabase.from('contas').update({ saldo: cOrigem.saldo - t.valor }).eq('cd_conta', t.cd_conta_origem);
-      if (cDestino) await supabase.from('contas').update({ saldo: cDestino.saldo + t.valor }).eq('cd_conta', t.cd_conta_destino);
+      if (cOrigem) await supabase.from('contas').update({ saldo: Number(cOrigem.saldo) - Number(t.valor) }).eq('cd_conta', t.cd_conta_origem);
+      if (cDestino) await supabase.from('contas').update({ saldo: Number(cDestino.saldo) + Number(t.valor) }).eq('cd_conta', t.cd_conta_destino);
     }
   },
   patrimonio: {
