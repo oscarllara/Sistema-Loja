@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { 
   BarChart, 
@@ -18,11 +19,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { db } from '@/services/api';
-import { TrendingUp, DollarSign, PieChart as PieIcon, Calendar, Loader2 } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart as PieIcon, Calendar, Loader2, ArrowUpRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const Reports = () => {
+  const navigate = useNavigate();
   const [data, setData] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -128,34 +131,34 @@ const Reports = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-4">
-          <Card className="border-none shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">Margem de Lucro Real</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-indigo-600">{data.margemLucro.toFixed(1)}%</div>
-              <p className="text-[10px] text-slate-400 mt-1">Faturamento - (Custo + Desp. Operacionais)</p>
-            </CardContent>
-          </Card>
-          <Card className="border-none shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">Lucro Líquido Operacional</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-emerald-600">R$ {data.lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-              <p className="text-[10px] text-slate-400 mt-1">Resultado das atividades principais</p>
-            </CardContent>
-          </Card>
-          <Card className="border-none shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">Ticket Médio</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900">R$ {data.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-              <p className="text-[10px] text-slate-400 mt-1">Média por venda realizada</p>
-            </CardContent>
-          </Card>
-          <Card className="border-none shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">Faturamento Real</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">R$ {data.faturamentoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-              <p className="text-[10px] text-slate-400 mt-1">Vendas + Receitas Operacionais</p>
-            </CardContent>
-          </Card>
+          <ReportStatCard 
+            title="Margem de Lucro Real"
+            value={`${data.margemLucro.toFixed(1)}%`}
+            subtitle="Faturamento - (Custo + Desp. Operacionais)"
+            color="text-indigo-600"
+            onClick={() => navigate('/financial')}
+          />
+          <ReportStatCard 
+            title="Lucro Líquido Operacional"
+            value={`R$ ${data.lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            subtitle="Resultado das atividades principais"
+            color="text-emerald-600"
+            onClick={() => navigate('/financial')}
+          />
+          <ReportStatCard 
+            title="Ticket Médio"
+            value={`R$ ${data.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            subtitle="Média por venda realizada"
+            color="text-slate-900"
+            onClick={() => navigate('/pos')}
+          />
+          <ReportStatCard 
+            title="Faturamento Real"
+            value={`R$ ${data.faturamentoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            subtitle="Vendas + Receitas Operacionais"
+            color="text-blue-600"
+            onClick={() => navigate('/financial')}
+          />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -205,5 +208,21 @@ const Reports = () => {
     </Layout>
   );
 };
+
+const ReportStatCard = ({ title, value, subtitle, color, onClick }: any) => (
+  <Card 
+    className="border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md active:scale-95 group"
+    onClick={onClick}
+  >
+    <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+      <CardTitle className="text-xs font-medium text-slate-500">{title}</CardTitle>
+      <ArrowUpRight size={14} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+    </CardHeader>
+    <CardContent>
+      <div className={cn("text-2xl font-bold", color)}>{value}</div>
+      <p className="text-[10px] text-slate-400 mt-1">{subtitle}</p>
+    </CardContent>
+  </Card>
+);
 
 export default Reports;
