@@ -120,6 +120,7 @@ interface ClientFormProps {
 
 const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const [isSearchingCep, setIsSearchingCep] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
@@ -252,27 +253,34 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     }
   };
 
-  const onSubmit = (data: ClientFormValues) => {
-    const payload = {
-      ...data,
-      cd_clientes: client?.cd_clientes || Date.now(),
-      data: client?.data || new Date().toISOString(),
-      salario: parseCurrencyToNumber(data.salario || ""),
-      limite: parseCurrencyToNumber(data.limite || ""),
-      despesa_fixa: parseCurrencyToNumber(data.despesa_fixa || ""),
-      despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao || ""),
-      despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel || ""),
-      dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : undefined,
-    } as any;
+  const onSubmit = async (data: ClientFormValues) => {
+    setIsSaving(true);
+    try {
+      const payload = {
+        ...data,
+        cd_clientes: client?.cd_clientes || Date.now(),
+        data: client?.data || new Date().toISOString(),
+        salario: parseCurrencyToNumber(data.salario || ""),
+        limite: parseCurrencyToNumber(data.limite || ""),
+        despesa_fixa: parseCurrencyToNumber(data.despesa_fixa || ""),
+        despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao || ""),
+        despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel || ""),
+        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : undefined,
+      } as any;
 
-    if (client) {
-      db.clientes.update(client.cd_clientes, payload);
-      showSuccess("Cadastro atualizado!");
-    } else {
-      db.clientes.add(payload);
-      showSuccess("Cadastro realizado com sucesso!");
+      if (client) {
+        await db.clientes.update(client.cd_clientes, payload);
+        showSuccess("Cadastro atualizado!");
+      } else {
+        await db.clientes.add(payload);
+        showSuccess("Cadastro realizado com sucesso!");
+      }
+      onSuccess();
+    } catch (err) {
+      showError("Erro ao salvar cadastro.");
+    } finally {
+      setIsSaving(false);
     }
-    onSuccess();
   };
 
   const permissionLabels: Record<keyof Permissoes, string> = {
@@ -283,7 +291,9 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     purchases: "Compras / XML",
     financial: "Financeiro / Caixas",
     reports: "Relatórios / Gráficos",
-    settings: "Configurações do Sistema"
+    settings: "Configurações do Sistema",
+    rentals: "Locação / Aluguel",
+    calculator: "Calculadora Técnica"
   };
 
   return (
@@ -313,7 +323,9 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             </RadioGroup>
           </div>
         </div>
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl shadow-lg shadow-indigo-100">Salvar Cadastro</Button>
+        <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl shadow-lg shadow-indigo-100">
+          {isSaving ? "Salvando..." : "Salvar Cadastro"}
+        </Button>
       </div>
 
       <Tabs defaultValue="geral" className="w-full">
@@ -342,7 +354,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         <TabsContent value="endereco" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} onBlur={handleCepBlur} /></div>
-            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} onChange={(e) => handleTitleCaseCaseChange(e, "endereco")} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} onChange={(e) => handleTitleCaseChange(e, "endereco")} /></div>
             <div className="space-y-2"><Label>Número</Label><Input {...register("numero")} /></div>
             <div className="space-y-2"><Label>Bairro</Label><Input {...register("bairro")} onChange={(e) => handleTitleCaseChange(e, "bairro")} /></div>
             <div className="md:col-span-2 space-y-2"><Label>Cidade</Label><Input {...register("cidade")} onChange={(e) => handleTitleCaseChange(e, "cidade")} /></div>
