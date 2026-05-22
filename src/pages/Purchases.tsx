@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   Clock,
   Edit,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,15 +35,33 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { showSuccess, showLoading, dismissToast, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import { Compra } from '@/types/database';
 
 const Purchases = () => {
-  const [compras, setCompras] = React.useState(db.compras.getAll());
+  const [compras, setCompras] = React.useState<Compra[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingCompra, setEditingCompra] = React.useState<any>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await db.compras.getAll();
+      setCompras(Array.isArray(data) ? data : []);
+    } catch (err) {
+      showError("Erro ao carregar compras.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   const refresh = () => {
-    setCompras(db.compras.getAll());
+    loadData();
     setIsModalOpen(false);
     setEditingCompra(null);
   };
@@ -78,9 +97,6 @@ const Purchases = () => {
           const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
           const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
 
-          // Tenta encontrar vínculo automático pelo código do fornecedor
-          const cd_produto_vinculado = db.mappings.get(1, cProd); // 1 é placeholder para fornecedor
-
           itens.push({
             codigo_fornecedor: cProd,
             nome_fornecedor: xProd,
@@ -90,7 +106,6 @@ const Purchases = () => {
             subtotal: vProd,
             margem: 40, // Sugestão padrão
             valor_venda: vUnCom * 1.4,
-            cd_produto: cd_produto_vinculado || undefined
           });
         }
 
@@ -123,10 +138,10 @@ const Purchases = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm("Deseja excluir este registro de compra?")) {
-      db.compras.delete(id);
-      refresh();
+      await db.compras.delete(id);
+      loadData();
     }
   };
 
@@ -173,7 +188,12 @@ const Purchases = () => {
           </div>
         </div>
 
-        {compras.length === 0 ? (
+        {isLoading ? (
+          <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
+            <Loader2 className="animate-spin" size={40} />
+            <p className="font-bold">Carregando compras...</p>
+          </div>
+        ) : compras.length === 0 ? (
           <Card className="border-none shadow-sm p-12 flex flex-col items-center justify-center text-center bg-white">
             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
               <FileCode className="text-slate-300" size={40} />
