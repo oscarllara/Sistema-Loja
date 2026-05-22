@@ -11,7 +11,9 @@ import {
   Minus, 
   History,
   Loader2,
-  FilterX
+  FilterX,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +36,7 @@ import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
 import FinancialForm from '@/components/FinancialForm';
 import PrintPreview from '@/components/PrintPreview';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { LancamentoFinanceiro, ContaBancaria } from '@/types/database';
 
 const DailyCash = () => {
@@ -42,12 +44,14 @@ const DailyCash = () => {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
   const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
+  const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
   const [filterType, setFilterType] = React.useState<'All' | 'R' | 'P'>('All');
   
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [editingEntry, setEditingEntry] = React.useState<LancamentoFinanceiro | undefined>(undefined);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -69,6 +73,23 @@ const DailyCash = () => {
   React.useEffect(() => {
     loadData();
   }, [loadData, refreshKey]);
+
+  const handleDelete = async (id: number) => {
+    if (confirm("Deseja realmente excluir este lançamento? Esta ação não pode ser desfeita.")) {
+      try {
+        await db.financeiro.delete(id);
+        showSuccess("Lançamento excluído com sucesso!");
+        setRefreshKey(k => k + 1);
+      } catch (err) {
+        showError("Erro ao excluir lançamento.");
+      }
+    }
+  };
+
+  const handleEdit = (entry: LancamentoFinanceiro) => {
+    setEditingEntry(entry);
+    setIsEditOpen(true);
+  };
 
   // Cálculos baseados nos dados carregados
   const movDia = lancamentos.filter(l => 
@@ -228,14 +249,15 @@ const DailyCash = () => {
                     <TableHead className="text-right">Entrada</TableHead>
                     <TableHead className="text-right">Saída</TableHead>
                     <TableHead className="text-right">Saldo Acum.</TableHead>
+                    <TableHead className="text-right w-24">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredExtrato.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhuma movimentação encontrada.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-20 text-slate-400">Nenhuma movimentação encontrada.</TableCell></TableRow>
                   ) : (
                     filteredExtrato.map((item, i) => (
-                      <TableRow key={i} className={cn(item.tipo === 'R' ? "hover:bg-emerald-50/30" : "hover:bg-rose-50/30")}>
+                      <TableRow key={i} className={cn(item.tipo === 'R' ? "hover:bg-emerald-50/30" : "hover:bg-rose-50/30", "group")}>
                         <TableCell className="text-[10px] font-mono text-slate-400">
                           {item.data_pagamento ? new Date(item.data_pagamento).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
                         </TableCell>
@@ -246,6 +268,16 @@ const DailyCash = () => {
                         <TableCell className="text-right text-xs font-bold text-emerald-600">{item.tipo === 'R' ? item.valor.toFixed(2) : '0,00'}</TableCell>
                         <TableCell className="text-right text-xs font-bold text-rose-600">{item.tipo === 'P' ? item.valor.toFixed(2) : '0,00'}</TableCell>
                         <TableCell className="text-right text-xs font-bold text-slate-900">{item.atual.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600" onClick={() => handleEdit(item)}>
+                              <Edit size={14} />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-600" onClick={() => handleDelete(item.cd_lancamento)}>
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -254,6 +286,18 @@ const DailyCash = () => {
             </Card>
           </>
         )}
+
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar Lançamento</DialogTitle></DialogHeader>
+            {editingEntry && (
+              <FinancialForm 
+                entry={editingEntry} 
+                onSuccess={() => { setIsEditOpen(false); setRefreshKey(k => k+1); }} 
+              />
+            )}
+          </DialogContent>
+        </Dialog>
 
         <PrintPreview 
           isOpen={isPrintOpen} 

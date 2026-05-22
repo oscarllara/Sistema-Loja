@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
-import { ContaBancaria } from '@/types/database';
+import { ContaBancaria, LancamentoFinanceiro } from '@/types/database';
 import { Loader2, Info } from 'lucide-react';
 
 const financialSchema = z.object({
@@ -30,15 +30,36 @@ type FinancialFormValues = z.infer<typeof financialSchema>;
 interface FinancialFormProps {
   onSuccess: () => void;
   defaultType?: 'R' | 'P';
+  entry?: LancamentoFinanceiro;
 }
 
-const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => {
+const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormProps) => {
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [isLoadingContas, setIsLoadingContas] = React.useState(true);
   
+  const formatCurrency = (value: string | number) => {
+    const val = typeof value === 'number' ? (value * 100).toString() : value.toString();
+    const digits = val.replace(/\D/g, "");
+    const number = parseInt(digits) / 100;
+    if (isNaN(number)) return "0,00";
+    return new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number);
+  };
+
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FinancialFormValues>({
     resolver: zodResolver(financialSchema),
-    defaultValues: {
+    defaultValues: entry ? {
+      tipo: entry.tipo,
+      descricao: entry.descricao,
+      valor: formatCurrency(entry.valor),
+      data_vencimento: (entry.data_pagamento || entry.data_vencimento).split('T')[0],
+      categoria: entry.categoria,
+      cd_account: entry.cd_conta?.toString() || "",
+      status: entry.status === 'Pago' ? 'Pago' : 'Pendente',
+      is_non_operational: entry.is_non_operational || false
+    } : {
       tipo: defaultType,
       status: 'Pago',
       data_vencimento: new Date().toISOString().split('T')[0],
@@ -76,16 +97,6 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
     });
   };
 
-  const formatCurrency = (value: string) => {
-    const digits = value.replace(/\D/g, "");
-    const number = parseInt(digits) / 100;
-    if (isNaN(number)) return "0,00";
-    return new Intl.NumberFormat("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(number);
-  };
-
   const handleDescricaoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setValue("descricao", toTitleCase(e.target.value));
   };
@@ -103,20 +114,26 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
         throw new Error("Selecione uma conta para o lançamento pago");
       }
 
-      await db.financeiro.add({
+      const payload = {
         tipo: data.tipo,
         descricao: data.descricao,
         valor: valorNum,
         data_vencimento: data.data_vencimento,
-        data_pagamento: data.status === 'Pago' ? new Date().toISOString() : undefined,
+        data_pagamento: data.status === 'Pago' ? new Date(data.data_vencimento).toISOString() : undefined,
         status: data.status,
         categoria: data.categoria,
         cd_conta: data.status === 'Pago' ? Number(data.cd_account) : undefined,
-        meio_pagamento: 'Dinheiro',
+        meio_pagamento: entry?.meio_pagamento || 'Dinheiro',
         is_non_operational: data.is_non_operational
-      });
+      };
 
-      showSuccess("Lançamento realizado com sucesso!");
+      if (entry) {
+        await db.financeiro.update(entry.cd_lancamento, payload);
+        showSuccess("Lançamento atualizado com sucesso!");
+      } else {
+        await db.financeiro.add(payload);
+        showSuccess("Lançamento realizado com sucesso!");
+      }
       onSuccess();
     } catch (err: any) {
       showError(err.message);
@@ -222,7 +239,7 @@ const FinancialForm = ({ onSuccess, defaultType = 'P' }: FinancialFormProps) => 
       </div>
 
       <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100">
-        Salvar Lançamento
+        {entry ? "Salvar Alterações" : "Salvar Lançamento"}
       </Button>
     </form>
   );

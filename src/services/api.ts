@@ -130,6 +130,14 @@ export const db = {
       const { error } = await supabase.from('financeiro').insert([l]);
       if (error) throw error;
     },
+    update: async (id: number, data: any) => {
+      const { error } = await supabase.from('financeiro').update(data).eq('cd_lancamento', id);
+      if (error) throw error;
+    },
+    delete: async (id: number) => {
+      const { error } = await supabase.from('financeiro').delete().eq('cd_lancamento', id);
+      if (error) throw error;
+    },
     baixar: async (id: number, cd_conta: number, valor?: number, meio?: string) => {
       const { data: lanc, error: lError } = await supabase.from('financeiro').select('*').eq('cd_lancamento', id).single();
       if (lError) throw lError;
