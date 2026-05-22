@@ -13,7 +13,8 @@ import {
   Contact2,
   Users2,
   Truck,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -40,6 +41,7 @@ import { Cliente } from '@/types/database';
 import ClientForm from '@/components/ClientForm';
 import ClientDetails from '@/components/ClientDetails';
 import { cn } from '@/lib/utils';
+import { showError } from '@/utils/toast';
 
 const Registrations = () => {
   const [entities, setEntities] = React.useState<Cliente[]>([]);
@@ -49,16 +51,29 @@ const Registrations = () => {
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
   const [editingEntity, setEditingEntity] = React.useState<Cliente | undefined>(undefined);
   const [selectedEntity, setSelectedEntity] = React.useState<Cliente | undefined>(undefined);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const loadData = React.useCallback(() => {
-    setEntities(db.clientes.getAll() || []);
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await db.clientes.getAll();
+      setEntities(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Erro ao carregar cadastros:", err);
+      showError("Não foi possível carregar os cadastros.");
+      setEntities([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   React.useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const filteredEntities = entities.filter(e => {
+  const filteredEntities = (Array.isArray(entities) ? entities : []).filter(e => {
+    if (!e || !e.nome) return false;
+    
     const matchesSearch = e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (e.cpf_cnpj && e.cpf_cnpj.includes(searchTerm));
     
@@ -95,10 +110,14 @@ const Registrations = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm("Tem certeza que deseja excluir este registro?")) {
-      db.clientes.delete(id);
-      loadData();
+      try {
+        await db.clientes.delete(id);
+        loadData();
+      } catch (e) {
+        showError("Erro ao excluir registro.");
+      }
     }
   };
 
@@ -178,7 +197,16 @@ const Registrations = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEntities.length === 0 ? (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-2 text-slate-400">
+                        <Loader2 className="animate-spin" />
+                        <p className="text-xs font-bold">Carregando cadastros...</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredEntities.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12 text-slate-400">Nenhum registro encontrado.</TableCell>
                   </TableRow>
