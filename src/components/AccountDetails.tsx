@@ -4,10 +4,10 @@ import React from 'react';
 import { 
   ArrowUpCircle, 
   ArrowDownCircle, 
-  Calendar,
   Search,
   Info,
-  Filter
+  Filter,
+  Loader2
 } from 'lucide-react';
 import { 
   Table, 
@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { db } from '@/services/api';
 import { LancamentoFinanceiro, ContaBancaria } from '@/types/database';
 import { showSuccess } from '@/utils/toast';
-import { cn } from '@/lib/utils';
 
 interface AccountDetailsProps {
   account: ContaBancaria;
@@ -33,9 +32,37 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [startDate, setStartDate] = React.useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = React.useState(new Date().toISOString().split('T')[0]);
-  
-  const allAccounts = db.contas.getAll();
-  const allLancamentos = db.financeiro.getAll().filter(l => l.cd_conta === account.cd_conta && l.status === 'Pago');
+  const [allLancamentos, setAllLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
+  const [allAccounts, setAllAccounts] = React.useState<ContaBancaria[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [lData, aData] = await Promise.all([
+        db.financeiro.getAll(),
+        db.contas.getAll()
+      ]);
+      // Filtra apenas os pagos desta conta específica
+      setAllLancamentos(lData.filter(l => l.cd_conta === account.cd_conta && l.status === 'Pago'));
+      setAllAccounts(aData);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [account.cd_conta]);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  if (isLoading) {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-2">
+        <Loader2 className="animate-spin" />
+        <p className="text-sm font-bold">Carregando extrato...</p>
+      </div>
+    );
+  }
 
   // 1. Calcular Saldo Anterior ao Período (Saldo Inicial + Movimentações antes da data inicial)
   const saldoAnteriorAoPeriodo = allLancamentos
@@ -47,13 +74,14 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
     const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
     const matchesDate = data >= startDate && data <= endDate;
     const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         l.categoria.toLowerCase().includes(searchTerm.toLowerCase());
+                         (l.categoria || "").toLowerCase().includes(searchTerm.toLowerCase());
     return matchesDate && matchesSearch;
   }).sort((a, b) => new Date(b.data_pagamento || b.data_vencimento).getTime() - new Date(a.data_pagamento || a.data_vencimento).getTime());
 
-  const handleAccountChange = (lancamentoId: number, newAccountId: number) => {
-    db.financeiro.changeAccount(lancamentoId, newAccountId);
+  const handleAccountChange = async (lancamentoId: number, newAccountId: number) => {
+    await db.financeiro.changeAccount(lancamentoId, newAccountId);
     showSuccess("Lançamento movido para outro caixa!");
+    loadData();
     onUpdate();
   };
 
@@ -61,61 +89,16 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
   const totalSaidas = filtered.filter(l => l.tipo === 'P').reduce((acc, curr) => acc + curr.valor, 0);
   const saldoFinalPeriodo = saldoAnteriorAoPeriodo + totalEntradas - totalSaidas;
 
-  const setToday = () => {
-    const today = new Date().toISOString().split('T')[0];
-    setStartDate(today);
-    setEndDate(today);
-  };
-
-  const setMonth = () => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-    setStartDate(firstDay);
-    setEndDate(lastDay);
-  };
-
   return (
     <div className="space-y-6">
-      {/* Filtros de Período */}
       <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Início</label>
-          <Input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)} 
-            className="h-10 w-44 bg-white" 
-          />
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 w-44 bg-white" />
         </div>
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Fim</label>
-          <Input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)} 
-            className="h-10 w-44 bg-white" 
-          />
-        </div>
-        <div className="flex gap-2 h-10">
-          <Button 
-            type="button"
-            variant="outline" 
-            size="sm" 
-            onClick={setToday} 
-            className="h-full px-4 bg-white hover:bg-indigo-50 hover:text-indigo-600 border-slate-200"
-          >
-            Hoje
-          </Button>
-          <Button 
-            type="button"
-            variant="outline" 
-            size="sm" 
-            onClick={setMonth} 
-            className="h-full px-4 bg-white hover:bg-indigo-50 hover:text-indigo-600 border-slate-200"
-          >
-            Este Mês
-          </Button>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 w-44 bg-white" />
         </div>
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -128,31 +111,23 @@ const AccountDetails = ({ account, onUpdate }: AccountDetailsProps) => {
         </div>
       </div>
 
-      {/* Cards de Resumo do Período */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
           <p className="text-[10px] font-bold text-slate-500 uppercase">Saldo Anterior</p>
           <p className="text-lg font-bold text-slate-700">R$ {saldoAnteriorAoPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          <p className="text-[9px] text-slate-400">Até {new Date(startDate).toLocaleDateString()}</p>
         </div>
         <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 shadow-sm">
-          <p className="text-[10px] font-bold text-emerald-600 uppercase">Entradas no Período</p>
+          <p className="text-[10px] font-bold text-emerald-600 uppercase">Entradas</p>
           <p className="text-lg font-bold text-emerald-700">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
         <div className="p-4 bg-rose-50 rounded-xl border border-rose-100 shadow-sm">
-          <p className="text-[10px] font-bold text-rose-600 uppercase">Saídas no Período</p>
+          <p className="text-[10px] font-bold text-rose-600 uppercase">Saídas</p>
           <p className="text-lg font-bold text-rose-700">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
         <div className="p-4 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-100">
           <p className="text-[10px] font-bold text-indigo-100 uppercase">Saldo Final</p>
           <p className="text-lg font-bold">R$ {saldoFinalPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          <p className="text-[9px] text-indigo-200">Em {new Date(endDate).toLocaleDateString()}</p>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg text-xs border border-blue-100">
-        <Info size={16} />
-        <span>A matemática do período: Saldo Anterior + Entradas - Saídas = Saldo Final do Período.</span>
       </div>
 
       <div className="border rounded-xl overflow-hidden bg-white">

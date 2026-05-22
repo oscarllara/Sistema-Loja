@@ -10,7 +10,8 @@ import {
   Plus, 
   Minus, 
   History,
-  Loader2
+  Loader2,
+  FilterX
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ const DailyCash = () => {
   const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
   const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
+  const [filterType, setFilterType] = React.useState<'All' | 'R' | 'P'>('All');
   
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
@@ -107,6 +109,9 @@ const DailyCash = () => {
     return { ...l, anterior, atual: runningBalance, contaNome };
   });
 
+  // Aplica o filtro visual (Entrada/Saída)
+  const filteredExtrato = filterType === 'All' ? extrato : extrato.filter(i => i.tipo === filterType);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -168,14 +173,53 @@ const DailyCash = () => {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <SummaryCard title="Saldo Anterior" value={saldoAnterior} color="text-slate-600" />
-              <SummaryCard title="Entradas" value={totalEntradas} color="text-emerald-600" />
-              <SummaryCard title="Saídas" value={totalSaidas} color="text-rose-600" />
-              <SummaryCard title="Movimentado" value={saldoDia} color={saldoDia >= 0 ? "text-indigo-600" : "text-rose-600"} />
-              <SummaryCard title="Saldo do Dia" value={saldoFinal} color="text-indigo-700" isHighlight />
+              <SummaryCard 
+                title="Saldo Anterior" 
+                value={saldoAnterior} 
+                color="text-slate-600" 
+                onClick={() => setFilterType('All')}
+                isActive={filterType === 'All'}
+              />
+              <SummaryCard 
+                title="Entradas" 
+                value={totalEntradas} 
+                color="text-emerald-600" 
+                onClick={() => setFilterType('R')}
+                isActive={filterType === 'R'}
+              />
+              <SummaryCard 
+                title="Saídas" 
+                value={totalSaidas} 
+                color="text-rose-600" 
+                onClick={() => setFilterType('P')}
+                isActive={filterType === 'P'}
+              />
+              <SummaryCard 
+                title="Movimentado" 
+                value={saldoDia} 
+                color={saldoDia >= 0 ? "text-indigo-600" : "text-rose-600"} 
+                onClick={() => setFilterType('All')}
+              />
+              <SummaryCard 
+                title="Saldo do Dia" 
+                value={saldoFinal} 
+                color="text-indigo-700" 
+                isHighlight 
+                onClick={() => setFilterType('All')}
+              />
             </div>
 
             <Card className="border-none shadow-sm overflow-hidden bg-white">
+              <div className="p-3 bg-slate-50 border-b flex items-center justify-between">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                  {filterType === 'All' ? 'Extrato Completo' : filterType === 'R' ? 'Apenas Entradas' : 'Apenas Saídas'}
+                </h3>
+                {filterType !== 'All' && (
+                  <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-indigo-600 font-bold" onClick={() => setFilterType('All')}>
+                    <FilterX size={12} /> Limpar Filtro
+                  </Button>
+                )}
+              </div>
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
@@ -187,11 +231,11 @@ const DailyCash = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {extrato.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhuma movimentação registrada.</TableCell></TableRow>
+                  {filteredExtrato.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">Nenhuma movimentação encontrada.</TableCell></TableRow>
                   ) : (
-                    extrato.map((item, i) => (
-                      <TableRow key={i}>
+                    filteredExtrato.map((item, i) => (
+                      <TableRow key={i} className={cn(item.tipo === 'R' ? "hover:bg-emerald-50/30" : "hover:bg-rose-50/30")}>
                         <TableCell className="text-[10px] font-mono text-slate-400">
                           {item.data_pagamento ? new Date(item.data_pagamento).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
                         </TableCell>
@@ -222,8 +266,15 @@ const DailyCash = () => {
   );
 };
 
-const SummaryCard = ({ title, value, color, isHighlight }: any) => (
-  <Card className={cn("border-none shadow-sm", isHighlight && "bg-indigo-600 text-white")}>
+const SummaryCard = ({ title, value, color, isHighlight, onClick, isActive }: any) => (
+  <Card 
+    className={cn(
+      "border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02]", 
+      isHighlight ? "bg-indigo-600 text-white" : "bg-white",
+      isActive && !isHighlight && "ring-2 ring-indigo-500 ring-offset-2"
+    )}
+    onClick={onClick}
+  >
     <CardContent className="p-4">
       <p className={cn("text-[10px] font-bold uppercase tracking-wider mb-1", isHighlight ? "text-indigo-100" : "text-slate-400")}>{title}</p>
       <p className={cn("text-lg font-black", isHighlight ? "text-white" : color)}>R$ {value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
