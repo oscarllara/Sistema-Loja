@@ -8,22 +8,13 @@ import {
   User, 
   MapPin, 
   Briefcase, 
-  DollarSign, 
   ShieldCheck, 
-  Plus, 
-  Trash2,
-  Search,
-  Globe,
-  Users2,
-  Facebook,
-  Instagram,
-  Linkedin,
-  UserCheck,
-  Building2,
-  Users,
-  Contact2,
-  Truck,
-  Lock,
+  UserCheck, 
+  Building2, 
+  Users, 
+  Contact2, 
+  Truck, 
+  Lock, 
   Shield
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -33,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Cliente, TipoPessoa, TipoEntidade, Permissoes } from '@/types/database';
+import { Cliente, TipoPessoa, Permissoes } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
@@ -81,22 +72,11 @@ const clientSchema = z.object({
   tel2: z.string().optional(),
   cel: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
-  contatos_responsaveis: z.array(z.object({
-    nome: z.string(),
-    cargo: z.string(),
-    telefone: z.string().optional(),
-    email: z.string().optional(),
-  })).optional(),
-  quadro_societario: z.array(z.object({
-    nome: z.string(),
-    cpf: z.string(),
-  })).optional(),
   limite: z.string().optional(),
   despesa_fixa: z.string().optional(),
   despesa_alimentacao: z.string().optional(),
   despesa_aluguel: z.string().optional(),
   obs1: z.string().optional(),
-  // Autenticação
   usuario: z.string().optional(),
   senha: z.string().optional(),
   permissoes: z.object({
@@ -108,6 +88,8 @@ const clientSchema = z.object({
     financial: z.boolean().default(false),
     reports: z.boolean().default(false),
     settings: z.boolean().default(false),
+    rentals: z.boolean().default(false),
+    calculator: z.boolean().default(false),
   }).optional(),
 });
 
@@ -132,6 +114,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       despesa_alimentacao: client.despesa_alimentacao ? formatCurrency(client.despesa_alimentacao.toString()) : "",
       despesa_aluguel: client.despesa_aluguel ? formatCurrency(client.despesa_aluguel.toString()) : "",
       dia_pagamento: client.dia_pagamento?.toString() || "",
+      tipo_pessoa: client.cpf_cnpj?.length === 14 ? 'F' : 'J',
       permissoes: client.permissoes || {
         dashboard: true,
         pos: true,
@@ -141,14 +124,14 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         financial: false,
         reports: false,
         settings: false,
+        rentals: false,
+        calculator: false,
       }
     } : {
       tipo_entidade: 'C',
       is_funcionario: false,
       tipo_pessoa: 'F',
       nome: "",
-      contatos_responsaveis: [],
-      quadro_societario: [],
       permissoes: {
         dashboard: true,
         pos: true,
@@ -158,18 +141,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         financial: false,
         reports: false,
         settings: false,
+        rentals: false,
+        calculator: false,
       }
     }
-  });
-
-  const { fields: contactFields, append: appendContact, remove: removeContact } = useFieldArray({
-    control,
-    name: "contatos_responsaveis"
-  });
-
-  const { fields: socioFields, append: appendSocio, remove: removeSocio } = useFieldArray({
-    control,
-    name: "quadro_societario"
   });
 
   const tipoPessoa = watch("tipo_pessoa");
@@ -256,10 +231,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const onSubmit = async (data: ClientFormValues) => {
     setIsSaving(true);
     try {
+      // Remove campos que não existem na tabela do banco de dados
+      const { tipo_pessoa, ...rest } = data;
+      
       const payload = {
-        ...data,
-        cd_clientes: client?.cd_clientes || Date.now(),
-        data: client?.data || new Date().toISOString(),
+        ...rest,
+        nome: data.nome.toUpperCase(),
         salario: parseCurrencyToNumber(data.salario || ""),
         limite: parseCurrencyToNumber(data.limite || ""),
         despesa_fixa: parseCurrencyToNumber(data.despesa_fixa || ""),
@@ -276,8 +253,9 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         showSuccess("Cadastro realizado com sucesso!");
       }
       onSuccess();
-    } catch (err) {
-      showError("Erro ao salvar cadastro.");
+    } catch (err: any) {
+      console.error("Erro ao salvar cadastro:", err);
+      showError(err.message || "Erro ao salvar cadastro.");
     } finally {
       setIsSaving(false);
     }
@@ -317,7 +295,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           <div className="w-px h-12 bg-slate-200" />
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Pessoa</Label>
-            <RadioGroup defaultValue={tipoPessoa} onValueChange={(v) => { setValue("tipo_pessoa", v as TipoPessoa); setValue("cpf_cnpj", ""); }} className="flex gap-4 h-10 items-center">
+            <RadioGroup value={tipoPessoa} onValueChange={(v) => { setValue("tipo_pessoa", v as TipoPessoa); setValue("cpf_cnpj", ""); }} className="flex gap-4 h-10 items-center">
               <div className="flex items-center space-x-2"><RadioGroupItem value="F" id="p-f" /><Label htmlFor="p-f" className="text-sm">Física</Label></div>
               <div className="flex items-center space-x-2"><RadioGroupItem value="J" id="p-j" /><Label htmlFor="p-j" className="text-sm">Jurídica</Label></div>
             </RadioGroup>
