@@ -198,6 +198,14 @@ export const db = {
     add: async (p: any) => {
       const { error } = await supabase.from('patrimonio').insert([p]);
       if (error) throw error;
+    },
+    update: async (id: number, data: any) => {
+      const { error } = await supabase.from('patrimonio').update(data).eq('cd_patrimonio', id);
+      if (error) throw error;
+    },
+    delete: async (id: number) => {
+      const { error } = await supabase.from('patrimonio').delete().eq('cd_patrimonio', id);
+      if (error) throw error;
     }
   },
   vendas: {

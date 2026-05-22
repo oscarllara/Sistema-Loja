@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { Loader2 } from 'lucide-react';
+import { Patrimonio } from '@/types/database';
 
 const patrimonySchema = z.object({
   descricao: z.string().min(3, "Descrição obrigatória"),
@@ -20,20 +21,17 @@ const patrimonySchema = z.object({
 
 type PatrimonyFormValues = z.infer<typeof patrimonySchema>;
 
-const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
+interface PatrimonyFormProps {
+  patrimony?: Patrimonio;
+  onSuccess: () => void;
+}
+
+const PatrimonyForm = ({ patrimony, onSuccess }: PatrimonyFormProps) => {
   const [isSaving, setIsSaving] = React.useState(false);
   
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<PatrimonyFormValues>({
-    resolver: zodResolver(patrimonySchema),
-    defaultValues: {
-      tipo: 'Equipamento',
-      proprietário: 'Empresa',
-      valor: "0,00"
-    }
-  });
-
-  const formatCurrency = (value: string) => {
-    const digits = value.replace(/\D/g, "");
+  const formatCurrency = (value: string | number) => {
+    const val = typeof value === 'number' ? (value * 100).toString() : value.toString();
+    const digits = val.replace(/\D/g, "");
     const number = parseInt(digits) / 100;
     if (isNaN(number)) return "0,00";
     return new Intl.NumberFormat("pt-BR", {
@@ -42,23 +40,43 @@ const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
     }).format(number);
   };
 
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<PatrimonyFormValues>({
+    resolver: zodResolver(patrimonySchema),
+    defaultValues: patrimony ? {
+      descricao: patrimony.descricao,
+      valor: formatCurrency(patrimony.valor),
+      tipo: patrimony.tipo as any,
+      proprietário: patrimony.proprietário as any
+    } : {
+      tipo: 'Equipamento',
+      proprietário: 'Empresa',
+      valor: "0,00"
+    }
+  });
+
   const onSubmit = async (data: PatrimonyFormValues) => {
     setIsSaving(true);
     try {
       const valorNum = parseFloat(data.valor.replace(/\./g, "").replace(",", "."));
       
-      await db.patrimonio.add({
+      const payload = {
         descricao: data.descricao.toUpperCase(),
         valor: valorNum,
         tipo: data.tipo,
         proprietário: data.proprietário
-      });
+      };
 
-      showSuccess("Patrimônio registrado com sucesso!");
+      if (patrimony) {
+        await db.patrimonio.update(patrimony.cd_patrimonio, payload);
+        showSuccess("Patrimônio atualizado com sucesso!");
+      } else {
+        await db.patrimonio.add(payload);
+        showSuccess("Patrimônio registrado com sucesso!");
+      }
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar patrimônio:", err);
-      showError("Erro ao registrar patrimônio. Verifique se a tabela existe no banco.");
+      showError("Erro ao salvar patrimônio.");
     } finally {
       setIsSaving(false);
     }
@@ -107,7 +125,7 @@ const PatrimonyForm = ({ onSuccess }: { onSuccess: () => void }) => {
       </div>
 
       <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold" disabled={isSaving}>
-        {isSaving ? <Loader2 className="animate-spin mr-2" /> : "Registrar Patrimônio"}
+        {isSaving ? <Loader2 className="animate-spin mr-2" /> : (patrimony ? "Salvar Alterações" : "Registrar Patrimônio")}
       </Button>
     </form>
   );

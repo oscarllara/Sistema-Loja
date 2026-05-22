@@ -20,7 +20,9 @@ import {
   Car,
   FileText,
   Loader2,
-  Info
+  Info,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,6 +73,7 @@ const Financial = () => {
   
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
+  const [editingPatrimony, setEditingPatrimony] = React.useState<Patrimonio | undefined>(undefined);
   
   const [isCompensateOpen, setIsCompensateOpen] = React.useState(false);
   const [selectedCheque, setSelectedCheque] = React.useState<LancamentoFinanceiro | null>(null);
@@ -145,6 +148,18 @@ const Financial = () => {
     }
   };
 
+  const handleDeletePatrimony = async (id: number) => {
+    if (confirm("Deseja realmente excluir este bem do patrimônio?")) {
+      try {
+        await db.patrimonio.delete(id);
+        showSuccess("Patrimônio excluído!");
+        loadData();
+      } catch (e) {
+        showError("Erro ao excluir patrimônio.");
+      }
+    }
+  };
+
   const filterData = (tipo: 'R' | 'P') => {
     return (lancamentos || []).filter(l => {
       if (!l) return false;
@@ -209,15 +224,15 @@ const Financial = () => {
           </div>
           <div className="flex gap-2">
             {activeTab === 'patrimony' ? (
-              <Dialog open={isPatrimonyOpen} onOpenChange={setIsPatrimonyOpen}>
+              <Dialog open={isPatrimonyOpen} onOpenChange={(open) => { setIsPatrimonyOpen(open); if(!open) setEditingPatrimony(undefined); }}>
                 <DialogTrigger asChild>
-                  <Button className="bg-amber-600 hover:bg-amber-700 rounded-xl gap-2 shadow-lg shadow-amber-100">
+                  <Button onClick={() => setEditingPatrimony(undefined)} className="bg-amber-600 hover:bg-amber-700 rounded-xl gap-2 shadow-lg shadow-amber-100">
                     <Plus size={20} /> Novo Patrimônio
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-md">
-                  <DialogHeader><DialogTitle>Cadastrar Bem / Patrimônio</DialogTitle></DialogHeader>
-                  <PatrimonyForm onSuccess={() => { setIsPatrimonyOpen(false); loadData(); }} />
+                  <DialogHeader><DialogTitle>{editingPatrimony ? "Editar Patrimônio" : "Cadastrar Bem / Patrimônio"}</DialogTitle></DialogHeader>
+                  <PatrimonyForm patrimony={editingPatrimony} onSuccess={() => { setIsPatrimonyOpen(false); loadData(); }} />
                 </DialogContent>
               </Dialog>
             ) : activeTab === 'accounts' ? (
@@ -410,7 +425,7 @@ const Financial = () => {
 
             <div className="grid gap-4 md:grid-cols-3">
               {filteredPatrimony.map((item) => (
-                <Card key={item.cd_patrimonio} className="border-none shadow-sm hover:shadow-md transition-all">
+                <Card key={item.cd_patrimonio} className="border-none shadow-sm hover:shadow-md transition-all group relative">
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div className={cn(
@@ -425,7 +440,17 @@ const Financial = () => {
                          item.tipo === 'Equipamento' ? <Briefcase size={20} /> : 
                          <Layers size={20} />}
                       </div>
-                      <Badge className="bg-slate-100 text-slate-600 border-none text-[10px]">{item.proprietário}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-slate-100 text-slate-600 border-none text-[10px]">{item.proprietário}</Badge>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600" onClick={() => { setEditingPatrimony(item); setIsPatrimonyOpen(true); }}>
+                            <Edit size={14} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-600" onClick={() => handleDeletePatrimony(item.cd_patrimonio)}>
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                     <h3 className="font-bold text-slate-900 uppercase text-sm">{item.descricao}</h3>
                     <div className="mt-4 flex items-end justify-between">
