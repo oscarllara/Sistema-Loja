@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { ContaBancaria, LancamentoFinanceiro } from '@/types/database';
-import { Loader2, Info } from 'lucide-react';
+import { Loader2, Info, Clock, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const financialSchema = z.object({
   tipo: z.enum(['R', 'P']),
@@ -85,6 +86,7 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
   }, []);
 
   const tipo = watch("tipo");
+  const status = watch("status");
   const isNonOperational = watch("is_non_operational");
 
   const categorias = tipo === 'R' 
@@ -119,7 +121,7 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
         descricao: data.descricao,
         valor: valorNum,
         data_vencimento: data.data_vencimento,
-        data_pagamento: data.status === 'Pago' ? new Date(data.data_vencimento).toISOString() : undefined,
+        data_pagamento: data.status === 'Pago' ? new Date().toISOString() : undefined,
         status: data.status,
         categoria: data.categoria,
         cd_conta: data.status === 'Pago' ? Number(data.cd_account) : undefined,
@@ -142,42 +144,62 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
         <div className="space-y-2">
-          <Label>Tipo de Lançamento</Label>
-          <RadioGroup 
-            value={tipo}
-            onValueChange={(v) => setValue("tipo", v as 'R' | 'P')}
-            className="flex gap-4"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="R" id="tipo-r" />
-              <Label htmlFor="tipo-r" className="text-emerald-600 font-bold cursor-pointer">Receita (+)</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="P" id="tipo-p" />
-              <Label htmlFor="tipo-p" className="text-rose-600 font-bold cursor-pointer">Despesa (-)</Label>
-            </div>
-          </RadioGroup>
+          <Label className="text-[10px] font-bold uppercase text-slate-500">Tipo de Lançamento</Label>
+          <div className="flex gap-2">
+            <Button 
+              type="button" 
+              variant={tipo === 'R' ? 'default' : 'outline'} 
+              className={cn("flex-1 gap-2", tipo === 'R' && "bg-emerald-600 hover:bg-emerald-700")}
+              onClick={() => setValue("tipo", 'R')}
+            >
+              Receita (+)
+            </Button>
+            <Button 
+              type="button" 
+              variant={tipo === 'P' ? 'default' : 'outline'} 
+              className={cn("flex-1 gap-2", tipo === 'P' && "bg-rose-600 hover:bg-rose-700")}
+              onClick={() => setValue("tipo", 'P')}
+            >
+              Despesa (-)
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200">
-          <Checkbox 
-            id="non-op" 
-            checked={isNonOperational}
-            onCheckedChange={(checked) => setValue("is_non_operational", !!checked)}
-          />
-          <Label htmlFor="non-op" className="text-xs font-bold text-slate-600 cursor-pointer flex items-center gap-1">
-            Não Operacional <Info size={12} className="text-slate-400" />
-          </Label>
+        <div className="space-y-2">
+          <Label className="text-[10px] font-bold uppercase text-slate-500">Situação Atual</Label>
+          <div className="flex gap-2">
+            <Button 
+              type="button" 
+              variant={status === 'Pendente' ? 'default' : 'outline'} 
+              className={cn("flex-1 gap-2", status === 'Pendente' && "bg-amber-500 hover:bg-amber-600")}
+              onClick={() => setValue("status", 'Pendente')}
+            >
+              <Clock size={16} /> Pendente
+            </Button>
+            <Button 
+              type="button" 
+              variant={status === 'Pago' ? 'default' : 'outline'} 
+              className={cn("flex-1 gap-2", status === 'Pago' && "bg-indigo-600 hover:bg-indigo-700")}
+              onClick={() => setValue("status", 'Pago')}
+            >
+              <CheckCircle2 size={16} /> Já Pago
+            </Button>
+          </div>
         </div>
       </div>
 
-      {isNonOperational && (
-        <div className="p-3 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-medium border border-amber-100">
-          Este lançamento não afetará os indicadores de faturamento real e margem de lucro nos relatórios.
-        </div>
-      )}
+      <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200">
+        <Checkbox 
+          id="non-op" 
+          checked={isNonOperational}
+          onCheckedChange={(checked) => setValue("is_non_operational", !!checked)}
+        />
+        <Label htmlFor="non-op" className="text-xs font-bold text-slate-600 cursor-pointer flex items-center gap-1">
+          Lançamento Não Operacional <Info size={12} className="text-slate-400" />
+        </Label>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -185,7 +207,7 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
           <Input 
             {...register("descricao")} 
             onChange={handleDescricaoChange}
-            placeholder="Ex: Aluguel Mensal" 
+            placeholder="Ex: Compra de Material, Aluguel..." 
           />
         </div>
         <div className="space-y-2">
@@ -210,36 +232,38 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
           />
         </div>
         <div className="space-y-2">
-          <Label>Data</Label>
+          <Label>{status === 'Pago' ? 'Data do Pagamento' : 'Data de Vencimento'}</Label>
           <Input type="date" {...register("data_vencimento")} />
         </div>
       </div>
 
-      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-        <div className="space-y-2">
-          <Label>Conta / Caixa de Destino</Label>
-          {isLoadingContas ? (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Loader2 className="animate-spin" size={14} /> Carregando contas...
-            </div>
-          ) : (
-            <select 
-              {...register("cd_account")}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Selecione a conta...</option>
-              {(contas || []).map(c => (
-                <option key={c.cd_conta} value={c.cd_conta}>
-                  {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
-                </option>
-              ))}
-            </select>
-          )}
+      {status === 'Pago' && (
+        <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-4 animate-in fade-in slide-in-from-top-2">
+          <div className="space-y-2">
+            <Label className="text-indigo-900 font-bold">Conta / Caixa de Destino</Label>
+            {isLoadingContas ? (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Loader2 className="animate-spin" size={14} /> Carregando contas...
+              </div>
+            ) : (
+              <select 
+                {...register("cd_account")}
+                className="w-full h-10 rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm focus:ring-indigo-500"
+              >
+                <option value="">Selecione a conta...</option>
+                {(contas || []).map(c => (
+                  <option key={c.cd_conta} value={c.cd_conta}>
+                    {c.nome} (Saldo: R$ {c.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100">
-        {entry ? "Salvar Alterações" : "Salvar Lançamento"}
+        {entry ? "Salvar Alterações" : "Cadastrar Lançamento"}
       </Button>
     </form>
   );
