@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { db } from '@/services/api';
+import SyncStatus from './SyncStatus';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
@@ -142,10 +143,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             {isSidebarOpen ? <X /> : <Menu />}
           </Button>
           <div className="flex items-center gap-4 ml-auto">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Sincronizado
-            </div>
+            <SyncStatus />
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</div>

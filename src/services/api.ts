@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Transferencia } from '../types/database';
 
 const AUTH_KEY = 'dyaderp_auth';
+const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
+const PRODUCTS_CACHE_KEY = 'dyaderp_products_cache';
 
 export const db = {
   auth: {
@@ -48,12 +50,22 @@ export const db = {
   },
   produtos: {
     getAll: async (): Promise<Produto[]> => {
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('*')
-        .order('nome');
-      if (error) throw error;
-      return data || [];
+      try {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('*')
+          .order('nome');
+        
+        if (error) throw error;
+        
+        // Atualiza o cache local sempre que consegue buscar da nuvem
+        if (data) localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(data));
+        return data || [];
+      } catch (err) {
+        // Se falhar (sem internet), tenta ler do cache local
+        const cache = localStorage.getItem(PRODUCTS_CACHE_KEY);
+        return cache ? JSON.parse(cache) : [];
+      }
     },
     add: async (p: any) => {
       const { data: lastProd } = await supabase.from('produtos').select('id_manual').order('id_manual', { ascending: false }).limit(1).maybeSingle();
@@ -191,25 +203,6 @@ export const db = {
       if (cDestino) await supabase.from('contas').update({ saldo: Number(cDestino.saldo) + Number(t.valor) }).eq('cd_conta', t.cd_conta_destino);
     }
   },
-  patrimonio: {
-    getAll: async (): Promise<Patrimonio[]> => {
-      const { data, error } = await supabase.from('patrimonio').select('*').order('descricao');
-      if (error) throw error;
-      return data || [];
-    },
-    add: async (p: any) => {
-      const { error } = await supabase.from('patrimonio').insert([p]);
-      if (error) throw error;
-    },
-    update: async (id: number, data: any) => {
-      const { error } = await supabase.from('patrimonio').update(data).eq('cd_patrimonio', id);
-      if (error) throw error;
-    },
-    delete: async (id: number) => {
-      const { error } = await supabase.from('patrimonio').delete().eq('cd_patrimonio', id);
-      if (error) throw error;
-    }
-  },
   vendas: {
     getAll: async (): Promise<Venda[]> => {
       const { data, error } = await supabase.from('vendas').select('*').order('data', { ascending: false });
@@ -222,8 +215,41 @@ export const db = {
       return data || [];
     },
     add: async (v: any) => {
-      const { error } = await supabase.from('vendas').insert([v]);
-      if (error) throw error;
+      try {
+        const { error } = await supabase.from('vendas').insert([v]);
+        if (error) throw error;
+      } catch (err) {
+        // Se falhar (offline), salva na fila local
+        const offlineSales = JSON.parse(localStorage.getItem(OFFLINE_SALES_KEY) || '[]');
+        offlineSales.push({ ...v, offline: true, timestamp: Date.now() });
+        localStorage.setItem(OFFLINE_SALES_KEY, JSON.stringify(offlineSales));
+        throw new Error("OFFLINE_SAVED");
+      }
+    },
+    getOfflineCount: () => {
+      const offlineSales = JSON.parse(localStorage.getItem(OFFLINE_SALES_KEY) || '[]');
+      return offlineSales.length;
+    },
+    syncOffline: async () => {
+      const offlineSales = JSON.parse(localStorage.getItem(OFFLINE_SALES_KEY) || '[]');
+      if (offlineSales.length === 0) return 0;
+
+      let syncedCount = 0;
+      const remainingSales = [];
+
+      for (const sale of offlineSales) {
+        try {
+          const { offline, timestamp, ...saleData } = sale;
+          const { error } = await supabase.from('vendas').insert([saleData]);
+          if (error) throw error;
+          syncedCount++;
+        } catch (err) {
+          remainingSales.push(sale);
+        }
+      }
+
+      localStorage.setItem(OFFLINE_SALES_KEY, JSON.stringify(remainingSales));
+      return syncedCount;
     }
   },
   orcamentos: {

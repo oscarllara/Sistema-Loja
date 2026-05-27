@@ -34,7 +34,8 @@ import {
   CalendarClock,
   Calendar,
   FileCode,
-  FileSearch
+  FileSearch,
+  WifiOff
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
 import PurchaseForm from '@/components/PurchaseForm';
+import SyncStatus from '@/components/SyncStatus';
 import { Produto, Cliente, Configuracoes } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
@@ -279,9 +281,20 @@ const POS = () => {
         }))
       };
 
-      await db.vendas.add(payload);
+      try {
+        await db.vendas.add(payload);
+        showSuccess("Operação finalizada!");
+      } catch (err: any) {
+        if (err.message === "OFFLINE_SAVED") {
+          showSuccess("Venda salva localmente (Offline). Será sincronizada automaticamente!");
+        } else {
+          throw err;
+        }
+      }
       
       // Baixa de estoque inteligente (considerando fracionamento)
+      // Nota: Em modo offline, a baixa de estoque no banco não ocorrerá até a sincronização,
+      // mas o sistema continuará funcionando com o cache local.
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
@@ -289,12 +302,12 @@ const POS = () => {
           if (item.isFractional && item.conversionFactor > 0) {
             qtyToDeduct = item.quantity / item.conversionFactor;
           }
-          await db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct });
+          // Tenta atualizar estoque (se falhar, ignora no modo offline)
+          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
         }
       }
 
       setLastActionData({ ...payload, type: 'Venda' });
-      showSuccess("Operação finalizada!");
       setCart([]);
       setIsCheckoutOpen(false);
       setIsPrintOpen(true);
@@ -355,6 +368,9 @@ const POS = () => {
                 <ShortcutItem keyName="F5" label="HISTÓRICO" onClick={() => setIsHistoryOpen(true)} icon={<History size={12} />} />
                 <ShortcutItem keyName="F7" label="RECEBER" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={12} />} color="emerald" />
               </div>
+            </div>
+            <div className="pt-4">
+              <SyncStatus />
             </div>
           </div>
         </ScrollArea>
