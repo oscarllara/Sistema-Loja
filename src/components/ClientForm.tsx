@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { 
@@ -15,7 +15,8 @@ import {
   Contact2, 
   Truck, 
   Lock, 
-  Shield
+  Shield,
+  Heart
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,51 +35,51 @@ const clientSchema = z.object({
   is_funcionario: z.boolean(),
   tipo_pessoa: z.enum(['F', 'J']),
   nome: z.string().min(3, "Nome/Razão Social obrigatório"),
-  apelido_fantasia: z.string().optional(),
-  cpf_cnpj: z.string().optional(),
-  rg_ie: z.string().optional(),
-  inscricao_municipal: z.string().optional(),
-  site: z.string().optional(),
-  facebook: z.string().optional(),
-  instagram: z.string().optional(),
-  linkedin: z.string().optional(),
-  sexo: z.string().optional(),
-  estado_civil: z.string().optional(),
-  naturalidade: z.string().optional(),
-  profissao: z.string().optional(),
-  data_nascimento: z.string().optional(),
-  filiacao_pai: z.string().optional(),
-  filiacao_mae: z.string().optional(),
-  conjuge_nome: z.string().optional(),
-  conjuge_cpf: z.string().optional(),
-  conjuge_nascimento: z.string().optional(),
-  conjuge_empresa: z.string().optional(),
-  conjuge_telefone: z.string().optional(),
-  conjuge_salario: z.string().optional(),
-  local_trabalho: z.string().optional(),
-  cargo: z.string().optional(),
-  data_admissao: z.string().optional(),
-  salario: z.string().optional(),
-  dia_pagamento: z.string().optional(),
-  cep: z.string().optional(),
-  endereco: z.string().optional(),
-  numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
-  uf: z.string().optional(),
-  referencia: z.string().optional(),
-  tel1: z.string().optional(),
-  tel2: z.string().optional(),
-  cel: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
-  limite: z.string().optional(),
-  despesa_fixa: z.string().optional(),
-  despesa_alimentacao: z.string().optional(),
-  despesa_aluguel: z.string().optional(),
-  obs1: z.string().optional(),
-  usuario: z.string().optional(),
-  senha: z.string().optional(),
+  apelido_fantasia: z.string().optional().nullable(),
+  cpf_cnpj: z.string().optional().nullable(),
+  rg_ie: z.string().optional().nullable(),
+  inscricao_municipal: z.string().optional().nullable(),
+  site: z.string().optional().nullable(),
+  facebook: z.string().optional().nullable(),
+  instagram: z.string().optional().nullable(),
+  linkedin: z.string().optional().nullable(),
+  sexo: z.string().optional().nullable(),
+  estado_civil: z.string().optional().nullable(),
+  naturalidade: z.string().optional().nullable(),
+  profissao: z.string().optional().nullable(),
+  data_nascimento: z.string().optional().nullable(),
+  filiacao_pai: z.string().optional().nullable(),
+  filiacao_mae: z.string().optional().nullable(),
+  conjuge_nome: z.string().optional().nullable(),
+  conjuge_cpf: z.string().optional().nullable(),
+  conjuge_nascimento: z.string().optional().nullable(),
+  conjuge_empresa: z.string().optional().nullable(),
+  conjuge_telefone: z.string().optional().nullable(),
+  conjuge_salario: z.string().optional().nullable(),
+  local_trabalho: z.string().optional().nullable(),
+  cargo: z.string().optional().nullable(),
+  data_admissao: z.string().optional().nullable(),
+  salario: z.string().optional().nullable(),
+  dia_pagamento: z.string().optional().nullable(),
+  cep: z.string().optional().nullable(),
+  endereco: z.string().optional().nullable(),
+  numero: z.string().optional().nullable(),
+  complemento: z.string().optional().nullable(),
+  bairro: z.string().optional().nullable(),
+  cidade: z.string().optional().nullable(),
+  uf: z.string().optional().nullable(),
+  referencia: z.string().optional().nullable(),
+  tel1: z.string().optional().nullable(),
+  tel2: z.string().optional().nullable(),
+  cel: z.string().optional().nullable(),
+  email: z.string().email().optional().or(z.literal("")).nullable(),
+  limite: z.string().optional().nullable(),
+  despesa_fixa: z.string().optional().nullable(),
+  despesa_alimentacao: z.string().optional().nullable(),
+  despesa_aluguel: z.string().optional().nullable(),
+  obs1: z.string().optional().nullable(),
+  usuario: z.string().optional().nullable(),
+  senha: z.string().optional().nullable(),
   permissoes: z.object({
     dashboard: z.boolean().default(true),
     pos: z.boolean().default(true),
@@ -90,7 +91,7 @@ const clientSchema = z.object({
     settings: z.boolean().default(false),
     rentals: z.boolean().default(false),
     calculator: z.boolean().default(false),
-  }).optional(),
+  }).optional().nullable(),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -104,7 +105,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const [isSearchingCep, setIsSearchingCep] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   
-  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ClientFormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
     defaultValues: client ? {
       ...client,
@@ -113,6 +114,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       despesa_fixa: client.despesa_fixa ? formatCurrency(client.despesa_fixa.toString()) : "",
       despesa_alimentacao: client.despesa_alimentacao ? formatCurrency(client.despesa_alimentacao.toString()) : "",
       despesa_aluguel: client.despesa_aluguel ? formatCurrency(client.despesa_aluguel.toString()) : "",
+      conjuge_salario: client.conjuge_salario ? formatCurrency(client.conjuge_salario.toString()) : "",
       dia_pagamento: client.dia_pagamento?.toString() || "",
       tipo_pessoa: client.cpf_cnpj?.length === 14 ? 'F' : 'J',
       permissoes: client.permissoes || {
@@ -132,6 +134,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       is_funcionario: false,
       tipo_pessoa: 'F',
       nome: "",
+      estado_civil: "Solteiro(a)",
       permissoes: {
         dashboard: true,
         pos: true,
@@ -150,6 +153,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
   const isFuncionario = watch("is_funcionario");
+  const estadoCivil = watch("estado_civil");
   const permissoes = watch("permissoes");
 
   function formatCurrency(value: string) {
@@ -162,7 +166,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     }).format(number);
   }
 
-  function parseCurrencyToNumber(value: string) {
+  function parseCurrencyToNumber(value: string | null | undefined) {
     if (!value) return 0;
     return parseFloat(value.replace(/[^\d,]/g, "").replace(",", ".")) || 0;
   }
@@ -231,18 +235,22 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const onSubmit = async (data: ClientFormValues) => {
     setIsSaving(true);
     try {
-      // Remove campos que não existem na tabela do banco de dados
       const { tipo_pessoa, ...rest } = data;
       
       const payload = {
         ...rest,
         nome: data.nome.toUpperCase(),
-        salario: parseCurrencyToNumber(data.salario || ""),
-        limite: parseCurrencyToNumber(data.limite || ""),
-        despesa_fixa: parseCurrencyToNumber(data.despesa_fixa || ""),
-        despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao || ""),
-        despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel || ""),
-        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : undefined,
+        salario: parseCurrencyToNumber(data.salario),
+        limite: parseCurrencyToNumber(data.limite),
+        despesa_fixa: parseCurrencyToNumber(data.despesa_fixa),
+        despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao),
+        despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel),
+        conjuge_salario: parseCurrencyToNumber(data.conjuge_salario),
+        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
+        // Garante que usuário e senha sejam enviados mesmo se isFuncionario for alterado
+        usuario: data.usuario || null,
+        senha: data.senha || null,
+        permissoes: data.permissoes || null
       } as any;
 
       if (client) {
@@ -341,6 +349,60 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         </TabsContent>
 
         <TabsContent value="pessoal" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" {...register("data_nascimento")} /></div>
+            <div className="space-y-2">
+              <Label>Estado Civil</Label>
+              <select 
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" 
+                {...register("estado_civil")}
+              >
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+                <option value="União Estável">União Estável</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Sexo</Label>
+              <select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" {...register("sexo")}>
+                <option value="">Selecione</option>
+                <option value="M">Masculino</option>
+                <option value="F">Feminino</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Campos Condicionais de Cônjuge */}
+          {estadoCivil === "Casado(a)" && (
+            <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4 animate-in fade-in slide-in-from-top-2">
+              <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Heart size={16} className="text-rose-500" /> Dados do Cônjuge</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Nome do Cônjuge</Label>
+                  <Input {...register("conjuge_nome")} onChange={(e) => handleTitleCaseChange(e, "conjuge_nome")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CPF do Cônjuge</Label>
+                  <Input {...register("conjuge_cpf")} onChange={(e) => handleMaskChange(e, "conjuge_cpf", maskCPF)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data de Nascimento</Label>
+                  <Input type="date" {...register("conjuge_nascimento")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input {...register("conjuge_telefone")} onChange={(e) => handleMaskChange(e, "conjuge_telefone", maskPhone)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Salário</Label>
+                  <Input {...register("conjuge_salario")} onChange={(e) => handleCurrencyChange(e, "conjuge_salario")} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {isFuncionario && (
             <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
               <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2"><Contact2 size={16} /> Dados de Funcionário</h4>
@@ -351,11 +413,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               </div>
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" {...register("data_nascimento")} /></div>
-            <div className="space-y-2"><Label>Sexo</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" {...register("sexo")}><option value="">Selecione</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
-            <div className="space-y-2"><Label>Estado Civil</Label><Input {...register("estado_civil")} /></div>
-          </div>
         </TabsContent>
 
         {isFuncionario && (
