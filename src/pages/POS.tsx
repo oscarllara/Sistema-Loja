@@ -154,18 +154,12 @@ const POS = () => {
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [isAddEntityOpen, setIsAddEntityOpen] = React.useState(false);
   const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
-  const [isEditItemOpen, setIsEditItemOpen] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = React.useState(false);
-  const [xmlPurchaseData, setXmlPurchaseData] = React.useState<any>(null);
-
-  const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
-  const [editData, setEditData] = React.useState({ qtde: 1, valor: "0,00", total: "0,00" });
-  const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
+  const [adminPassword, setAdminPassword] = React.useState("");
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
@@ -176,12 +170,11 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
-    if (key === 'F12' && mode === 'COMPRA') xmlInputRef.current?.click();
   }, [cart, selectedSellerId, mode]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['F1', 'F3', 'F4', 'F10', 'F12'].includes(e.key)) {
+      if (['F1', 'F3', 'F4', 'F10'].includes(e.key)) {
         e.preventDefault();
         handleShortcut(e.key);
       }
@@ -326,7 +319,13 @@ const POS = () => {
     return <div className="h-screen w-screen bg-slate-900 flex items-center justify-center text-white font-bold">CARREGANDO PDV...</div>;
   }
 
-  const themeColor = mode === 'VENDA' ? 'indigo' : mode === 'COMPRA' ? 'emerald' : 'amber';
+  const getThemeClasses = () => {
+    if (mode === 'VENDA') return { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-900', header: 'bg-slate-900', border: 'border-slate-800' };
+    if (mode === 'COMPRA') return { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', text: 'text-emerald-900', header: 'bg-emerald-900', border: 'border-emerald-800' };
+    return { bg: 'bg-amber-600', hover: 'hover:bg-amber-700', text: 'text-amber-900', header: 'bg-amber-900', border: 'border-amber-800' };
+  };
+
+  const theme = getThemeClasses();
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
@@ -337,15 +336,15 @@ const POS = () => {
               <img src={config.logo_url} alt="Logo Loja" className="max-h-full max-w-full object-contain" />
             </div>
           ) : (
-            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg mb-2", `bg-${themeColor}-600`)}>
+            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg mb-2", theme.bg)}>
               <ShoppingCart size={32} />
             </div>
           )}
-          <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>{config?.nome_empresa || 'DyadERP'}</h2>
+          <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", theme.text)}>{config?.nome_empresa || 'DyadERP'}</h2>
           <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{config?.slogan}</p>
         </div>
 
-        <div className={cn("p-3 text-white space-y-2", mode === 'VENDA' ? "bg-slate-900" : mode === 'COMPRA' ? "bg-emerald-900" : "bg-amber-900")}>
+        <div className={cn("p-3 text-white space-y-2", theme.header)}>
           <div className="space-y-1">
             <label className="text-[8px] font-bold text-slate-500 uppercase">Operador Logado *</label>
             <select 
@@ -363,7 +362,7 @@ const POS = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Ações Principais</h3>
-              <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700" : mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700")} onClick={() => handleShortcut('F10')}>
+              <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", theme.bg, theme.hover)} onClick={() => handleShortcut('F10')}>
                 <CheckCircle size={20} /> FINALIZAR (F10)
               </Button>
             </div>
@@ -392,7 +391,7 @@ const POS = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("h-16 text-white flex items-center justify-between px-6 shrink-0 border-b", mode === 'VENDA' ? "bg-slate-900 border-slate-800" : mode === 'COMPRA' ? "bg-emerald-900 border-emerald-800" : "bg-amber-900 border-amber-800")}>
+        <header className={cn("h-16 text-white flex items-center justify-between px-6 shrink-0 border-b", theme.header, theme.border)}>
           <div className="flex items-center gap-6">
             <div className="flex bg-white/10 p-1 rounded-lg">
               <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'VENDA' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('VENDA')}>VENDA</Button>
@@ -464,7 +463,7 @@ const POS = () => {
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
-      <Dialog open={isAdminAuthOpen} onOpenChange={isAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
     </div>
   );
 };
