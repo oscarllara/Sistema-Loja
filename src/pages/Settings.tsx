@@ -18,7 +18,9 @@ import {
   Mail,
   MapPin,
   Clock,
-  Zap
+  Zap,
+  Globe,
+  MessageCircle
 } from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
@@ -139,21 +141,67 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* SEÇÃO 3: DADOS DA LOJA */}
-          <Card className="border-none shadow-sm">
+          {/* SEÇÃO 3: DADOS DA LOJA (RESTAURADA) */}
+          <Card className="border-none shadow-sm md:col-span-2">
             <CardHeader className="border-b bg-indigo-600 text-white rounded-t-xl">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
                 <Building2 size={18} /> Dados da Loja (Operador)
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="space-y-2">
-                <Label>Nome da Loja</Label>
-                <Input value={config.nome_empresa} onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value })} />
+            <CardContent className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Nome da Loja / Razão Social</Label>
+                  <Input value={config.nome_empresa} onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Slogan da Loja</Label>
+                  <Input value={config.slogan || ""} onChange={(e) => setConfig({ ...config, slogan: e.target.value })} />
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>CNPJ</Label>
+                  <Input value={config.cnpj || ""} onChange={(e) => setConfig({ ...config, cnpj: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Inscrição Estadual</Label>
+                  <Input value={config.inscricao_estadual || ""} onChange={(e) => setConfig({ ...config, inscricao_estadual: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Inscrição Municipal</Label>
+                  <Input value={config.inscricao_municipal || ""} onChange={(e) => setConfig({ ...config, inscricao_municipal: e.target.value })} />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label>Logo da Loja (URL)</Label>
-                <Input value={config.logo_url || ""} onChange={(e) => setConfig({ ...config, logo_url: e.target.value })} />
+                <Label className="flex items-center gap-2"><MapPin size={14} /> Endereço Completo</Label>
+                <Input value={config.endereco || ""} onChange={(e) => setConfig({ ...config, endereco: e.target.value })} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo</Label>
+                  <Input value={config.telefone || ""} onChange={(e) => setConfig({ ...config, telefone: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2"><MessageCircle size={14} /> WhatsApp Loja</Label>
+                  <Input value={config.whatsapp_loja || ""} onChange={(e) => setConfig({ ...config, whatsapp_loja: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2"><Mail size={14} /> E-mail</Label>
+                  <Input value={config.email_loja || ""} onChange={(e) => setConfig({ ...config, email_loja: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2"><Globe size={14} /> Site</Label>
+                  <Input value={config.site_loja || ""} onChange={(e) => setConfig({ ...config, site_loja: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><ImageIcon size={14} /> Logo da Loja (URL)</Label>
+                <Input value={config.logo_url || ""} onChange={(e) => setConfig({ ...config, logo_url: e.target.value })} placeholder="https://..." />
               </div>
             </CardContent>
           </Card>
