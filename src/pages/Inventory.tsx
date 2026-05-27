@@ -37,11 +37,10 @@ const Inventory = () => {
   const [editingProduct, setEditingProduct] = React.useState<Produto | undefined>(undefined);
   const [filterSiteOnly, setFilterSiteOnly] = React.useState(false);
 
-  // 1. Busca de dados com React Query
+  // 1. Busca de dados
   const { data: products = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ['produtos'],
     queryFn: () => db.produtos.getAll(),
-    staleTime: 1000 * 60 * 5,
   });
 
   const { data: sales = [] } = useQuery({
@@ -60,8 +59,7 @@ const Inventory = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['produtos'] });
       showSuccess("Alteração salva!");
-    },
-    onError: () => showError("Erro ao atualizar.")
+    }
   });
 
   const deleteMutation = useMutation({
@@ -72,7 +70,7 @@ const Inventory = () => {
     }
   });
 
-  // 3. Cálculos de Inteligência
+  // 3. Filtro e Inteligência
   const stats = React.useMemo(() => {
     const totalVendas = sales.reduce((acc, v) => acc + v.total, 0);
     const totalDespesasFixas = financeiro
@@ -88,21 +86,29 @@ const Inventory = () => {
       });
     });
 
-    const siteCount = products.filter(p => p.disponivel_site).length;
+    return { cfWeight, salesMap };
+  }, [sales, financeiro]);
 
-    return { cfWeight, salesMap, siteCount };
-  }, [sales, financeiro, products]);
+  const filteredProducts = React.useMemo(() => {
+    return products.filter(p => {
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = (
+        p.nome.toLowerCase().includes(term) ||
+        p.id_manual?.includes(term) ||
+        p.cod_barras?.includes(term)
+      );
+      const matchesSite = filterSiteOnly ? p.disponivel_site : true;
+      return matchesSearch && matchesSite;
+    });
+  }, [products, searchTerm, filterSiteOnly]);
 
-  const filteredProducts = products.filter(p => {
-    const term = searchTerm.toLowerCase();
-    const matchesSearch = (
-      p.nome.toLowerCase().includes(term) ||
-      p.id_manual?.includes(term) ||
-      p.cod_barras?.includes(term)
-    );
-    const matchesSite = filterSiteOnly ? p.disponivel_site : true;
-    return matchesSearch && matchesSite;
-  });
+  // Totais baseados no que está filtrado na tela
+  const viewStats = React.useMemo(() => {
+    const totalItens = filteredProducts.length;
+    const valorEstoque = filteredProducts.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0);
+    const noSite = filteredProducts.filter(p => p.disponivel_site).length;
+    return { totalItens, valorEstoque, noSite };
+  }, [filteredProducts]);
 
   const handleQuickUpdate = (id: number, field: keyof Produto, value: string) => {
     const numValue = parseFloat(value.replace(',', '.'));
@@ -110,48 +116,24 @@ const Inventory = () => {
     updateMutation.mutate({ id, data: { [field]: numValue } });
   };
 
-  const handleEdit = (product: Produto) => {
-    setEditingProduct(product);
-    setIsModalOpen(true);
-  };
-
-  const handleAdd = () => {
-    setEditingProduct(undefined);
-    setIsModalOpen(true);
-  };
-
-  const handleDelete = (id: number) => {
-    if (confirm("Tem certeza que deseja excluir este produto?")) {
-      deleteMutation.mutate(id);
-    }
-  };
-
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque Inteligente</h1>
-            <p className="text-slate-500">Análise de lucratividade e integração com o site.</p>
+            <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
+            <p className="text-slate-500 text-sm">Os totais abaixo refletem os filtros aplicados.</p>
           </div>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
-              <Button onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg shadow-indigo-100">
+              <Button onClick={() => setEditingProduct(undefined)} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg">
                 <Plus size={20} /> Novo Produto
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle>
-              </DialogHeader>
-              <ProductForm 
-                product={editingProduct} 
-                onSuccess={() => {
-                  setIsModalOpen(false);
-                  queryClient.invalidateQueries({ queryKey: ['produtos'] });
-                }} 
-              />
+              <DialogHeader><DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
+              <ProductForm product={editingProduct} onSuccess={() => { setIsModalOpen(false); queryClient.invalidateQueries({ queryKey: ['produtos'] }); }} />
             </DialogContent>
           </Dialog>
         </div>
@@ -159,32 +141,31 @@ const Inventory = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <SummaryCard 
             title="Peso Custos Fixos" 
-            value={`R$ ${(stats.cfWeight * 100).toFixed(2)}%`} 
-            subtitle="Sobre o custo unitário"
+            value={`${(stats.cfWeight * 100).toFixed(2)}%`} 
+            subtitle="Impacto nas vendas"
             icon={Calculator}
             color="bg-indigo-500"
-            onClick={() => {}} // Pode abrir o financeiro no futuro
           />
           <SummaryCard 
             title="Valor em Estoque" 
-            value={`R$ ${products.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
-            subtitle="Capital imobilizado"
+            value={`R$ ${viewStats.valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+            subtitle="Dos itens filtrados"
             icon={DollarSign}
             color="bg-amber-500"
             onClick={() => setSearchTerm("")}
           />
           <SummaryCard 
             title="Total de Itens" 
-            value={products.length} 
-            subtitle="Produtos cadastrados"
+            value={viewStats.totalItens} 
+            subtitle="Listados na tela"
             icon={Package}
             color="bg-emerald-500"
             onClick={() => { setSearchTerm(""); setFilterSiteOnly(false); }}
           />
           <SummaryCard 
             title="No Site" 
-            value={stats.siteCount} 
-            subtitle="Visíveis para clientes"
+            value={viewStats.noSite} 
+            subtitle="Visíveis online"
             icon={Globe}
             color="bg-blue-500"
             isActive={filterSiteOnly}
@@ -193,7 +174,7 @@ const Inventory = () => {
         </div>
 
         <Card className="border-none shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+          <div className="p-4 border-b border-slate-100 bg-white">
             <div className="relative max-w-md w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <Input 
@@ -208,24 +189,24 @@ const Inventory = () => {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-slate-50">
-                <TableRow>
-                  <TableHead className="font-bold w-16">Cód.</TableHead>
-                  <TableHead className="font-bold min-w-[180px]">Produto</TableHead>
-                  <TableHead className="font-bold text-center">Estoque</TableHead>
-                  <TableHead className="font-bold text-right">Custo (R$)</TableHead>
-                  <TableHead className="font-bold text-right">Custo Real</TableHead>
-                  <TableHead className="font-bold text-right">Venda (R$)</TableHead>
-                  <TableHead className="font-bold text-center">Margem Nom.</TableHead>
-                  <TableHead className="font-bold text-center">Margem Real</TableHead>
-                  <TableHead className="font-bold text-center">Vendas</TableHead>
-                  <TableHead className="text-right font-bold w-20">Ações</TableHead>
+                <TableRow className="text-[10px] uppercase font-bold">
+                  <TableHead className="w-14">Cód.</TableHead>
+                  <TableHead className="min-w-[150px]">Produto</TableHead>
+                  <TableHead className="text-center w-20">Estoque</TableHead>
+                  <TableHead className="text-right w-24">Custo (R$)</TableHead>
+                  <TableHead className="text-right w-24">Custo Real</TableHead>
+                  <TableHead className="text-right w-24">Venda (R$)</TableHead>
+                  <TableHead className="text-center w-20">Markup Nom.</TableHead>
+                  <TableHead className="text-center w-20">Markup Real</TableHead>
+                  <TableHead className="text-center w-16">Vendas</TableHead>
+                  <TableHead className="text-right w-16">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoadingProducts ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-12"><Loader2 className="animate-spin mx-auto" /></TableCell></TableRow>
                 ) : filteredProducts.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-12 text-slate-400">Nenhum produto encontrado.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center py-12 text-slate-400 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell></TableRow>
                 ) : (
                   filteredProducts.map((product) => {
                     const custoOriginal = product.compra || 0;
@@ -233,45 +214,41 @@ const Inventory = () => {
                     const custoReal = custoOriginal + custoCF;
                     const precoVenda = product.venda || 0;
                     
-                    const margemNominal = precoVenda > 0 ? ((precoVenda - custoOriginal) / precoVenda) * 100 : 0;
-                    const margemReal = precoVenda > 0 ? ((precoVenda - custoReal) / precoVenda) * 100 : 0;
+                    // Lógica de Markup: ((Venda / Custo) - 1) * 100
+                    const markupNominal = custoOriginal > 0 ? ((precoVenda / custoOriginal) - 1) * 100 : 0;
+                    const markupReal = custoReal > 0 ? ((precoVenda / custoReal) - 1) * 100 : 0;
                     const totalVendido = stats.salesMap[product.cd_produto] || 0;
 
                     return (
-                      <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors group h-12">
+                      <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors group h-10">
                         <TableCell className="font-bold text-indigo-600 text-[10px]">{product.id_manual}</TableCell>
                         <TableCell>
-                          <div className="max-w-[180px]">
-                            <div className="flex items-center gap-1">
-                              <p className="font-bold text-slate-900 text-xs truncate uppercase">{product.nome}</p>
-                              {product.disponivel_site && <Globe size={10} className="text-blue-500 shrink-0" />}
-                            </div>
-                            <span className="text-[8px] text-slate-500 uppercase font-bold bg-slate-100 px-1 rounded">{product.un}</span>
+                          <div className="flex items-center gap-1">
+                            <p className="font-bold text-slate-900 text-[11px] truncate uppercase max-w-[140px]">{product.nome}</p>
+                            {product.disponivel_site && <Globe size={10} className="text-blue-500 shrink-0" />}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <Input 
                             defaultValue={product.estoque}
                             onBlur={(e) => handleQuickUpdate(product.cd_produto, 'estoque', e.target.value)}
-                            className="h-7 text-[10px] font-bold text-center border-transparent hover:border-slate-200 focus:bg-white w-16 mx-auto"
+                            className="h-6 text-[10px] font-bold text-center border-transparent hover:border-slate-200 focus:bg-white w-14 mx-auto p-0"
                           />
                         </TableCell>
                         <TableCell className="text-right">
                           <Input 
                             defaultValue={custoOriginal.toFixed(2).replace('.', ',')}
                             onBlur={(e) => handleQuickUpdate(product.cd_produto, 'compra', e.target.value)}
-                            className="h-7 text-[10px] font-bold text-right border-transparent hover:border-slate-200 text-slate-600 w-20 ml-auto"
+                            className="h-6 text-[10px] font-bold text-right border-transparent hover:border-slate-200 text-slate-600 w-16 ml-auto p-0"
                           />
                         </TableCell>
                         <TableCell className="text-right">
                           <TooltipProvider>
                             <Tooltip>
-                              <TooltipTrigger className="text-right font-bold text-slate-900 text-[10px] w-full">
+                              <TooltipTrigger className="text-right font-bold text-slate-400 text-[10px] w-full">
                                 R$ {custoReal.toFixed(2)}
                               </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="text-[10px]">Custo Original + R$ {custoCF.toFixed(2)} (Peso CF)</p>
-                              </TooltipContent>
+                              <TooltipContent><p className="text-[10px]">Custo + R$ {custoCF.toFixed(2)} (Desp. Fixas)</p></TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </TableCell>
@@ -279,39 +256,29 @@ const Inventory = () => {
                           <Input 
                             defaultValue={precoVenda.toFixed(2).replace('.', ',')}
                             onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda', e.target.value)}
-                            className="h-7 text-[10px] font-black text-right border-transparent hover:border-slate-200 text-indigo-700 w-20 ml-auto"
+                            className="h-6 text-[10px] font-black text-right border-transparent hover:border-slate-200 text-indigo-700 w-16 ml-auto p-0"
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="text-[9px] font-bold border-slate-200 text-slate-600">
-                            {margemNominal.toFixed(1)}%
-                          </Badge>
+                          <span className="text-[10px] font-bold text-slate-500">{markupNominal.toFixed(0)}%</span>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge className={cn(
-                            "text-[9px] font-black border-none",
-                            margemReal > 20 ? "bg-emerald-100 text-emerald-700" : 
-                            margemReal > 5 ? "bg-amber-100 text-amber-700" : 
+                            "text-[9px] font-black border-none h-5 px-1.5",
+                            markupReal > 40 ? "bg-emerald-100 text-emerald-700" : 
+                            markupReal > 15 ? "bg-amber-100 text-amber-700" : 
                             "bg-rose-100 text-rose-700"
                           )}>
-                            {margemReal.toFixed(1)}%
+                            {markupReal.toFixed(0)}%
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-bold text-slate-700">{totalVendido}</span>
-                            <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden mt-0.5">
-                              <div 
-                                className="h-full bg-indigo-500" 
-                                style={{ width: `${Math.min(100, (totalVendido / 50) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
+                          <span className="text-[10px] font-bold text-slate-700">{totalVendido}</span>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(product)}><Edit size={14} /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500" onClick={() => handleDelete(product.cd_produto)}><Trash2 size={14} /></Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}><Edit size={12} /></Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-500" onClick={() => handleDelete(product.cd_produto)}><Trash2 size={12} /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -331,7 +298,8 @@ const SummaryCard = ({ title, value, subtitle, icon: Icon, color, onClick, isAct
   <Card 
     className={cn(
       "border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02] active:scale-95",
-      isActive && "ring-2 ring-indigo-500 ring-offset-2"
+      isActive && "ring-2 ring-indigo-500 ring-offset-2",
+      !onClick && "cursor-default hover:scale-100"
     )}
     onClick={onClick}
   >
@@ -341,7 +309,7 @@ const SummaryCard = ({ title, value, subtitle, icon: Icon, color, onClick, isAct
       </div>
       <div>
         <p className="text-[10px] font-bold text-slate-500 uppercase">{title}</p>
-        <p className="text-xl font-black text-slate-900">{value}</p>
+        <p className="text-lg font-black text-slate-900">{value}</p>
         <p className="text-[8px] text-slate-400 font-medium">{subtitle}</p>
       </div>
     </CardContent>
