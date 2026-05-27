@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2, Globe, Package } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -35,12 +35,13 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingProduct, setEditingProduct] = React.useState<Produto | undefined>(undefined);
+  const [filterSiteOnly, setFilterSiteOnly] = React.useState(false);
 
-  // 1. Busca de dados com React Query (Cache Inteligente)
+  // 1. Busca de dados com React Query
   const { data: products = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ['produtos'],
     queryFn: () => db.produtos.getAll(),
-    staleTime: 1000 * 60 * 5, // Cache de 5 minutos
+    staleTime: 1000 * 60 * 5,
   });
 
   const { data: sales = [] } = useQuery({
@@ -53,7 +54,7 @@ const Inventory = () => {
     queryFn: () => db.financeiro.getAll(),
   });
 
-  // 2. Mutações para atualização rápida
+  // 2. Mutações
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number, data: any }) => db.produtos.update(id, data),
     onSuccess: () => {
@@ -71,7 +72,7 @@ const Inventory = () => {
     }
   });
 
-  // 3. Cálculos de Inteligência de Negócio
+  // 3. Cálculos de Inteligência
   const stats = React.useMemo(() => {
     const totalVendas = sales.reduce((acc, v) => acc + v.total, 0);
     const totalDespesasFixas = financeiro
@@ -87,16 +88,20 @@ const Inventory = () => {
       });
     });
 
-    return { cfWeight, salesMap };
-  }, [sales, financeiro]);
+    const siteCount = products.filter(p => p.disponivel_site).length;
+
+    return { cfWeight, salesMap, siteCount };
+  }, [sales, financeiro, products]);
 
   const filteredProducts = products.filter(p => {
     const term = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       p.nome.toLowerCase().includes(term) ||
       p.id_manual?.includes(term) ||
       p.cod_barras?.includes(term)
     );
+    const matchesSite = filterSiteOnly ? p.disponivel_site : true;
+    return matchesSearch && matchesSite;
   });
 
   const handleQuickUpdate = (id: number, field: keyof Produto, value: string) => {
@@ -127,7 +132,7 @@ const Inventory = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque Inteligente</h1>
-            <p className="text-slate-500">Análise de custos reais e lucratividade baseada no seu financeiro.</p>
+            <p className="text-slate-500">Análise de lucratividade e integração com o site.</p>
           </div>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -151,39 +156,40 @@ const Inventory = () => {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-none shadow-sm bg-indigo-50">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-indigo-600 rounded-xl text-white"><Calculator size={20} /></div>
-              <div>
-                <p className="text-[10px] font-bold text-indigo-600 uppercase">Peso dos Custos Fixos</p>
-                <p className="text-xl font-black text-indigo-900">{(stats.cfWeight * 100).toFixed(2)}%</p>
-                <p className="text-[8px] text-indigo-400">Aplicado sobre o custo de cada item</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-none shadow-sm bg-emerald-50">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-emerald-600 rounded-xl text-white"><TrendingUp size={20} /></div>
-              <div>
-                <p className="text-[10px] font-bold text-emerald-600 uppercase">Total de Itens</p>
-                <p className="text-xl font-black text-emerald-900">{products.length}</p>
-                <p className="text-[8px] text-emerald-400">Produtos cadastrados no sistema</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-none shadow-sm bg-amber-50">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-amber-600 rounded-xl text-white"><DollarSign size={20} /></div>
-              <div>
-                <p className="text-[10px] font-bold text-amber-600 uppercase">Valor em Estoque (Custo)</p>
-                <p className="text-xl font-black text-amber-900">
-                  R$ {products.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-                <p className="text-[8px] text-amber-400">Capital imobilizado em mercadoria</p>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <SummaryCard 
+            title="Peso Custos Fixos" 
+            value={`R$ ${(stats.cfWeight * 100).toFixed(2)}%`} 
+            subtitle="Sobre o custo unitário"
+            icon={Calculator}
+            color="bg-indigo-500"
+            onClick={() => {}} // Pode abrir o financeiro no futuro
+          />
+          <SummaryCard 
+            title="Valor em Estoque" 
+            value={`R$ ${products.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+            subtitle="Capital imobilizado"
+            icon={DollarSign}
+            color="bg-amber-500"
+            onClick={() => setSearchTerm("")}
+          />
+          <SummaryCard 
+            title="Total de Itens" 
+            value={products.length} 
+            subtitle="Produtos cadastrados"
+            icon={Package}
+            color="bg-emerald-500"
+            onClick={() => { setSearchTerm(""); setFilterSiteOnly(false); }}
+          />
+          <SummaryCard 
+            title="No Site" 
+            value={stats.siteCount} 
+            subtitle="Visíveis para clientes"
+            icon={Globe}
+            color="bg-blue-500"
+            isActive={filterSiteOnly}
+            onClick={() => setFilterSiteOnly(!filterSiteOnly)}
+          />
         </div>
 
         <Card className="border-none shadow-sm overflow-hidden">
@@ -207,9 +213,9 @@ const Inventory = () => {
                   <TableHead className="font-bold min-w-[180px]">Produto</TableHead>
                   <TableHead className="font-bold text-center">Estoque</TableHead>
                   <TableHead className="font-bold text-right">Custo (R$)</TableHead>
-                  <TableHead className="font-bold text-center">Peso CF</TableHead>
                   <TableHead className="font-bold text-right">Custo Real</TableHead>
                   <TableHead className="font-bold text-right">Venda (R$)</TableHead>
+                  <TableHead className="font-bold text-center">Margem Nom.</TableHead>
                   <TableHead className="font-bold text-center">Margem Real</TableHead>
                   <TableHead className="font-bold text-center">Vendas</TableHead>
                   <TableHead className="text-right font-bold w-20">Ações</TableHead>
@@ -226,6 +232,8 @@ const Inventory = () => {
                     const custoCF = custoOriginal * stats.cfWeight;
                     const custoReal = custoOriginal + custoCF;
                     const precoVenda = product.venda || 0;
+                    
+                    const margemNominal = precoVenda > 0 ? ((precoVenda - custoOriginal) / precoVenda) * 100 : 0;
                     const margemReal = precoVenda > 0 ? ((precoVenda - custoReal) / precoVenda) * 100 : 0;
                     const totalVendido = stats.salesMap[product.cd_produto] || 0;
 
@@ -234,7 +242,10 @@ const Inventory = () => {
                         <TableCell className="font-bold text-indigo-600 text-[10px]">{product.id_manual}</TableCell>
                         <TableCell>
                           <div className="max-w-[180px]">
-                            <p className="font-bold text-slate-900 text-xs truncate uppercase">{product.nome}</p>
+                            <div className="flex items-center gap-1">
+                              <p className="font-bold text-slate-900 text-xs truncate uppercase">{product.nome}</p>
+                              {product.disponivel_site && <Globe size={10} className="text-blue-500 shrink-0" />}
+                            </div>
                             <span className="text-[8px] text-slate-500 uppercase font-bold bg-slate-100 px-1 rounded">{product.un}</span>
                           </div>
                         </TableCell>
@@ -252,22 +263,17 @@ const Inventory = () => {
                             className="h-7 text-[10px] font-bold text-right border-transparent hover:border-slate-200 text-slate-600 w-20 ml-auto"
                           />
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-right">
                           <TooltipProvider>
                             <Tooltip>
-                              <TooltipTrigger>
-                                <Badge variant="outline" className="text-[9px] font-medium border-indigo-100 text-indigo-600 bg-indigo-50/30">
-                                  + R$ {custoCF.toFixed(2)}
-                                </Badge>
+                              <TooltipTrigger className="text-right font-bold text-slate-900 text-[10px] w-full">
+                                R$ {custoReal.toFixed(2)}
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p className="text-[10px]">Peso de {(stats.cfWeight * 100).toFixed(1)}% das despesas fixas sobre o custo.</p>
+                                <p className="text-[10px]">Custo Original + R$ {custoCF.toFixed(2)} (Peso CF)</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-slate-900 text-[10px]">
-                          R$ {custoReal.toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Input 
@@ -275,6 +281,11 @@ const Inventory = () => {
                             onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda', e.target.value)}
                             className="h-7 text-[10px] font-black text-right border-transparent hover:border-slate-200 text-indigo-700 w-20 ml-auto"
                           />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="text-[9px] font-bold border-slate-200 text-slate-600">
+                            {margemNominal.toFixed(1)}%
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge className={cn(
@@ -315,5 +326,26 @@ const Inventory = () => {
     </Layout>
   );
 };
+
+const SummaryCard = ({ title, value, subtitle, icon: Icon, color, onClick, isActive }: any) => (
+  <Card 
+    className={cn(
+      "border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02] active:scale-95",
+      isActive && "ring-2 ring-indigo-500 ring-offset-2"
+    )}
+    onClick={onClick}
+  >
+    <CardContent className="p-4 flex items-center gap-4">
+      <div className={cn("p-3 rounded-xl text-white shadow-lg", color)}>
+        <Icon size={20} />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold text-slate-500 uppercase">{title}</p>
+        <p className="text-xl font-black text-slate-900">{value}</p>
+        <p className="text-[8px] text-slate-400 font-medium">{subtitle}</p>
+      </div>
+    </CardContent>
+  </Card>
+);
 
 export default Inventory;
