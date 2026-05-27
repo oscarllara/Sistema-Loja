@@ -70,6 +70,12 @@ const Inventory = () => {
     }
   });
 
+  const handleDelete = (id: number) => {
+    if (confirm("Tem certeza que deseja excluir este produto permanentemente?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
   // 3. Filtro e Inteligência
   const stats = React.useMemo(() => {
     const totalVendas = sales.reduce((acc, v) => acc + v.total, 0);

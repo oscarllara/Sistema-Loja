@@ -168,31 +168,42 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const onSubmit = async (data: ProductFormValues) => {
     try {
-      const { id_manual, ...rest } = data;
-      
+      // Mapeamento explícito para evitar enviar campos extras que causam Erro 400
       const payload = {
-        ...rest,
         nome: data.nome.toUpperCase(),
+        id_importado: data.id_importado || null,
         un: data.un.toUpperCase(),
+        cod_barras: data.cod_barras || null,
         compra: parseCurrencyToNumber(data.compra),
         venda: parseCurrencyToNumber(data.venda),
         venda_vista: parseCurrencyToNumber(data.venda_vista),
         venda_fracionada: parseCurrencyToNumber(data.venda_fracionada),
+        desconto_vista_tipo: data.desconto_vista_tipo,
+        desconto_vista_valor: parseFloat(data.desconto_vista_valor || "0"),
+        estoque: parseFloat(data.estoque || "0"),
+        minimo: parseFloat(data.minimo || "0"),
+        ncm: data.ncm || null,
+        fracionado: !!data.fracionado,
+        un_fracionada: data.un_fracionada || null,
+        fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : null,
+        is_kit: !!data.is_kit,
+        itens_kit: data.itens_kit || null,
+        is_locacao: !!data.is_locacao,
         valor_diaria: parseCurrencyToNumber(data.valor_diaria),
         valor_semana: parseCurrencyToNumber(data.valor_semana),
         valor_quinzena: parseCurrencyToNumber(data.valor_quinzena),
         valor_mes: parseCurrencyToNumber(data.valor_mes),
+        disponivel_site: !!data.disponivel_site,
         preco_site: parseCurrencyToNumber(data.preco_site),
-        desconto_vista_valor: parseFloat(data.desconto_vista_valor || "0"),
-        estoque: parseFloat(data.estoque || "0"),
-        minimo: parseFloat(data.minimo || "0"),
-        fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : undefined,
+        imagem_url: data.imagem_url || null,
+        link_externo: data.link_externo || null,
+        descricao_site: data.descricao_site || null,
         integrar_calculadora: !!data.integrar_calculadora,
         data_atualizacao: new Date().toISOString()
-      } as any;
+      };
 
       if (product) {
-        await db.produtos.update(product.cd_produto, { ...payload, id_manual: product.id_manual });
+        await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado!");
       } else {
         await db.produtos.add(payload);
@@ -201,7 +212,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar produto:", err);
-      showError("Erro ao salvar no banco de dados. Verifique se todos os campos estão corretos.");
+      showError("Erro ao salvar no banco de dados. Verifique os campos.");
     }
   };
 

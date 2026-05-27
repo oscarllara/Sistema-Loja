@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { TrendingUp, Users, Package, DollarSign, ArrowUpRight, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/services/api';
