@@ -1,18 +1,22 @@
 "use client";
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
-import { TrendingUp, Users, Package, DollarSign, ArrowUpRight, ArrowDownRight, Calendar } from 'lucide-react';
+import { TrendingUp, Users, Package, DollarSign, ArrowUpRight, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/services/api';
 
-const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) => (
-  <Card className="border-none shadow-sm hover:shadow-md transition-shadow duration-200">
+const StatCard = ({ title, value, icon: Icon, trendValue, color, onClick }: any) => (
+  <Card 
+    className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer active:scale-95 group"
+    onClick={onClick}
+  >
     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-      <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
-      <div className={cn("p-2 rounded-lg", color)}>
+      <CardTitle className="text-sm font-medium text-slate-500 group-hover:text-indigo-600 transition-colors">{title}</CardTitle>
+      <div className={cn("p-2 rounded-lg transition-transform group-hover:scale-110", color)}>
         <Icon className="w-4 h-4 text-white" />
       </div>
     </CardHeader>
@@ -28,6 +32,7 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) =
 );
 
 const Index = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = React.useState({ vendasHoje: 0, clientes: 0, produtos: 0 });
   const [vendasRecentes, setVendasRecentes] = React.useState<any[]>([]);
 
@@ -61,7 +66,7 @@ const Index = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Painel de Controle</h1>
-            <p className="text-slate-500">Dados em tempo real do seu banco de dados Supabase.</p>
+            <p className="text-slate-500">Resumo operacional da sua loja em tempo real.</p>
           </div>
           <div className="flex items-center gap-2 text-sm font-medium text-slate-500 bg-white px-4 py-2 rounded-xl border border-slate-200">
             <Calendar size={16} />
@@ -70,15 +75,46 @@ const Index = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Vendas Hoje" value={`R$ ${stats.vendasHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={DollarSign} trendValue="+10%" color="bg-indigo-500" />
-          <StatCard title="Total Clientes" value={stats.clientes} icon={Users} trendValue="+2" color="bg-blue-500" />
-          <StatCard title="Itens no Estoque" value={stats.produtos} icon={Package} trendValue="+5" color="bg-amber-500" />
-          <StatCard title="Lucro Estimado" value="R$ 0,00" icon={TrendingUp} trendValue="0%" color="bg-emerald-500" />
+          <StatCard 
+            title="Vendas Hoje" 
+            value={`R$ ${stats.vendasHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+            icon={DollarSign} 
+            trendValue="+10%" 
+            color="bg-indigo-500"
+            onClick={() => navigate('/daily-cash')}
+          />
+          <StatCard 
+            title="Total Clientes" 
+            value={stats.clientes} 
+            icon={Users} 
+            trendValue="+2" 
+            color="bg-blue-500"
+            onClick={() => navigate('/registrations')}
+          />
+          <StatCard 
+            title="Itens no Estoque" 
+            value={stats.produtos} 
+            icon={Package} 
+            trendValue="+5" 
+            color="bg-amber-500"
+            onClick={() => navigate('/inventory')}
+          />
+          <StatCard 
+            title="Lucro Estimado" 
+            value="R$ 0,00" 
+            icon={TrendingUp} 
+            trendValue="0%" 
+            color="bg-emerald-500"
+            onClick={() => navigate('/reports')}
+          />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2 border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg font-semibold">Desempenho Semanal</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Desempenho Semanal</CardTitle>
+              <Button variant="ghost" size="sm" className="text-indigo-600 font-bold" onClick={() => navigate('/reports')}>Ver Relatórios</Button>
+            </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={[{name: 'Seg', total: 0}, {name: 'Ter', total: 0}, {name: 'Qua', total: 0}, {name: 'Qui', total: 0}, {name: 'Sex', total: 0}]}>
@@ -93,11 +129,18 @@ const Index = () => {
           </Card>
 
           <Card className="border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg font-semibold">Vendas Recentes</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Vendas Recentes</CardTitle>
+              <Button variant="ghost" size="sm" className="text-indigo-600 font-bold" onClick={() => navigate('/pos')}>Ir para PDV</Button>
+            </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {vendasRecentes.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50">
+                  <div 
+                    key={i} 
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-slate-100"
+                    onClick={() => navigate('/daily-cash')}
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-xs">
                         {v.nome_cliente?.substring(0, 2).toUpperCase()}
