@@ -22,18 +22,28 @@ const PrintPreview = ({ isOpen, onClose, data, type }: PrintPreviewProps) => {
   const config = db.config.get();
   const [copies, setCopies] = React.useState(1);
   const [viewMode, setViewMode] = React.useState<'Normal' | 'TXT'>('Normal');
+  const [currentConfig, setCurrentConfig] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const load = async () => {
+      const cfg = await db.config.get();
+      setCurrentConfig(cfg);
+    };
+    load();
+  }, []);
 
   const handlePrint = () => {
     window.print();
   };
 
-  if (!data) return null;
+  if (!data || !currentConfig) return null;
 
   const renderContent = () => {
     if (type === 'Fechamento') {
       return (
         <div className="space-y-4 text-[10px] font-mono">
           <div className="text-center border-b border-dashed pb-2">
+            {currentConfig.logo_url && <img src={currentConfig.logo_url} alt="Logo" className="h-10 mx-auto mb-2 object-contain" />}
             <h2 className="text-sm font-bold">FECHAMENTO DE CAIXA</h2>
             <p>DATA: {new Date(data.date).toLocaleDateString()}</p>
           </div>
@@ -64,7 +74,7 @@ const PrintPreview = ({ isOpen, onClose, data, type }: PrintPreviewProps) => {
       return (
         <pre className="font-mono text-[10px] whitespace-pre-wrap bg-slate-50 p-4 border">
           {`==========================================
-          DYADERP - ORÇAMENTO #${data.cd_orcamento}
+          ${currentConfig.nome_empresa} - ${type.toUpperCase()} #${data.cd_venda || data.cd_orcamento}
 ==========================================
 DATA: ${new Date(data.data).toLocaleString()}
 CLIENTE: ${data.nome_cliente || 'CONSUMIDOR'}
@@ -85,9 +95,11 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
     return (
       <>
         <div className="text-center border-b pb-4 mb-4">
-          <h1 className="text-xl font-black uppercase">DyadERP - Sistema de Loja</h1>
-          <p className="text-[10px]">Rua Exemplo, 123 - Centro - Cidade/UF</p>
-          <p className="text-[10px]">CNPJ: 00.000.000/0001-00 | Tel: (00) 0000-0000</p>
+          {currentConfig.logo_url && <img src={currentConfig.logo_url} alt="Logo" className="h-12 mx-auto mb-2 object-contain" />}
+          <h1 className="text-xl font-black uppercase">{currentConfig.nome_empresa}</h1>
+          <p className="text-[10px]">{currentConfig.slogan}</p>
+          <p className="text-[10px]">{currentConfig.endereco}</p>
+          <p className="text-[10px]">CNPJ: {currentConfig.cnpj} | Tel: {currentConfig.telefone}</p>
         </div>
 
         <div className="flex justify-between text-[10px] font-bold mb-4">
@@ -178,12 +190,12 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
             id="printable-area"
             className="bg-white shadow-lg p-8"
             style={{
-              width: config.tipo_impressao === 'Bobina' ? (config.largura_bobina === '79mm' ? '300px' : '340px') : '210mm',
+              width: currentConfig.tipo_impressao === 'Bobina' ? (currentConfig.largura_bobina === '79mm' ? '300px' : '340px') : '210mm',
               minHeight: 'auto',
-              paddingLeft: `${config.margem_esquerda}mm`,
-              paddingRight: `${config.margem_direita}mm`,
-              paddingTop: `${config.margem_topo}mm`,
-              paddingBottom: `${config.margem_rodape}mm`,
+              paddingLeft: `${currentConfig.margem_esquerda}mm`,
+              paddingRight: `${currentConfig.margem_direita}mm`,
+              paddingTop: `${currentConfig.margem_topo}mm`,
+              paddingBottom: `${currentConfig.margem_rodape}mm`,
             }}
           >
             {renderContent()}

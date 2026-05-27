@@ -246,6 +246,7 @@ export interface Configuracoes {
   juros_atraso: number;
   multa_atraso: number;
   whatsapp_suporte?: string;
+  logo_url?: string;
 }
 
 export interface Patrimonio {

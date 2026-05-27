@@ -336,6 +336,13 @@ const POS = () => {
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
       <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-100 flex flex-col items-center text-center">
+          {config?.logo_url ? (
+            <img src={config.logo_url} alt="Logo" className="h-12 object-contain mb-2" />
+          ) : (
+            <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg mb-2", `bg-${themeColor}-600`)}>
+              <ShoppingCart size={24} />
+            </div>
+          )}
           <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>{config?.nome_empresa || 'DyadERP'}</h2>
           <p className="text-[9px] text-slate-500 font-bold">{config?.slogan}</p>
         </div>
@@ -455,7 +462,7 @@ const POS = () => {
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
-      <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isAdminAuthOpen} onOpenChange={isAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
     </div>
   );
 };
