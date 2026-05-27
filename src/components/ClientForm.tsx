@@ -109,12 +109,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     resolver: zodResolver(clientSchema),
     defaultValues: client ? {
       ...client,
-      salario: client.salario ? formatCurrency(client.salario.toString()) : "",
-      limite: client.limite ? formatCurrency(client.limite.toString()) : "",
-      despesa_fixa: client.despesa_fixa ? formatCurrency(client.despesa_fixa.toString()) : "",
-      despesa_alimentacao: client.despesa_alimentacao ? formatCurrency(client.despesa_alimentacao.toString()) : "",
-      despesa_aluguel: client.despesa_aluguel ? formatCurrency(client.despesa_aluguel.toString()) : "",
-      conjuge_salario: client.conjuge_salario ? formatCurrency(client.conjuge_salario.toString()) : "",
+      salario: client.salario ? client.salario.toString() : "",
+      limite: client.limite ? client.limite.toString() : "",
+      despesa_fixa: client.despesa_fixa ? client.despesa_fixa.toString() : "",
+      despesa_alimentacao: client.despesa_alimentacao ? client.despesa_alimentacao.toString() : "",
+      despesa_aluguel: client.despesa_aluguel ? client.despesa_aluguel.toString() : "",
+      conjuge_salario: client.conjuge_salario ? client.conjuge_salario.toString() : "",
       dia_pagamento: client.dia_pagamento?.toString() || "",
       tipo_pessoa: client.cpf_cnpj?.length === 14 ? 'F' : 'J',
       permissoes: client.permissoes || {
@@ -156,102 +156,23 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const estadoCivil = watch("estado_civil");
   const permissoes = watch("permissoes");
 
-  function formatCurrency(value: string) {
-    const digits = value.replace(/\D/g, "");
-    const number = parseInt(digits) / 100;
-    if (isNaN(number)) return "";
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(number);
-  }
-
-  function parseCurrencyToNumber(value: string | null | undefined) {
-    if (!value) return 0;
-    return parseFloat(value.replace(/[^\d,]/g, "").replace(",", ".")) || 0;
-  }
-
-  const maskCPF = (value: string) => {
-    return value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
-  };
-
-  const maskCNPJ = (value: string) => {
-    return value.replace(/\D/g, "").replace(/(\d{2})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1/$2").replace(/(\d{4})(\d)/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
-  };
-
-  const maskPhone = (value: string) => {
-    let v = value.replace(/\D/g, "");
-    if (v.startsWith("55")) v = v.slice(2);
-    if (v.length > 11) v = v.slice(0, 11);
-    let r = "+55 ";
-    if (v.length > 0) r += "(" + v.slice(0, 2);
-    if (v.length > 2) {
-      const isMobile = v[2] === '9';
-      r += ") " + v.slice(2, isMobile ? 7 : 6);
-      if (v.length > (isMobile ? 7 : 6)) r += "-" + v.slice(isMobile ? 7 : 6);
-    }
-    return v.length === 0 ? "" : r;
-  };
-
-  const formatTitleCase = (value: string) => {
-    if (!value) return value;
-    return value.replace(/(^\w|\s\w)/g, m => m.toUpperCase());
-  };
-
-  const handleTitleCaseChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues | string) => {
-    const formatted = formatTitleCase(e.target.value);
-    setValue(fieldName as any, formatted);
-  };
-
-  const handleMaskChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues, maskFn: (v: string) => string) => {
-    setValue(fieldName, maskFn(e.target.value));
-  };
-
-  const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ClientFormValues) => {
-    const formatted = formatCurrency(e.target.value);
-    setValue(fieldName, formatted);
-  };
-
-  const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-    const cep = e.target.value.replace(/\D/g, '');
-    if (cep.length !== 8) return;
-    setIsSearchingCep(true);
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await response.json();
-      if (!data.erro) {
-        setValue("endereco", formatTitleCase(data.logradouro));
-        setValue("bairro", formatTitleCase(data.bairro));
-        setValue("cidade", formatTitleCase(data.localidade));
-        setValue("uf", data.uf);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar CEP", err);
-    } finally {
-      setIsSearchingCep(false);
-    }
-  };
-
   const onSubmit = async (data: ClientFormValues) => {
     setIsSaving(true);
     try {
-      const { tipo_pessoa, ...rest } = data;
-      
       const payload = {
-        ...rest,
+        ...data,
         nome: data.nome.toUpperCase(),
-        salario: parseCurrencyToNumber(data.salario),
-        limite: parseCurrencyToNumber(data.limite),
-        despesa_fixa: parseCurrencyToNumber(data.despesa_fixa),
-        despesa_alimentacao: parseCurrencyToNumber(data.despesa_alimentacao),
-        despesa_aluguel: parseCurrencyToNumber(data.despesa_aluguel),
-        conjuge_salario: parseCurrencyToNumber(data.conjuge_salario),
+        salario: parseFloat(data.salario || "0"),
+        limite: parseFloat(data.limite || "0"),
+        despesa_fixa: parseFloat(data.despesa_fixa || "0"),
+        despesa_alimentacao: parseFloat(data.despesa_alimentacao || "0"),
+        despesa_aluguel: parseFloat(data.despesa_aluguel || "0"),
+        conjuge_salario: parseFloat(data.conjuge_salario || "0"),
         dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
-        // Garante que usuário e senha sejam enviados mesmo se isFuncionario for alterado
         usuario: data.usuario || null,
         senha: data.senha || null,
         permissoes: data.permissoes || null
-      } as any;
+      };
 
       if (client) {
         await db.clientes.update(client.cd_clientes, payload);
@@ -262,8 +183,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       }
       onSuccess();
     } catch (err: any) {
-      console.error("Erro ao salvar cadastro:", err);
-      showError(err.message || "Erro ao salvar cadastro.");
+      showError("Erro ao salvar cadastro.");
     } finally {
       setIsSaving(false);
     }
@@ -300,14 +220,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             <Label className="text-[10px] uppercase font-bold text-slate-500">Vínculo Interno</Label>
             <Button type="button" variant={isFuncionario ? 'default' : 'outline'} className={cn("gap-2 rounded-lg h-10", isFuncionario && "bg-emerald-600 hover:bg-emerald-700")} onClick={() => setValue("is_funcionario", !isFuncionario)}><Contact2 size={16} /> Funcionário</Button>
           </div>
-          <div className="w-px h-12 bg-slate-200" />
-          <div className="space-y-2">
-            <Label className="text-[10px] uppercase font-bold text-slate-500">Tipo de Pessoa</Label>
-            <RadioGroup value={tipoPessoa} onValueChange={(v) => { setValue("tipo_pessoa", v as TipoPessoa); setValue("cpf_cnpj", ""); }} className="flex gap-4 h-10 items-center">
-              <div className="flex items-center space-x-2"><RadioGroupItem value="F" id="p-f" /><Label htmlFor="p-f" className="text-sm">Física</Label></div>
-              <div className="flex items-center space-x-2"><RadioGroupItem value="J" id="p-j" /><Label htmlFor="p-j" className="text-sm">Jurídica</Label></div>
-            </RadioGroup>
-          </div>
         </div>
         <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl shadow-lg shadow-indigo-100">
           {isSaving ? "Salvando..." : "Salvar Cadastro"}
@@ -318,32 +230,25 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         <TabsList className={cn("grid w-full bg-slate-100 p-1 rounded-xl", isFuncionario ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
           <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
-          <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> {tipoPessoa === 'F' ? 'Pessoal/Prof.' : 'Empresa/Sócios'}</TabsTrigger>
+          <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> Pessoal</TabsTrigger>
           {isFuncionario && <TabsTrigger value="acesso" className="gap-2"><Lock size={16} /> Acesso</TabsTrigger>}
-          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Fin./Autoriz.</TabsTrigger>}
+          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Financeiro</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="geral" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'Nome Completo *' : 'Razão Social *'}</Label><Input {...register("nome")} onChange={(e) => handleTitleCaseChange(e, "nome")} /></div>
-            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'Apelido' : 'Nome Fantasia'}</Label><Input {...register("apelido_fantasia")} onChange={(e) => handleTitleCaseChange(e, "apelido_fantasia")} /></div>
-            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'CPF' : 'CNPJ'}</Label><Input {...register("cpf_cnpj")} onChange={(e) => handleMaskChange(e, "cpf_cnpj", tipoPessoa === 'F' ? maskCPF : maskCNPJ)} /></div>
-            <div className="space-y-2"><Label>{tipoPessoa === 'F' ? 'RG / Identidade' : 'Inscrição Estadual'}</Label><Input {...register("rg_ie")} /></div>
-            <div className="space-y-2"><Label>E-mail Principal</Label><Input type="email" {...register("email")} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2"><Label>Celular</Label><Input {...register("cel")} onChange={(e) => handleMaskChange(e, "cel", maskPhone)} /></div>
-              <div className="space-y-2"><Label>Telefone Fixo</Label><Input {...register("tel1")} onChange={(e) => handleMaskChange(e, "tel1", maskPhone)} /></div>
-            </div>
+            <div className="space-y-2"><Label>Nome Completo *</Label><Input {...register("nome")} /></div>
+            <div className="space-y-2"><Label>CPF/CNPJ</Label><Input {...register("cpf_cnpj")} /></div>
+            <div className="space-y-2"><Label>E-mail</Label><Input type="email" {...register("email")} /></div>
+            <div className="space-y-2"><Label>Celular</Label><Input {...register("cel")} /></div>
           </div>
         </TabsContent>
 
         <TabsContent value="endereco" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} onBlur={handleCepBlur} /></div>
-            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} onChange={(e) => handleTitleCaseChange(e, "endereco")} /></div>
-            <div className="space-y-2"><Label>Número</Label><Input {...register("numero")} /></div>
-            <div className="space-y-2"><Label>Bairro</Label><Input {...register("bairro")} onChange={(e) => handleTitleCaseChange(e, "bairro")} /></div>
-            <div className="md:col-span-2 space-y-2"><Label>Cidade</Label><Input {...register("cidade")} onChange={(e) => handleTitleCaseChange(e, "cidade")} /></div>
+            <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} /></div>
+            <div className="space-y-2"><Label>Cidade</Label><Input {...register("cidade")} /></div>
             <div className="space-y-2"><Label>UF</Label><Input {...register("uf")} maxLength={2} /></div>
           </div>
         </TabsContent>
@@ -351,87 +256,28 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         <TabsContent value="pessoal" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" {...register("data_nascimento")} /></div>
-            <div className="space-y-2">
-              <Label>Estado Civil</Label>
-              <select 
-                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" 
-                {...register("estado_civil")}
-              >
-                <option value="Solteiro(a)">Solteiro(a)</option>
-                <option value="Casado(a)">Casado(a)</option>
-                <option value="Divorciado(a)">Divorciado(a)</option>
-                <option value="Viúvo(a)">Viúvo(a)</option>
-                <option value="União Estável">União Estável</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Sexo</Label>
-              <select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" {...register("sexo")}>
-                <option value="">Selecione</option>
-                <option value="M">Masculino</option>
-                <option value="F">Feminino</option>
-              </select>
-            </div>
+            <div className="space-y-2"><Label>Estado Civil</Label><Input {...register("estado_civil")} /></div>
+            <div className="space-y-2"><Label>Profissão</Label><Input {...register("profissao")} /></div>
           </div>
-
-          {/* Campos Condicionais de Cônjuge */}
-          {estadoCivil === "Casado(a)" && (
-            <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-4 animate-in fade-in slide-in-from-top-2">
-              <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Heart size={16} className="text-rose-500" /> Dados do Cônjuge</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 space-y-2">
-                  <Label>Nome do Cônjuge</Label>
-                  <Input {...register("conjuge_nome")} onChange={(e) => handleTitleCaseChange(e, "conjuge_nome")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>CPF do Cônjuge</Label>
-                  <Input {...register("conjuge_cpf")} onChange={(e) => handleMaskChange(e, "conjuge_cpf", maskCPF)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Data de Nascimento</Label>
-                  <Input type="date" {...register("conjuge_nascimento")} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefone</Label>
-                  <Input {...register("conjuge_telefone")} onChange={(e) => handleMaskChange(e, "conjuge_telefone", maskPhone)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Salário</Label>
-                  <Input {...register("conjuge_salario")} onChange={(e) => handleCurrencyChange(e, "conjuge_salario")} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {isFuncionario && (
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
-              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2"><Contact2 size={16} /> Dados de Funcionário</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2"><Label>Data de Admissão</Label><Input type="date" {...register("data_admissao")} /></div>
-                <div className="space-y-2"><Label>Salário Mensal</Label><Input {...register("salario")} onChange={(e) => handleCurrencyChange(e, "salario")} /></div>
-                <div className="space-y-2"><Label>Dia de Pagamento</Label><Input type="number" min="1" max="31" {...register("dia_pagamento")} /></div>
-              </div>
-            </div>
-          )}
         </TabsContent>
 
         {isFuncionario && (
           <TabsContent value="acesso" className="mt-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Lock size={16} /> Credenciais de Acesso</h4>
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Lock size={16} /> Credenciais</h4>
                 <div className="space-y-2">
-                  <Label>Nome de Usuário (Login)</Label>
-                  <Input {...register("usuario")} placeholder="Ex: joao.silva" />
+                  <Label>Usuário (Login)</Label>
+                  <Input {...register("usuario")} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Senha de Acesso</Label>
-                  <Input type="password" {...register("senha")} placeholder="Digite a senha" />
+                  <Label>Senha</Label>
+                  <Input type="password" {...register("senha")} />
                 </div>
               </div>
 
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-4">
-                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões do Usuário</h4>
+                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões</h4>
                 <div className="grid grid-cols-1 gap-3">
                   {(Object.keys(permissionLabels) as Array<keyof Permissoes>).map((key) => (
                     <div key={key} className="flex items-center space-x-3 bg-white p-2 rounded-lg border border-indigo-50">
@@ -449,17 +295,11 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           </TabsContent>
         )}
 
-        {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && (
-          <TabsContent value="financeiro" className="mt-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-2"><Label>Limite de Crédito</Label><Input {...register("limite")} onChange={(e) => handleCurrencyChange(e, "limite")} /></div>
-            </div>
-            <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-4">
-              <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={16} /> Pessoas Autorizadas a Comprar</h4>
-              <Textarea placeholder="Digite os nomes das pessoas autorizadas..." className="min-h-[100px]" {...register("obs1")} />
-            </div>
-          </TabsContent>
-        )}
+        <TabsContent value="financeiro" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2"><Label>Limite de Crédito</Label><Input {...register("limite")} /></div>
+          </div>
+        </TabsContent>
       </Tabs>
     </form>
   );

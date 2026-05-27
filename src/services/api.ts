@@ -57,12 +57,9 @@ export const db = {
           .order('nome');
         
         if (error) throw error;
-        
-        // Atualiza o cache local sempre que consegue buscar da nuvem
         if (data) localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(data));
         return data || [];
       } catch (err) {
-        // Se falhar (sem internet), tenta ler do cache local
         const cache = localStorage.getItem(PRODUCTS_CACHE_KEY);
         return cache ? JSON.parse(cache) : [];
       }
@@ -73,10 +70,6 @@ export const db = {
       const { data, error } = await supabase.from('produtos').insert([{ ...p, id_manual: nextId }]).select().single();
       if (error) throw error;
       return data;
-    },
-    bulkAdd: async (products: any[]) => {
-      const { error } = await supabase.from('produtos').insert(products);
-      if (error) throw error;
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
@@ -92,6 +85,20 @@ export const db = {
       const { data, error } = await supabase.from('clientes').select('*').order('nome');
       if (error) throw error;
       return data || [];
+    },
+    checkStatus: async (id: number) => {
+      const { data: financeiro } = await supabase
+        .from('financeiro')
+        .select('valor, data_vencimento')
+        .eq('cd_entidade', id)
+        .eq('status', 'Pendente')
+        .eq('tipo', 'R');
+      
+      const today = new Date().toISOString().split('T')[0];
+      const atrasado = (financeiro || []).some(l => l.data_vencimento < today);
+      const totalPendente = (financeiro || []).reduce((acc, l) => acc + l.valor, 0);
+      
+      return { atrasado, totalPendente };
     },
     add: async (c: any) => {
       const { error } = await supabase.from('clientes').insert([c]);
@@ -165,10 +172,6 @@ export const db = {
         }
       }
     },
-    changeAccount: async (id: number, newAccountId: number) => {
-      const { error } = await supabase.from('financeiro').update({ cd_conta: newAccountId }).eq('cd_lancamento', id);
-      if (error) throw error;
-    },
     transferir: async (t: any) => {
       const { error: e1 } = await supabase.from('financeiro').insert([{
         tipo: 'P',
@@ -209,17 +212,11 @@ export const db = {
       if (error) throw error;
       return data || [];
     },
-    getByCliente: async (id: number): Promise<Venda[]> => {
-      const { data, error } = await supabase.from('vendas').select('*').eq('cd_clientes', id).order('data', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
     add: async (v: any) => {
       try {
         const { error } = await supabase.from('vendas').insert([v]);
         if (error) throw error;
       } catch (err) {
-        // Se falhar (offline), salva na fila local
         const offlineSales = JSON.parse(localStorage.getItem(OFFLINE_SALES_KEY) || '[]');
         offlineSales.push({ ...v, offline: true, timestamp: Date.now() });
         localStorage.setItem(OFFLINE_SALES_KEY, JSON.stringify(offlineSales));
@@ -258,6 +255,10 @@ export const db = {
       if (error) throw error;
       return data || [];
     },
+    add: async (o: any) => {
+      const { error } = await supabase.from('orcamentos').insert([o]);
+      if (error) throw error;
+    },
     delete: async (id: number) => {
       const { error } = await supabase.from('orcamentos').delete().eq('cd_orcamento', id);
       if (error) throw error;
@@ -278,13 +279,23 @@ export const db = {
       if (error) throw error;
     }
   },
-  mappings: {
-    get: async (fornecedorId: number, codigoExterno: string) => {
-      const { data } = await supabase.from('fornecedor_produto_map').select('cd_produto_interno').eq('cd_fornecedor', fornecedorId).eq('codigo_externo', codigoExterno).maybeSingle();
-      return data?.cd_produto_interno;
+  patrimonio: {
+    getAll: async (): Promise<Patrimonio[]> => {
+      const { data, error } = await supabase.from('patrimonio').select('*').order('descricao');
+      if (error) throw error;
+      return data || [];
     },
-    save: async (fornecedorId: number, codigoExterno: string, produtoId: number) => {
-      await supabase.from('fornecedor_produto_map').upsert([{ cd_fornecedor: fornecedorId, codigo_externo: codigoExterno, cd_produto_interno: produtoId }]);
+    add: async (p: any) => {
+      const { error } = await supabase.from('patrimonio').insert([p]);
+      if (error) throw error;
+    },
+    update: async (id: number, data: any) => {
+      const { error } = await supabase.from('patrimonio').update(data).eq('cd_patrimonio', id);
+      if (error) throw error;
+    },
+    delete: async (id: number) => {
+      const { error } = await supabase.from('patrimonio').delete().eq('cd_patrimonio', id);
+      if (error) throw error;
     }
   }
 };

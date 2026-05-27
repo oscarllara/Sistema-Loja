@@ -66,7 +66,6 @@ import ClientForm from '@/components/ClientForm';
 import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
-import PurchaseForm from '@/components/PurchaseForm';
 import SyncStatus from '@/components/SyncStatus';
 import { Produto, Cliente, Configuracoes } from '@/types/database';
 
@@ -76,7 +75,13 @@ const POS = () => {
   const navigate = useNavigate();
   const [mode, setMode] = React.useState<POSMode>('VENDA');
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
-  const [selectedSellerId, setSelectedSellerId] = React.useState<number | "">("");
+  
+  // Operadores independentes por guia
+  const [selectedSellersIds, setSelectedSellersIds] = React.useState<Record<POSMode, number | "">>({
+    VENDA: "",
+    COMPRA: "",
+    LOCACAO: ""
+  });
   
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [clients, setClients] = React.useState<Cliente[]>([]);
@@ -84,9 +89,9 @@ const POS = () => {
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
-  const xmlInputRef = React.useRef<HTMLInputElement>(null);
   const codeRef = React.useRef<HTMLInputElement>(null);
   const qtyRef = React.useRef<HTMLInputElement>(null);
+  const sellerRef = React.useRef<HTMLSelectElement>(null);
 
   const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
     VENDA: [],
@@ -102,6 +107,7 @@ const POS = () => {
 
   const cart = carts[mode];
   const selectedEntityId = entitiesIds[mode];
+  const selectedSellerId = selectedSellersIds[mode];
 
   const loadAllData = React.useCallback(async () => {
     setIsLoadingData(true);
@@ -126,11 +132,14 @@ const POS = () => {
     loadAllData();
   }, [loadAllData]);
 
+  // Gestão de Foco
   React.useEffect(() => {
-    if (selectedSellerId) {
-      setTimeout(() => codeRef.current?.focus(), 100);
+    if (!selectedSellerId) {
+      sellerRef.current?.focus();
+    } else {
+      codeRef.current?.focus();
     }
-  }, [selectedSellerId]);
+  }, [selectedSellerId, mode]);
 
   const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
     setCarts(prev => ({
@@ -141,6 +150,10 @@ const POS = () => {
 
   const setSelectedEntityId = (id: number | "") => {
     setEntitiesIds(prev => ({ ...prev, [mode]: id }));
+  };
+
+  const setSelectedSellerId = (id: number | "") => {
+    setSelectedSellersIds(prev => ({ ...prev, [mode]: id }));
   };
   
   const [inputCode, setInputCode] = React.useState("");
@@ -154,6 +167,7 @@ const POS = () => {
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [isAddEntityOpen, setIsAddEntityOpen] = React.useState(false);
   const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
+  const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
@@ -166,15 +180,16 @@ const POS = () => {
     if (key === 'F3') { if(confirm("Deseja realmente cancelar esta operação e limpar o carrinho?")) setCart([]); }
     if (key === 'F10') {
       if (cart.length === 0) { showError("Carrinho vazio!"); return; }
-      if (!selectedSellerId) { showError("Selecione o Usuário primeiro!"); return; }
+      if (!selectedSellerId) { showError("Selecione o Operador primeiro!"); return; }
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
+    if (key === 'F9') handleSaveQuote();
   }, [cart, selectedSellerId, mode]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['F1', 'F3', 'F4', 'F10'].includes(e.key)) {
+      if (['F1', 'F3', 'F4', 'F9', 'F10'].includes(e.key)) {
         e.preventDefault();
         handleShortcut(e.key);
       }
@@ -184,7 +199,7 @@ const POS = () => {
   }, [handleShortcut]);
 
   const startInsertion = (product: any) => {
-    if (!selectedSellerId) { showError("Selecione o Usuário antes de iniciar!"); return; }
+    if (!selectedSellerId) { showError("Selecione o Operador antes de iniciar!"); return; }
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
@@ -220,26 +235,6 @@ const POS = () => {
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
-  const toggleItemUnit = (index: number) => {
-    setCart(prev => {
-      const newCart = [...prev];
-      const item = { ...newCart[index] };
-      const product = products.find(p => p.cd_produto === item.cd_produto);
-      if (product && product.fracionado && product.un_fracionada) {
-        const newUnit = item.selectedUnit === product.un ? product.un_fracionada : product.un;
-        item.selectedUnit = newUnit;
-        item.finalPrice = Number(getProductPrice(product, newUnit, priceMode).toFixed(2));
-        item.isFractional = newUnit === product.un_fracionada;
-        newCart[index] = item;
-      }
-      return newCart;
-    });
-  };
-
-  const removeItem = (index: number) => {
-    setCart(prev => prev.filter((_, i) => i !== index));
-  };
-
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputCode.trim()) return;
@@ -250,11 +245,60 @@ const POS = () => {
     else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
   };
 
+  const handleSaveQuote = async () => {
+    if (cart.length === 0) { showError("Adicione itens para salvar orçamento."); return; }
+    try {
+      const entity = clients.find(e => e.cd_clientes === selectedEntityId);
+      const payload = {
+        total: total,
+        custo_total: cart.reduce((acc, item) => acc + ((item.costPrice || 0) * item.quantity), 0),
+        cd_clientes: selectedEntityId || null,
+        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
+        cd_func: Number(selectedSellerId),
+        status: 'Aberto',
+        itens: cart.map(item => ({
+          cd_produto: item.cd_produto,
+          nome_produto: item.nome,
+          valor: item.finalPrice,
+          qtde: item.quantity,
+          subtotal: item.finalPrice * item.quantity,
+          un: item.selectedUnit
+        }))
+      };
+      await db.orcamentos.add(payload);
+      showSuccess("Orçamento salvo com sucesso!");
+      setCart([]);
+    } catch (err) {
+      showError("Erro ao salvar orçamento.");
+    }
+  };
+
   const total = React.useMemo(() => cart.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0), [cart]);
 
   const confirmCheckout = async (payments: any[]) => {
     try {
-      const entity = clients.find(e => e.cd_clientes === selectedEntityId) || { nome: 'CONSUMIDOR FINAL' };
+      const entity = clients.find(e => e.cd_clientes === selectedEntityId);
+      
+      // Travas de Segurança para Crediário
+      if (payments.some(p => p.method === 'Crediário')) {
+        if (!selectedEntityId) {
+          showError("Venda no crediário exige identificação do cliente!");
+          return;
+        }
+        
+        const status = await db.clientes.checkStatus(Number(selectedEntityId));
+        if (status.atrasado) {
+          showError("CLIENTE COM CONTAS EM ATRASO! Venda bloqueada.");
+          return;
+        }
+        
+        const limite = entity?.limite || 0;
+        if (limite > 0 && (status.totalPendente + total) > limite) {
+          showError(`LIMITE EXCEDIDO! Limite: R$ ${limite.toFixed(2)} | Pendente: R$ ${status.totalPendente.toFixed(2)}`);
+          return;
+        }
+      }
+
       const payload = {
         total: Number(total.toFixed(2)),
         custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
@@ -274,17 +318,9 @@ const POS = () => {
         }))
       };
 
-      try {
-        await db.vendas.add(payload);
-        showSuccess("Operação finalizada!");
-      } catch (err: any) {
-        if (err.message === "OFFLINE_SAVED") {
-          showSuccess("Venda salva localmente (Offline). Será sincronizada automaticamente!");
-        } else {
-          throw err;
-        }
-      }
+      await db.vendas.add(payload);
       
+      // Baixa de Estoque
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
@@ -298,6 +334,7 @@ const POS = () => {
 
       setLastActionData({ ...payload, type: 'Venda' });
       setCart([]);
+      setSelectedSellerId(""); // Reseta operador após venda conforme pedido
       setIsCheckoutOpen(false);
       setIsPrintOpen(true);
       loadAllData();
@@ -319,13 +356,11 @@ const POS = () => {
     return <div className="h-screen w-screen bg-slate-900 flex items-center justify-center text-white font-bold">CARREGANDO PDV...</div>;
   }
 
-  const getThemeClasses = () => {
-    if (mode === 'VENDA') return { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-900', header: 'bg-slate-900', border: 'border-slate-800' };
-    if (mode === 'COMPRA') return { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', text: 'text-emerald-900', header: 'bg-emerald-900', border: 'border-emerald-800' };
-    return { bg: 'bg-amber-600', hover: 'hover:bg-amber-700', text: 'text-amber-900', header: 'bg-amber-900', border: 'border-amber-800' };
-  };
-
-  const theme = getThemeClasses();
+  const theme = {
+    VENDA: { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-900', header: 'bg-slate-900', border: 'border-slate-800' },
+    COMPRA: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', text: 'text-emerald-900', header: 'bg-emerald-900', border: 'border-emerald-800' },
+    LOCACAO: { bg: 'bg-amber-600', hover: 'hover:bg-amber-700', text: 'text-amber-900', header: 'bg-amber-900', border: 'border-amber-800' }
+  }[mode];
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
@@ -348,6 +383,7 @@ const POS = () => {
           <div className="space-y-1">
             <label className="text-[8px] font-bold text-slate-500 uppercase">Operador Logado *</label>
             <select 
+              ref={sellerRef}
               className={cn("w-full border-none text-[10px] font-bold h-9 rounded px-2", !selectedSellerId ? "bg-rose-600 text-white animate-pulse" : "bg-white/10 text-white")}
               value={selectedSellerId}
               onChange={(e) => setSelectedSellerId(e.target.value ? Number(e.target.value) : "")}
@@ -365,12 +401,18 @@ const POS = () => {
               <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", theme.bg, theme.hover)} onClick={() => handleShortcut('F10')}>
                 <CheckCircle size={20} /> FINALIZAR (F10)
               </Button>
+              {mode === 'VENDA' && (
+                <Button variant="outline" className="w-full h-10 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold text-xs" onClick={handleSaveQuote}>
+                  <Save size={16} /> SALVAR ORÇAMENTO (F9)
+                </Button>
+              )}
             </div>
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
               <div className="space-y-1.5">
                 <ShortcutItem keyName="F5" label="HISTÓRICO" onClick={() => setIsHistoryOpen(true)} icon={<History size={12} />} />
                 <ShortcutItem keyName="F7" label="RECEBER" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={12} />} color="emerald" />
+                <ShortcutItem keyName="F8" label="ORÇAMENTOS" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={12} />} color="amber" />
               </div>
             </div>
             <div className="pt-4">
@@ -380,10 +422,6 @@ const POS = () => {
         </ScrollArea>
 
         <div className="p-3 border-t border-slate-100 bg-slate-50">
-          <div className="flex flex-col items-center gap-1 mb-3">
-            {config?.provider_logo && <img src={config.provider_logo} alt="Provedor" className="h-4 opacity-50 grayscale hover:grayscale-0 transition-all" />}
-            <p className="text-[8px] text-slate-400 font-bold uppercase">Powered by {config?.provider_name || 'Key Of Innov'}</p>
-          </div>
           <Button variant="ghost" className="w-full h-9 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs" onClick={() => setIsAdminAuthOpen(true)}>
             <LogOut size={14} /> SAIR DO PDV
           </Button>
@@ -429,12 +467,7 @@ const POS = () => {
                   <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
                   <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
                   <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold" onClick={(e) => { e.stopPropagation(); toggleItemUnit(idx); }}>
-                    <div className="flex items-center justify-center gap-1">
-                      {item?.selectedUnit}
-                      {item?.fracionado && <Scale size={10} className="text-indigo-500" />}
-                    </div>
-                  </TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold">{item?.selectedUnit}</TableCell>
                   <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
                   <TableCell className="py-0 text-center"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
                 </TableRow>
@@ -459,6 +492,7 @@ const POS = () => {
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} />
+      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
@@ -469,8 +503,8 @@ const POS = () => {
 };
 
 const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { keyName: string, label: string, onClick: () => void, icon?: React.ReactNode, color?: string }) => (
-  <Button variant="outline" className={cn("w-full h-10 justify-between gap-2 border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-[10px] group transition-all", color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50", color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50")} onClick={onClick}>
-    <div className="flex items-center gap-2"><div className={cn("p-1 rounded-lg bg-slate-100 group-hover:bg-white transition-colors", color === 'rose' && "bg-rose-50 text-rose-600", color === 'emerald' && "bg-emerald-50 text-emerald-600", color === 'indigo' && "bg-indigo-50 text-indigo-600")}>{icon}</div><span className="uppercase">{label}</span></div>
+  <Button variant="outline" className={cn("w-full h-10 justify-between gap-2 border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-[10px] group transition-all", color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50", color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50", color === 'amber' && "border-amber-100 text-amber-700 hover:bg-amber-50")} onClick={onClick}>
+    <div className="flex items-center gap-2"><div className={cn("p-1 rounded-lg bg-slate-100 group-hover:bg-white transition-colors", color === 'rose' && "bg-rose-50 text-rose-600", color === 'emerald' && "bg-emerald-50 text-emerald-600", color === 'indigo' && "bg-indigo-50 text-indigo-600", color === 'amber' && "bg-amber-50 text-amber-600")}>{icon}</div><span className="uppercase">{label}</span></div>
     <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] font-black text-slate-500 border border-slate-200">{keyName}</span>
   </Button>
 );
