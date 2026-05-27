@@ -13,17 +13,13 @@ import {
   X,
   Wallet,
   ClipboardList,
-  Truck,
   UserSquare2,
-  ArrowLeftRight,
-  Receipt,
-  ChevronDown,
-  ChevronRight,
   LogOut,
   History,
   CalendarClock,
   Database,
-  Calculator
+  Calculator,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,7 +33,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(!isMobile);
+  const [config, setConfig] = React.useState<any>(null);
   const user = db.auth.getUser();
+
+  React.useEffect(() => {
+    db.config.get().then(setConfig).catch(() => {});
+  }, []);
 
   const handleLogout = () => {
     db.auth.logout();
@@ -79,7 +80,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     }
   ];
 
-  // Filtra itens do menu baseado nas permissões do usuário
   const filteredMenu = menuGroups.map(group => ({
     ...group,
     items: group.items.filter(item => !user?.permissoes || (user.permissoes as any)[item.perm])
@@ -125,13 +125,22 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   <p className="text-sm font-semibold truncate">{user?.nome}</p>
                 </div>
               </div>
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start text-slate-400 hover:text-white hover:bg-white/10 h-8 px-2 text-xs gap-2"
-                onClick={handleLogout}
-              >
+              <Button variant="ghost" className="w-full justify-start text-slate-400 hover:text-white hover:bg-white/10 h-8 px-2 text-xs gap-2" onClick={handleLogout}>
                 <LogOut size={14} /> Sair do Sistema
               </Button>
+            </div>
+            
+            {/* Identidade do Provedor no Rodapé do Menu */}
+            <div className="mt-4 flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+              {config?.provider_logo ? (
+                <img src={config.provider_logo} alt="Provedor" className="h-5 object-contain grayscale" />
+              ) : (
+                <ShieldCheck size={14} className="text-slate-400" />
+              )}
+              <div className="text-center">
+                <p className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">{config?.provider_name || 'Key Of Innov'}</p>
+                <p className="text-[7px] font-bold text-slate-400 italic">{config?.provider_slogan}</p>
+              </div>
             </div>
           </div>
         </div>

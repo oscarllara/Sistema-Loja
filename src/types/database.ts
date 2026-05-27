@@ -122,14 +122,12 @@ export interface LancamentoFinanceiro {
   categoria: string; 
   meio_pagamento?: MeioPagamento;
   bandeira_cartao?: string;
-  cd_conta?: number; 
+  cd_account?: number; 
   is_fixa?: boolean;
   cd_venda?: number;
   cd_compra?: number;
   cd_aluguel?: number;
   is_non_operational?: boolean;
-  
-  // Campos de Cheque / Boleto
   num_documento?: string;
   banco_nome?: string;
   banco_num?: string;
@@ -138,26 +136,59 @@ export interface LancamentoFinanceiro {
   cheque_num?: string;
 }
 
-export interface AluguelItem {
-  cd_produto: number;
-  nome_produto: string;
-  tipo_periodo: 'Diária' | 'Semana' | 'Quinzena' | 'Mês';
-  valor_unit: number;
-  qtde: number;
-  subtotal: number;
+export interface Configuracoes {
+  id?: string;
+  provider_name: string;
+  provider_slogan?: string;
+  provider_cnpj: string;
+  provider_tel: string;
+  provider_email: string;
+  provider_logo?: string;
+  
+  nome_empresa: string;
+  slogan: string;
+  cnpj: string;
+  inscricao_estadual?: string;
+  inscricao_municipal?: string;
+  endereco: string;
+  telefone: string;
+  tel2?: string;
+  tel3?: string;
+  whatsapp_loja?: string;
+  site_loja?: string;
+  email_loja?: string;
+  logo_url?: string;
+
+  tipo_impressao: 'A4' | 'Bobina';
+  largura_bobina: '79mm' | '89mm';
+  margem_esquerda: number;
+  margem_direita: number;
+  margem_topo: number;
+  margem_rodape: number;
+  
+  juros_parcelamento: number;
+  juros_atraso: number; // Juros diário (ex: 0.04)
+  multa_atraso: number; // Multa fixa (ex: 2.00)
+  dias_carencia_juros: number; // Dias após vencimento para começar a cobrar
+  whatsapp_suporte?: string;
 }
 
-export interface Aluguel {
-  cd_aluguel: number;
-  data_inicio: string;
-  data_fim_prevista: string;
-  data_devolucao?: string;
+export interface Venda {
+  cd_venda: number;
+  data: string;
+  total: number;
+  custo_total: number; 
   cd_clientes: number;
   nome_cliente?: string;
-  total: number;
-  status: 'Ativo' | 'Finalizado' | 'Atrasado' | 'Cancelado';
-  itens: AluguelItem[];
+  cd_func: number;
+  tipo_venda: 'Vista' | 'Prazo';
   meio_pagamento: MeioPagamento;
+  itens: any[];
+}
+
+export interface Orcamento extends Omit<Venda, 'cd_venda'> {
+  cd_orcamento: number;
+  status: 'Aberto' | 'Convertido' | 'Cancelado';
 }
 
 export interface ContaBancaria {
@@ -171,101 +202,6 @@ export interface ContaBancaria {
   tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
 }
 
-export interface CompraItem {
-  cd_produto?: number;
-  codigo_fornecedor?: string;
-  nome_fornecedor?: string;
-  un: string;
-  qtde: number;
-  valor_unit: number;
-  margem: number;
-  valor_venda: number;
-  subtotal: number;
-}
-
-export interface Compra {
-  cd_compra: number;
-  data: string;
-  nota_fiscal: string;
-  cd_fornecedores: number;
-  nome_fornecedor?: string;
-  total: number;
-  status: 'Rascunho' | 'Confirmada';
-  itens: CompraItem[];
-  pagamentos?: any[];
-}
-
-export interface FornecedorProdutoMap {
-  cd_fornecedor: number;
-  codigo_externo: string;
-  cd_produto_interno: number;
-}
-
-export interface VendaItem {
-  cd_produto: number;
-  nome_produto: string;
-  valor: number;
-  custo: number;
-  qtde: number;
-  subtotal: number;
-  un: string;
-}
-
-export interface Venda {
-  cd_venda: number;
-  data: string;
-  total: number;
-  custo_total: number; 
-  cd_clientes: number;
-  nome_cliente?: string;
-  cd_func: number;
-  tipo_venda: 'Vista' | 'Prazo';
-  meio_pagamento: MeioPagamento;
-  itens: VendaItem[];
-}
-
-export interface Orcamento extends Omit<Venda, 'cd_venda'> {
-  cd_orcamento: number;
-  status: 'Aberto' | 'Convertido' | 'Cancelado';
-}
-
-export interface Configuracoes {
-  id?: string;
-  // Dados do Provedor (Sua Empresa)
-  provider_name: string;
-  provider_cnpj: string;
-  provider_tel: string;
-  provider_email: string;
-  provider_logo?: string;
-  
-  // Dados do Cliente (Loja)
-  nome_empresa: string;
-  slogan: string;
-  cnpj: string;
-  inscricao_estadual?: string;
-  inscricao_municipal?: string;
-  endereco: string;
-  telefone: string; // Tel 1
-  tel2?: string;
-  tel3?: string;
-  whatsapp_loja?: string;
-  site_loja?: string;
-  email_loja?: string;
-  logo_url?: string;
-
-  // Configurações Técnicas
-  tipo_impressao: 'A4' | 'Bobina';
-  largura_bobina: '79mm' | '89mm';
-  margem_esquerda: number;
-  margem_direita: number;
-  margem_topo: number;
-  margem_rodape: number;
-  juros_parcelamento: number;
-  juros_atraso: number;
-  multa_atraso: number;
-  whatsapp_suporte?: string;
-}
-
 export interface Patrimonio {
   cd_patrimonio: number;
   descricao: string;
@@ -273,13 +209,4 @@ export interface Patrimonio {
   tipo: 'Imóvel' | 'Veículo' | 'Equipamento' | 'Outros';
   proprietário: 'Empresa' | 'Sócio A' | 'Sócio B';
   cd_produto_vinculado?: number;
-}
-
-export interface Transferencia {
-  cd_transferencia: number;
-  data: string;
-  valor: number;
-  cd_conta_origem: number;
-  cd_conta_destino: number;
-  obs?: string;
 }
