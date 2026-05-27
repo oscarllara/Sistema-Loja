@@ -292,9 +292,6 @@ const POS = () => {
         }
       }
       
-      // Baixa de estoque inteligente (considerando fracionamento)
-      // Nota: Em modo offline, a baixa de estoque no banco não ocorrerá até a sincronização,
-      // mas o sistema continuará funcionando com o cache local.
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
@@ -302,7 +299,6 @@ const POS = () => {
           if (item.isFractional && item.conversionFactor > 0) {
             qtyToDeduct = item.quantity / item.conversionFactor;
           }
-          // Tenta atualizar estoque (se falhar, ignora no modo offline)
           db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
         }
       }
@@ -335,27 +331,29 @@ const POS = () => {
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
       <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-100 flex flex-col items-center text-center">
+        <div className="p-4 border-b border-slate-100 flex flex-col items-center text-center bg-slate-50">
           {config?.logo_url ? (
-            <img src={config.logo_url} alt="Logo" className="h-12 object-contain mb-2" />
+            <div className="w-full h-24 flex items-center justify-center p-2 bg-white rounded-xl border border-slate-200 shadow-sm mb-2">
+              <img src={config.logo_url} alt="Logo Loja" className="max-h-full max-w-full object-contain" />
+            </div>
           ) : (
-            <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg mb-2", `bg-${themeColor}-600`)}>
-              <ShoppingCart size={24} />
+            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg mb-2", `bg-${themeColor}-600`)}>
+              <ShoppingCart size={32} />
             </div>
           )}
           <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", `text-${themeColor}-900`)}>{config?.nome_empresa || 'DyadERP'}</h2>
-          <p className="text-[9px] text-slate-500 font-bold">{config?.slogan}</p>
+          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{config?.slogan}</p>
         </div>
 
         <div className={cn("p-3 text-white space-y-2", mode === 'VENDA' ? "bg-slate-900" : mode === 'COMPRA' ? "bg-emerald-900" : "bg-amber-900")}>
           <div className="space-y-1">
-            <label className="text-[8px] font-bold text-slate-500 uppercase">Usuário do Sistema *</label>
+            <label className="text-[8px] font-bold text-slate-500 uppercase">Operador Logado *</label>
             <select 
               className={cn("w-full border-none text-[10px] font-bold h-9 rounded px-2", !selectedSellerId ? "bg-rose-600 text-white animate-pulse" : "bg-white/10 text-white")}
               value={selectedSellerId}
               onChange={(e) => setSelectedSellerId(e.target.value ? Number(e.target.value) : "")}
             >
-              <option value="" className="bg-white text-slate-900">SELECIONE O USUÁRIO...</option>
+              <option value="" className="bg-white text-slate-900">SELECIONE O OPERADOR...</option>
               {sellers.map(v => <option key={v.cd_clientes} value={v.cd_clientes} className="bg-white text-slate-900">{v.nome}</option>)}
             </select>
           </div>
@@ -382,7 +380,11 @@ const POS = () => {
           </div>
         </ScrollArea>
 
-        <div className="p-3 border-t border-slate-100">
+        <div className="p-3 border-t border-slate-100 bg-slate-50">
+          <div className="flex flex-col items-center gap-1 mb-3">
+            {config?.provider_logo && <img src={config.provider_logo} alt="Provedor" className="h-4 opacity-50 grayscale hover:grayscale-0 transition-all" />}
+            <p className="text-[8px] text-slate-400 font-bold uppercase">Powered by {config?.provider_name || 'Key Of Innov'}</p>
+          </div>
           <Button variant="ghost" className="w-full h-9 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs" onClick={() => setIsAdminAuthOpen(true)}>
             <LogOut size={14} /> SAIR DO PDV
           </Button>

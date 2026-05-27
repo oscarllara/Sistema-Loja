@@ -231,11 +231,29 @@ export interface Orcamento extends Omit<Venda, 'cd_venda'> {
 
 export interface Configuracoes {
   id?: string;
+  // Dados do Provedor (Sua Empresa)
+  provider_name: string;
+  provider_cnpj: string;
+  provider_tel: string;
+  provider_email: string;
+  provider_logo?: string;
+  
+  // Dados do Cliente (Loja)
   nome_empresa: string;
   slogan: string;
-  telefone: string;
   cnpj: string;
+  inscricao_estadual?: string;
+  inscricao_municipal?: string;
   endereco: string;
+  telefone: string; // Tel 1
+  tel2?: string;
+  tel3?: string;
+  whatsapp_loja?: string;
+  site_loja?: string;
+  email_loja?: string;
+  logo_url?: string;
+
+  // Configurações Técnicas
   tipo_impressao: 'A4' | 'Bobina';
   largura_bobina: '79mm' | '89mm';
   margem_esquerda: number;
@@ -246,7 +264,6 @@ export interface Configuracoes {
   juros_atraso: number;
   multa_atraso: number;
   whatsapp_suporte?: string;
-  logo_url?: string;
 }
 
 export interface Patrimonio {

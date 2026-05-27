@@ -7,7 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Printer, Save, Layout as LayoutIcon, Percent, Wallet, MessageCircle, Image as ImageIcon, Building2 } from 'lucide-react';
+import { 
+  Printer, 
+  Save, 
+  Layout as LayoutIcon, 
+  Percent, 
+  Wallet, 
+  MessageCircle, 
+  Image as ImageIcon, 
+  Building2,
+  ShieldCheck,
+  Globe,
+  Phone,
+  Mail,
+  MapPin
+} from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { Configuracoes } from '@/types/database';
@@ -19,12 +33,6 @@ const Settings = () => {
   const loadConfig = React.useCallback(async () => {
     try {
       const data = await db.config.get();
-      // Se for a primeira vez ou dados vazios, preenche com os novos dados solicitados
-      if (!data.nome_empresa || data.nome_empresa === 'Key Of Inov Dev') {
-        data.nome_empresa = 'Key Of Innov';
-        data.slogan = 'A chave da inovação!';
-        data.telefone = '+55 (35) 99842-1050';
-      }
       setConfig(data);
     } catch (err) {
       showError("Erro ao carregar configurações.");
@@ -36,6 +44,31 @@ const Settings = () => {
   React.useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  const maskPhone = (value: string) => {
+    let v = value.replace(/\D/g, "");
+    if (v.startsWith("55")) v = v.slice(2);
+    if (v.length > 11) v = v.slice(0, 11);
+    
+    if (v.length === 0) return "";
+    
+    let r = "+55 ";
+    if (v.length > 0) r += "(" + v.slice(0, 2);
+    if (v.length > 2) {
+      // Se o terceiro dígito for 9, é celular (xxxxx-xxxx)
+      const isMobile = v[2] === '9';
+      r += ") " + v.slice(2, isMobile ? 7 : 6);
+      if (v.length > (isMobile ? 7 : 6)) {
+        r += "-" + v.slice(isMobile ? 7 : 6);
+      }
+    }
+    return r;
+  };
+
+  const handlePhoneChange = (field: keyof Configuracoes, value: string) => {
+    if (!config) return;
+    setConfig({ ...config, [field]: maskPhone(value) });
+  };
 
   const handleSave = async () => {
     if (!config) return;
@@ -53,226 +86,163 @@ const Settings = () => {
 
   return (
     <Layout>
-      <div className="space-y-6 max-w-5xl">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Configurações do Sistema</h1>
-          <p className="text-slate-500">Personalize a identidade visual, impressão e regras de negócio.</p>
+      <div className="space-y-6 max-w-6xl mx-auto pb-20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Configurações do Sistema</h1>
+            <p className="text-slate-500">Gerencie os dados do provedor e da sua loja.</p>
+          </div>
+          <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl gap-2 font-bold shadow-lg shadow-indigo-100">
+            <Save size={20} /> Salvar Tudo
+          </Button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-6">
-            <Card className="border-none shadow-sm">
-              <CardHeader className="border-b bg-slate-50/50">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Building2 size={18} className="text-indigo-600" /> Identidade da Empresa
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
+          {/* SEÇÃO 1: PROVEDOR DO SISTEMA */}
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b bg-slate-900 text-white rounded-t-xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <ShieldCheck size={18} /> Provedor do Sistema (Sua Empresa)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-2">
+                <Label>Nome / Razão Social</Label>
+                <Input value={config.provider_name || ""} onChange={(e) => setConfig({ ...config, provider_name: e.target.value })} placeholder="Ex: Key Of Innov" />
+              </div>
+              <div className="space-y-2">
+                <Label>CNPJ</Label>
+                <Input value={config.provider_cnpj || ""} onChange={(e) => setConfig({ ...config, provider_cnpj: e.target.value })} placeholder="00.000.000/0000-00" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Nome da Empresa</Label>
-                  <Input 
-                    value={config.nome_empresa} 
-                    onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value })}
-                  />
+                  <Label>Telefone</Label>
+                  <Input value={config.provider_tel || ""} onChange={(e) => handlePhoneChange('provider_tel', e.target.value)} placeholder="+55 (xx) xxxx-xxxx" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Slogan / Frase de Efeito</Label>
-                  <Input 
-                    value={config.slogan} 
-                    onChange={(e) => setConfig({ ...config, slogan: e.target.value })}
-                  />
+                  <Label>E-mail</Label>
+                  <Input type="email" value={config.provider_email || ""} onChange={(e) => setConfig({ ...config, provider_email: e.target.value })} placeholder="contato@provedor.com" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><ImageIcon size={14} /> URL da Logo do Provedor</Label>
+                <Input value={config.provider_logo || ""} onChange={(e) => setConfig({ ...config, provider_logo: e.target.value })} placeholder="https://..." />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* SEÇÃO 2: DADOS DO CLIENTE (LOJA) */}
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b bg-indigo-600 text-white rounded-t-xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Building2 size={18} /> Dados da Loja (Operador)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Nome da Loja / Razão Social</Label>
+                  <Input value={config.nome_empresa} onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Telefone de Contato</Label>
-                  <Input 
-                    value={config.telefone} 
-                    onChange={(e) => setConfig({ ...config, telefone: e.target.value })}
-                  />
+                  <Label>CNPJ</Label>
+                  <Input value={config.cnpj} onChange={(e) => setConfig({ ...config, cnpj: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2"><ImageIcon size={14} /> URL da Logo (PNG/JPG)</Label>
-                  <Input 
-                    value={config.logo_url || ""} 
-                    onChange={(e) => setConfig({ ...config, logo_url: e.target.value })}
-                    placeholder="https://link-da-sua-logo.png"
-                  />
-                  <p className="text-[10px] text-slate-500">Insira o link da imagem da sua logo para aparecer no PDV e Recibos.</p>
+                  <Label>Inscrição Estadual</Label>
+                  <Input value={config.inscricao_estadual || ""} onChange={(e) => setConfig({ ...config, inscricao_estadual: e.target.value })} />
                 </div>
+                <div className="space-y-2">
+                  <Label>Inscrição Municipal</Label>
+                  <Input value={config.inscricao_municipal || ""} onChange={(e) => setConfig({ ...config, inscricao_municipal: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Slogan</Label>
+                  <Input value={config.slogan} onChange={(e) => setConfig({ ...config, slogan: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><MapPin size={14} /> Endereço Completo</Label>
+                <Input value={config.endereco} onChange={(e) => setConfig({ ...config, endereco: e.target.value })} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* SEÇÃO 3: CONTATOS DA LOJA */}
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b bg-slate-50">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Phone size={18} className="text-indigo-600" /> Contatos e Web
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Telefone 1 (Padrão)</Label>
+                  <Input value={config.telefone} onChange={(e) => handlePhoneChange('telefone', e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone 2</Label>
+                  <Input value={config.tel2 || ""} onChange={(e) => handlePhoneChange('tel2', e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone 3</Label>
+                  <Input value={config.tel3 || ""} onChange={(e) => handlePhoneChange('tel3', e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-emerald-600 font-bold">WhatsApp Loja</Label>
+                  <Input value={config.whatsapp_loja || ""} onChange={(e) => handlePhoneChange('whatsapp_loja', e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Site</Label>
+                  <Input value={config.site_loja || ""} onChange={(e) => setConfig({ ...config, site_loja: e.target.value })} placeholder="www.loja.com.br" />
+                </div>
+                <div className="space-y-2">
+                  <Label>E-mail da Loja</Label>
+                  <Input value={config.email_loja || ""} onChange={(e) => setConfig({ ...config, email_loja: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-indigo-600 font-bold"><ImageIcon size={14} /> Logo da Loja (PDV/Recibos)</Label>
+                <Input value={config.logo_url || ""} onChange={(e) => setConfig({ ...config, logo_url: e.target.value })} placeholder="https://link-da-logo.png" />
                 {config.logo_url && (
-                  <div className="mt-2 p-2 border rounded-lg bg-slate-50 flex justify-center">
-                    <img src={config.logo_url} alt="Preview Logo" className="h-16 object-contain" />
+                  <div className="mt-2 p-4 border rounded-xl bg-slate-50 flex justify-center">
+                    <img src={config.logo_url} alt="Preview Logo" className="h-20 object-contain" />
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="border-none shadow-sm">
-              <CardHeader className="border-b bg-slate-50/50">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Printer size={18} className="text-indigo-600" /> Impressão de Recibos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="space-y-3">
-                  <Label>Tipo de Papel</Label>
-                  <RadioGroup 
-                    value={config.tipo_impressao} 
-                    onValueChange={(v) => setConfig({ ...config, tipo_impressao: v as any })}
-                    className="flex gap-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="Bobina" id="p-bobina" />
-                      <Label htmlFor="p-bobina">Bobina (Térmica)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="A4" id="p-a4" />
-                      <Label htmlFor="p-a4">Folha A4</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                {config.tipo_impressao === 'Bobina' && (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <Label>Largura da Bobina</Label>
-                    <RadioGroup 
-                      value={config.largura_bobina} 
-                      onValueChange={(v) => setConfig({ ...config, largura_bobina: v as any })}
-                      className="flex gap-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="79mm" id="w-79" />
-                        <Label htmlFor="w-79">79mm / 80mm</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="89mm" id="w-89" />
-                        <Label htmlFor="w-89">89mm</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t space-y-4">
-                  <h4 className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
-                    <LayoutIcon size={14} /> Ajustes de Margem (mm)
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[10px]">Esquerda</Label>
-                      <Input 
-                        type="number" 
-                        value={config.margem_esquerda} 
-                        onChange={(e) => setConfig({ ...config, margem_esquerda: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px]">Direita</Label>
-                      <Input 
-                        type="number" 
-                        value={config.margem_direita} 
-                        onChange={(e) => setConfig({ ...config, margem_direita: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px]">Topo</Label>
-                      <Input 
-                        type="number" 
-                        value={config.margem_topo} 
-                        onChange={(e) => setConfig({ ...config, margem_topo: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px]">Rodapé</Label>
-                      <Input 
-                        type="number" 
-                        value={config.margem_rodape} 
-                        onChange={(e) => setConfig({ ...config, margem_rodape: Number(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card className="border-none shadow-sm">
-              <CardHeader className="border-b bg-slate-50/50">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <MessageCircle size={18} className="text-emerald-600" /> Suporte e Contato
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
+          {/* SEÇÃO 4: REGRAS E IMPRESSÃO */}
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b bg-slate-50">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Printer size={18} className="text-indigo-600" /> Impressão e Regras
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <div className="space-y-3">
+                <Label>Tipo de Papel</Label>
+                <RadioGroup value={config.tipo_impressao} onValueChange={(v) => setConfig({ ...config, tipo_impressao: v as any })} className="flex gap-4">
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="Bobina" id="p-bobina" /><Label htmlFor="p-bobina">Bobina</Label></div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="A4" id="p-a4" /><Label htmlFor="p-a4">Folha A4</Label></div>
+                </RadioGroup>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>WhatsApp de Suporte</Label>
-                  <Input 
-                    value={config.whatsapp_suporte || ""} 
-                    onChange={(e) => setConfig({ ...config, whatsapp_suporte: e.target.value })}
-                    placeholder="Ex: 5511999999999"
-                  />
-                  <p className="text-[10px] text-slate-500">Número com DDD (apenas números) para o link de "Esqueci minha senha".</p>
+                  <Label>Juros Parcelamento (%)</Label>
+                  <Input type="number" step="0.01" value={config.juros_parcelamento} onChange={(e) => setConfig({ ...config, juros_parcelamento: Number(e.target.value) })} />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-sm">
-              <CardHeader className="border-b bg-slate-50/50">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Percent size={18} className="text-indigo-600" /> Regras de Venda
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
                 <div className="space-y-2">
-                  <Label>Juros de Parcelamento (%)</Label>
-                  <Input 
-                    type="number" 
-                    step="0.01"
-                    value={config.juros_parcelamento} 
-                    onChange={(e) => setConfig({ ...config, juros_parcelamento: Number(e.target.value) })}
-                    placeholder="Ex: 2.5"
-                  />
-                  <p className="text-[10px] text-slate-500">Taxa aplicada ao total da venda quando parcelada no crediário.</p>
+                  <Label>Multa Atraso (%)</Label>
+                  <Input type="number" step="0.01" value={config.multa_atraso} onChange={(e) => setConfig({ ...config, multa_atraso: Number(e.target.value) })} />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-sm">
-              <CardHeader className="border-b bg-slate-50/50">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Wallet size={18} className="text-indigo-600" /> Financeiro / Atrasos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Multa por Atraso (%)</Label>
-                    <Input 
-                      type="number" 
-                      step="0.01"
-                      value={config.multa_atraso} 
-                      onChange={(e) => setConfig({ ...config, multa_atraso: Number(e.target.value) })}
-                      placeholder="Ex: 2.0"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Juros Diário (%)</Label>
-                    <Input 
-                      type="number" 
-                      step="0.001"
-                      value={config.juros_atraso} 
-                      onChange={(e) => setConfig({ ...config, juros_atraso: Number(e.target.value) })}
-                      placeholder="Ex: 0.033"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl gap-2 font-bold shadow-lg shadow-indigo-100">
-            <Save size={20} /> Salvar Configurações
-          </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </Layout>
