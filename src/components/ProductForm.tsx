@@ -132,7 +132,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     }).format(number);
   };
 
-  // Cálculo automático do preço à vista (pode ser sobrescrito)
+  // Cálculo automático do preço à vista
   React.useEffect(() => {
     const subscription = watch((value, { name }) => {
       if (name === 'venda' || name === 'desconto_vista_valor' || name === 'desconto_vista_tipo') {
@@ -149,7 +149,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         setValue("venda_vista", calculado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
       }
 
-      // Cálculo automático do preço fracionado sugerido
       if (name === 'venda' || name === 'fator_conversao') {
         const venda = parseCurrencyToNumber(value.venda || "0");
         const fator = parseFloat(value.fator_conversao || "0");
@@ -188,7 +187,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         estoque: parseFloat(data.estoque || "0"),
         minimo: parseFloat(data.minimo || "0"),
         fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : undefined,
-        integrar_calculadora: data.integrar_calculadora,
+        integrar_calculadora: !!data.integrar_calculadora,
         data_atualizacao: new Date().toISOString()
       } as any;
 
@@ -202,7 +201,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar produto:", err);
-      showError("Erro ao salvar no banco de dados.");
+      showError("Erro ao salvar no banco de dados. Verifique se todos os campos estão corretos.");
     }
   };
 
@@ -255,7 +254,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Label htmlFor="is_locacao_geral" className="font-black text-sm cursor-pointer text-indigo-900">Este item é para Locação</Label>
               </div>
               <div className="flex items-center space-x-2 p-4 bg-amber-50 rounded-xl border border-amber-100">
-                <Checkbox id="integrar_calc" checked={watch("integrar_calculadora")} onCheckedChange={(checked) => setValue("integrar_calculadora", !!checked)} />
+                <Checkbox id="integrar_calc" checked={!!watch("integrar_calculadora")} onCheckedChange={(checked) => setValue("integrar_calculadora", !!checked)} />
                 <Label htmlFor="integrar_calc" className="font-black text-sm cursor-pointer text-amber-900 flex items-center gap-2"><Calculator size={16} /> Integrar com Calculadora</Label>
               </div>
             </div>
