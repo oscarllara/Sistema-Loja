@@ -85,8 +85,6 @@ const POS = () => {
   const xmlInputRef = React.useRef<HTMLInputElement>(null);
   const codeRef = React.useRef<HTMLInputElement>(null);
   const qtyRef = React.useRef<HTMLInputElement>(null);
-  const rentalStartRef = React.useRef<HTMLInputElement>(null);
-  const rentalEndRef = React.useRef<HTMLInputElement>(null);
 
   const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
     VENDA: [],
@@ -126,7 +124,6 @@ const POS = () => {
     loadAllData();
   }, [loadAllData]);
 
-  // Foco automático no campo de código após selecionar o vendedor
   React.useEffect(() => {
     if (selectedSellerId) {
       setTimeout(() => codeRef.current?.focus(), 100);
@@ -149,9 +146,6 @@ const POS = () => {
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
   
-  const [rentalStart, setRentalStart] = React.useState(new Date().toISOString().split('T')[0]);
-  const [rentalEnd, setRentalEnd] = React.useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
-
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchInitialTerm, setSearchInitialTerm] = React.useState("");
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
@@ -161,7 +155,6 @@ const POS = () => {
   const [isEditItemOpen, setIsEditItemOpen] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
-  const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = React.useState(false);
@@ -171,71 +164,6 @@ const POS = () => {
   const [editData, setEditData] = React.useState({ qtde: 1, valor: "0,00", total: "0,00" });
   const [adminPassword, setAdminPassword] = React.useState("");
   const [lastActionData, setLastActionData] = React.useState<any>(null);
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const loadingId = showLoading("Lendo arquivo XML...");
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      try {
-        const xmlText = e.target?.result as string;
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-
-        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
-        const xNomeFornecedor = xmlDoc.getElementsByTagName("xNome")[0]?.textContent || "FORNECEDOR DESCONHECIDO";
-        const vNF = parseFloat(xmlDoc.getElementsByTagName("vNF")[0]?.textContent || "0");
-
-        const itensNodes = xmlDoc.getElementsByTagName("det");
-        const itens: any[] = [];
-
-        for (let i = 0; i < itensNodes.length; i++) {
-          const prod = itensNodes[i].getElementsByTagName("prod")[0];
-          const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
-          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
-          const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
-          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
-          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
-          const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
-
-          itens.push({
-            codigo_fornecedor: cProd,
-            nome_fornecedor: xProd,
-            un: uCom,
-            qtde: qCom,
-            valor_unit: vUnCom,
-            subtotal: vProd,
-            margem: 40,
-            valor_venda: vUnCom * 1.4,
-          });
-        }
-
-        const compraData = {
-          cd_compra: Date.now(),
-          nota_fiscal: nNF,
-          cd_fornecedores: 0,
-          nome_fornecedor: xNomeFornecedor,
-          total: vNF,
-          status: 'Rascunho' as const,
-          itens: itens
-        };
-
-        dismissToast(loadingId);
-        setXmlPurchaseData(compraData);
-        setIsPurchaseModalOpen(true);
-        showSuccess("XML importado com sucesso!");
-      } catch (err) {
-        dismissToast(loadingId);
-        showError("Erro ao processar o XML.");
-      }
-    };
-
-    reader.readAsText(file);
-    if (xmlInputRef.current) xmlInputRef.current.value = "";
-  };
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
@@ -255,29 +183,18 @@ const POS = () => {
         e.preventDefault();
         handleShortcut(e.key);
       }
-      if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) { 
-        e.preventDefault();
-        if (cart.length > 0) handleOpenEdit(cart.length - 1); 
-      }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [handleShortcut, cart]);
+  }, [handleShortcut]);
 
   const startInsertion = (product: any) => {
     if (!selectedSellerId) { showError("Selecione o Usuário antes de iniciar!"); return; }
     setPendingProduct(product);
     setInputCode(product.nome);
-    if (mode === 'LOCACAO') {
-      const days = getDays();
-      setInputUnit(getRentalUnit(days));
-      setInputQty(days.toString());
-      setTimeout(() => rentalStartRef.current?.focus(), 50);
-    } else {
-      setInputUnit(product.un);
-      setInputQty("1");
-      setTimeout(() => qtyRef.current?.focus(), 50);
-    }
+    setInputUnit(product.un);
+    setInputQty("1");
+    setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
@@ -291,7 +208,7 @@ const POS = () => {
     if (e) e.preventDefault();
     if (!pendingProduct) return;
     const qty = parseFloat(inputQty.replace(',', '.')) || 1;
-    let price = mode === 'LOCACAO' ? calculateRentalPrice(getDays(), pendingProduct) : getProductPrice(pendingProduct, inputUnit, priceMode);
+    const price = getProductPrice(pendingProduct, inputUnit, priceMode);
     
     setCart(prev => [...prev, { 
       ...pendingProduct, 
@@ -299,10 +216,8 @@ const POS = () => {
       selectedUnit: inputUnit,
       finalPrice: Number(price.toFixed(2)),
       costPrice: pendingProduct.compra || 0,
-      isRental: mode === 'LOCACAO',
-      rentalStart: mode === 'LOCACAO' ? rentalStart : undefined,
-      rentalEnd: mode === 'LOCACAO' ? rentalEnd : undefined,
-      rentalDays: mode === 'LOCACAO' ? getDays() : undefined
+      isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
+      conversionFactor: pendingProduct.fator_conversao || 1
     }]);
     setPendingProduct(null);
     setInputCode("");
@@ -310,27 +225,16 @@ const POS = () => {
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
-  const togglePriceMode = () => {
-    const newMode = priceMode === 'PRAZO' ? 'VISTA' : 'PRAZO';
-    setPriceMode(newMode);
-    setCart(prev => prev.map(item => {
-      if (item.isRental) return item;
-      const product = products.find(p => p.cd_produto === item.cd_produto);
-      if (!product) return item;
-      return { ...item, finalPrice: Number(getProductPrice(product, item.selectedUnit, newMode).toFixed(2)) };
-    }));
-  };
-
   const toggleItemUnit = (index: number) => {
     setCart(prev => {
       const newCart = [...prev];
       const item = { ...newCart[index] };
-      if (item.isRental) return prev;
       const product = products.find(p => p.cd_produto === item.cd_produto);
       if (product && product.fracionado && product.un_fracionada) {
         const newUnit = item.selectedUnit === product.un ? product.un_fracionada : product.un;
         item.selectedUnit = newUnit;
         item.finalPrice = Number(getProductPrice(product, newUnit, priceMode).toFixed(2));
+        item.isFractional = newUnit === product.un_fracionada;
         newCart[index] = item;
       }
       return newCart;
@@ -341,61 +245,21 @@ const POS = () => {
     setCart(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setInputCode(val);
-    
-    if (!val) { setPendingProduct(null); return; }
-
-    // Se não for apenas números (leitor) e tiver 3 ou mais caracteres, abre a busca automática
-    if (val.length >= 3 && !/^\d+$/.test(val) && !pendingProduct) { 
-      setSearchInitialTerm(val); 
-      setIsSearchOpen(true); 
-    }
-    
-    if (pendingProduct && val !== pendingProduct.nome) setPendingProduct(null);
-  };
-
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputCode.trim()) return;
-    if (pendingProduct) {
-      if (mode === 'LOCACAO') rentalStartRef.current?.focus();
-      else qtyRef.current?.focus();
-      return;
-    }
+    if (pendingProduct) { commitToCart(); return; }
     const paddedVal = inputCode.padStart(5, '0');
     const product = products.find(p => p.id_manual === inputCode || p.id_manual === paddedVal || p.cod_barras === inputCode);
     if (product) startInsertion(product);
     else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
   };
 
-  const handleOpenEdit = (index: number) => {
-    const item = cart[index];
-    setEditingIndex(index);
-    setEditData({ qtde: item.quantity, valor: formatCurrency(item.finalPrice), total: formatCurrency(item.quantity * item.finalPrice) });
-    setIsEditItemOpen(true);
-  };
-
-  const saveEdit = () => {
-    if (editingIndex === null) return;
-    setCart(prev => {
-      const newCart = [...prev];
-      const item = { ...newCart[editingIndex] };
-      item.quantity = editData.qtde;
-      item.finalPrice = parseCurrency(editData.valor);
-      newCart[editingIndex] = item;
-      return newCart;
-    });
-    setIsEditItemOpen(false);
-    setEditingIndex(null);
-  };
-
   const total = React.useMemo(() => cart.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0), [cart]);
 
   const confirmCheckout = async (payments: any[]) => {
     try {
-      const entity = (mode === 'COMPRA' ? clients.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A') : clients).find(e => e.cd_clientes === selectedEntityId) || { nome: 'CONSUMIDOR FINAL' };
+      const entity = clients.find(e => e.cd_clientes === selectedEntityId) || { nome: 'CONSUMIDOR FINAL' };
       const payload = {
         total: Number(total.toFixed(2)),
         custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
@@ -417,10 +281,15 @@ const POS = () => {
 
       await db.vendas.add(payload);
       
+      // Baixa de estoque inteligente (considerando fracionamento)
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
-          await db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity });
+          let qtyToDeduct = item.quantity;
+          if (item.isFractional && item.conversionFactor > 0) {
+            qtyToDeduct = item.quantity / item.conversionFactor;
+          }
+          await db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct });
         }
       }
 
@@ -443,38 +312,6 @@ const POS = () => {
       maximumFractionDigits: 2,
     }).format(number);
   };
-
-  const parseCurrency = (value: string) => {
-    if (!value) return 0;
-    const cleanValue = value.replace(/[^\d,]/g, "").replace(",", ".");
-    return parseFloat(cleanValue) || 0;
-  };
-
-  const getDays = React.useCallback(() => {
-    const start = new Date(rentalStart);
-    const end = new Date(rentalEnd);
-    const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(1, diffDays);
-  }, [rentalStart, rentalEnd]);
-
-  const calculateRentalPrice = React.useCallback((days: number, p: any) => {
-    if (!p) return 0;
-    if (days <= 0) return 0;
-    let price = 0;
-    if (days >= 1 && days <= 3) price = p.valor_diaria || p.venda || 0;
-    else if (days >= 4 && days <= 10) price = p.valor_semana || p.valor_diaria || p.venda || 0;
-    else if (days >= 11 && days <= 18) price = p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
-    else price = p.valor_mes || p.valor_quinzena || p.valor_semana || p.valor_diaria || p.venda || 0;
-    return Number(price.toFixed(2));
-  }, []);
-
-  const getRentalUnit = React.useCallback((days: number) => {
-    if (days >= 1 && days <= 3) return "DIÁRIA(S)";
-    if (days >= 4 && days <= 10) return "SEMANAL";
-    if (days >= 11 && days <= 18) return "QUINZENAL";
-    return "MENSAL";
-  }, []);
 
   if (isLoadingData) {
     return <div className="h-screen w-screen bg-slate-900 flex items-center justify-center text-white font-bold">CARREGANDO PDV...</div>;
@@ -511,15 +348,6 @@ const POS = () => {
               <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", mode === 'VENDA' ? "bg-indigo-600 hover:bg-indigo-700" : mode === 'COMPRA' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700")} onClick={() => handleShortcut('F10')}>
                 <CheckCircle size={20} /> FINALIZAR (F10)
               </Button>
-              
-              {mode === 'COMPRA' && (
-                <>
-                  <input type="file" ref={xmlInputRef} className="hidden" accept=".xml" onChange={handleFileChange} />
-                  <Button variant="outline" className="w-full h-12 bg-blue-600 text-white hover:bg-blue-700 border-none rounded-xl gap-2 shadow-lg shadow-blue-100 font-bold text-xs" onClick={() => handleShortcut('F12')}>
-                    <Upload size={18} /> IMPORTAR XML (F12)
-                  </Button>
-                </>
-              )}
             </div>
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
@@ -572,12 +400,17 @@ const POS = () => {
             </TableHeader>
             <TableBody>
               {cart.map((item, idx) => (
-                <TableRow key={idx} className="h-7 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer" onClick={() => handleOpenEdit(idx)}>
+                <TableRow key={idx} className="h-7 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer">
                   <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200">{item?.id_manual?.padStart(5, '0')}</TableCell>
                   <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
                   <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
                   <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold" onClick={(e) => { e.stopPropagation(); toggleItemUnit(idx); }}>{item?.selectedUnit}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold" onClick={(e) => { e.stopPropagation(); toggleItemUnit(idx); }}>
+                    <div className="flex items-center justify-center gap-1">
+                      {item?.selectedUnit}
+                      {item?.fracionado && <Scale size={10} className="text-indigo-500" />}
+                    </div>
+                  </TableCell>
                   <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
                   <TableCell className="py-0 text-center"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
                 </TableRow>
@@ -590,7 +423,7 @@ const POS = () => {
           <form onSubmit={handleCodeSubmit} className="flex items-end gap-3 h-full">
             <div className="flex-1 space-y-1">
               <label className="text-[8px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
-              <Input ref={codeRef} value={inputCode} onChange={handleCodeChange} onKeyDown={(e) => { if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); handleCodeSubmit(e); } }} className={cn("h-9 border-none text-base font-black", pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900")} placeholder="Bipe o produto ou digite o nome..." />
+              <Input ref={codeRef} value={inputCode} onChange={(e) => setInputCode(e.target.value)} className={cn("h-9 border-none text-base font-black", pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900")} placeholder="Bipe o produto ou digite o nome..." />
             </div>
             <div className="w-20 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Qtde</label><Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-9 bg-[#E1FFFF] border-none text-base font-black text-slate-900 text-center" /></div>
             <div className="w-28 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Unidade</label><div className="w-full h-9 rounded flex items-center justify-center font-black text-[10px] uppercase bg-[#E1FFFF] text-slate-900">{inputUnit || "UN"}</div></div>
@@ -607,19 +440,6 @@ const POS = () => {
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
       <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
-      <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><Edit3 className="text-indigo-600" />Editar Item</DialogTitle></DialogHeader><div className="space-y-4 py-4">{editingIndex !== null && <div className="p-3 bg-slate-50 rounded-lg border mb-4"><p className="text-[10px] font-bold text-slate-400 uppercase">Produto</p><p className="text-sm font-bold text-slate-900">{cart[editingIndex]?.nome}</p></div>}<div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label>Quantidade</Label><Input type="number" value={editData.qtde} onChange={(e) => { const q = parseFloat(e.target.value) || 0; const v = parseCurrency(editData.valor); setEditData({ ...editData, qtde: q, total: formatCurrency(q * v) }); }} /></div><div className="space-y-2"><Label>Valor Unitário (R$)</Label><Input value={editData.valor} onChange={(e) => { const vStr = formatCurrency(e.target.value); const v = parseCurrency(vStr); setEditData({ ...editData, valor: vStr, total: formatCurrency(editData.qtde * v) }); }} /></div></div><div className="space-y-2"><Label>Valor Total (R$)</Label><Input value={editData.total} onChange={(e) => { const tStr = formatCurrency(e.target.value); const t = parseCurrency(tStr); const v = editData.qtde > 0 ? t / editData.qtde : 0; setEditData({ ...editData, total: tStr, valor: formatCurrency(v) }); }} /></div></div><DialogFooter><Button variant="outline" onClick={() => setIsEditItemOpen(false)}>Cancelar</Button><Button onClick={saveEdit} className="bg-indigo-600">Salvar</Button></DialogFooter></DialogContent></Dialog>
-      
-      <Dialog open={isPurchaseModalOpen} onOpenChange={setIsPurchaseModalOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileSearch className="text-indigo-600" />
-              Conferência de Compra / XML
-            </DialogTitle>
-          </DialogHeader>
-          <PurchaseForm initialData={xmlPurchaseData} onSuccess={() => { setIsPurchaseModalOpen(false); loadAllData(); }} />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
