@@ -36,7 +36,8 @@ import {
   FileCode,
   FileSearch,
   WifiOff,
-  ShieldAlert
+  ShieldAlert,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -225,12 +226,16 @@ const POS = () => {
     const qty = parseFloat(inputQty.replace(',', '.')) || 1;
     const price = getProductPrice(pendingProduct, inputUnit, priceMode);
     
+    const margin = pendingProduct.compra > 0 ? ((pendingProduct.venda / pendingProduct.compra) - 1) * 100 : 40;
+
     setCart(prev => [...prev, { 
       ...pendingProduct, 
       quantity: qty, 
       selectedUnit: inputUnit,
-      finalPrice: Number(price.toFixed(2)),
+      finalPrice: Number(price.toFixed(2)), // No modo compra, isso é o custo
       costPrice: pendingProduct.compra || 0,
+      salePrice: pendingProduct.venda || 0,
+      margin: margin,
       isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
       conversionFactor: pendingProduct.fator_conversao || 1
     }]);
@@ -242,7 +247,6 @@ const POS = () => {
 
   const handleCodeChange = (val: string) => {
     setInputCode(val);
-    // Se digitar mais de 2 caracteres e não for puramente numérico (barcode), abre a pesquisa
     if (val.length >= 3 && !/^\d+$/.test(val) && !pendingProduct) {
       setSearchInitialTerm(val);
       setIsSearchOpen(true);
@@ -259,31 +263,106 @@ const POS = () => {
     else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
   };
 
+  const updateCartItem = (idx: number, field: string, value: any) => {
+    const newCart = [...cart];
+    const item = { ...newCart[idx] };
+    
+    if (field === 'finalPrice') { // Custo
+      item.finalPrice = parseFloat(value) || 0;
+      item.salePrice = item.finalPrice * (1 + (item.margin / 100));
+    } else if (field === 'margin') {
+      item.margin = parseFloat(value) || 0;
+      item.salePrice = item.finalPrice * (1 + (item.margin / 100));
+    } else if (field === 'salePrice') {
+      item.salePrice = parseFloat(value) || 0;
+      if (item.finalPrice > 0) {
+        item.margin = ((item.salePrice / item.finalPrice) - 1) * 100;
+      }
+    }
+    
+    newCart[idx] = item;
+    setCart(newCart);
+  };
+
   const handleSaveQuote = async () => {
-    if (cart.length === 0) { showError("Adicione itens para salvar orçamento."); return; }
+    if (cart.length === 0) { showError("Adicione itens para salvar cotação."); return; }
     try {
       const entity = clients.find(e => e.cd_clientes === selectedEntityId);
-      const payload = {
-        total: total,
-        custo_total: cart.reduce((acc, item) => acc + ((item.costPrice || 0) * item.quantity), 0),
-        cd_clientes: selectedEntityId || null,
-        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
-        cd_func: Number(selectedSellerId),
-        status: 'Aberto',
-        itens: cart.map(item => ({
-          cd_produto: item.cd_produto,
-          nome_produto: item.nome,
-          valor: item.finalPrice,
-          qtde: item.quantity,
-          subtotal: item.finalPrice * item.quantity,
-          un: item.selectedUnit
-        }))
-      };
-      await db.orcamentos.add(payload);
-      showSuccess("Orçamento salvo com sucesso!");
+      
+      if (mode === 'COMPRA') {
+        await db.compras.save({
+          cd_compra: Date.now(),
+          data: new Date().toISOString(),
+          nota_fiscal: "COTACAO",
+          cd_fornecedores: selectedEntityId || null,
+          nome_fornecedor: entity?.nome || 'FORNECEDOR AVULSO',
+          total: total,
+          status: 'Cotacao',
+          itens: cart.map(item => ({
+            cd_produto: item.cd_produto,
+            nome_fornecedor: item.nome,
+            valor_unit: item.finalPrice,
+            qtde: item.quantity,
+            subtotal: item.finalPrice * item.quantity,
+            un: item.selectedUnit,
+            margem: item.margin,
+            valor_venda: item.salePrice
+          }))
+        });
+        showSuccess("Cotação de compra salva!");
+      } else {
+        const payload = {
+          total: total,
+          custo_total: cart.reduce((acc, item) => acc + ((item.costPrice || 0) * item.quantity), 0),
+          cd_clientes: selectedEntityId || null,
+          nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
+          cd_func: Number(selectedSellerId),
+          status: 'Aberto',
+          itens: cart.map(item => ({
+            cd_produto: item.cd_produto,
+            nome_produto: item.nome,
+            valor: item.finalPrice,
+            qtde: item.quantity,
+            subtotal: item.finalPrice * item.quantity,
+            un: item.selectedUnit
+          }))
+        };
+        await db.orcamentos.add(payload);
+        showSuccess("Orçamento de venda salvo!");
+      }
       setCart([]);
     } catch (err) {
-      showError("Erro ao salvar orçamento.");
+      showError("Erro ao salvar.");
+    }
+  };
+
+  const generateAutoQuote = async () => {
+    const loadingId = showLoading("Analisando estoque...");
+    try {
+      const lowStock = products.filter(p => (p.estoque || 0) < (p.minimo || 0));
+      if (lowStock.length === 0) {
+        showError("Nenhum produto abaixo do estoque mínimo.");
+        return;
+      }
+      
+      const newItems = lowStock.map(p => {
+        const qtyToBuy = (p.minimo || 0) - (p.estoque || 0);
+        const margin = p.compra > 0 ? ((p.venda / p.compra) - 1) * 100 : 40;
+        return {
+          ...p,
+          quantity: Math.ceil(qtyToBuy),
+          selectedUnit: p.un,
+          finalPrice: p.compra || 0,
+          salePrice: p.venda || 0,
+          margin: margin,
+          costPrice: p.compra || 0
+        };
+      });
+      
+      setCart(prev => [...prev, ...newItems]);
+      showSuccess(`${newItems.length} itens adicionados por estoque mínimo!`);
+    } finally {
+      dismissToast(loadingId);
     }
   };
 
@@ -293,94 +372,109 @@ const POS = () => {
     try {
       const entity = clients.find(e => e.cd_clientes === selectedEntityId);
       
-      // Travas de Segurança para Crediário
-      if (payments.some(p => p.method === 'Crediário')) {
-        if (!selectedEntityId) {
-          showError("Venda no crediário exige identificação do cliente!");
-          return;
-        }
-        
+      if (mode === 'VENDA' && payments.some(p => p.method === 'Crediário')) {
+        if (!selectedEntityId) { showError("Venda no crediário exige identificação!"); return; }
         const status = await db.clientes.checkStatus(Number(selectedEntityId));
         let blocked = false;
         let reason = "";
-
-        if (status.atrasado) {
-          blocked = true;
-          reason = "CLIENTE COM CONTAS EM ATRASO!";
-        }
-        
+        if (status.atrasado) { blocked = true; reason = "CLIENTE COM CONTAS EM ATRASO!"; }
         const limite = entity?.limite || 0;
-        if (limite > 0 && (status.totalPendente + total) > limite) {
-          blocked = true;
-          reason = `LIMITE EXCEDIDO! Limite: R$ ${limite.toFixed(2)} | Pendente: R$ ${status.totalPendente.toFixed(2)}`;
-        }
-
-        if (blocked) {
-          setBlockBlockReason(reason);
-          setPendingCheckoutData(payments);
-          setIsSupervisorModalOpen(true);
-          return;
-        }
+        if (limite > 0 && (status.totalPendente + total) > limite) { blocked = true; reason = `LIMITE EXCEDIDO!`; }
+        if (blocked) { setBlockBlockReason(reason); setPendingCheckoutData(payments); setIsSupervisorModalOpen(true); return; }
       }
 
       executeFinalize(payments);
-    } catch (err) { showError("Erro ao processar a operação."); }
+    } catch (err) { showError("Erro ao processar."); }
   };
 
   const executeFinalize = async (payments: any[]) => {
     const entity = clients.find(e => e.cd_clientes === selectedEntityId);
-    const payload = {
-      total: Number(total.toFixed(2)),
-      custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
-      cd_clientes: selectedEntityId || null,
-      nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
-      cd_func: Number(selectedSellerId),
-      tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
-      meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
-      itens: cart.map(item => ({
-        cd_produto: item?.cd_produto,
-        nome_produto: item?.nome || 'Produto sem nome',
-        valor: item?.finalPrice || 0,
-        custo: item?.costPrice || 0,
-        qtde: item?.quantity || 0,
-        subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
-        un: item?.selectedUnit || 'UN'
-      }))
-    };
-
-    await db.vendas.add(payload);
     
-    for (const item of cart) {
-      const prod = products.find(p => p.cd_produto === item.cd_produto);
-      if (prod) {
-        let qtyToDeduct = item.quantity;
-        if (item.isFractional && item.conversionFactor > 0) {
-          qtyToDeduct = item.quantity / item.conversionFactor;
-        }
-        db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
+    if (mode === 'COMPRA') {
+      // Finalizar Compra: Atualiza Estoque e Cadastro de Produtos
+      const compraPayload = {
+        cd_compra: Date.now(),
+        data: new Date().toISOString(),
+        nota_fiscal: "PDV-COMPRA",
+        cd_fornecedores: selectedEntityId || null,
+        nome_fornecedor: entity?.nome || 'FORNECEDOR AVULSO',
+        total: total,
+        status: 'Confirmada',
+        itens: cart.map(item => ({
+          cd_produto: item.cd_produto,
+          nome_fornecedor: item.nome,
+          valor_unit: item.finalPrice,
+          qtde: item.quantity,
+          subtotal: item.finalPrice * item.quantity,
+          un: item.selectedUnit,
+          margem: item.margin,
+          valor_venda: item.salePrice
+        }))
+      };
+
+      await db.compras.save(compraPayload);
+
+      // Atualiza cada produto no cadastro
+      for (const item of cart) {
+        await db.produtos.update(item.cd_produto, {
+          compra: item.finalPrice,
+          venda: item.salePrice,
+          estoque: (products.find(p => p.cd_produto === item.cd_produto)?.estoque || 0) + item.quantity
+        });
       }
+      showSuccess("Compra finalizada e estoque atualizado!");
+    } else {
+      // Finalizar Venda
+      const payload = {
+        total: Number(total.toFixed(2)),
+        custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
+        cd_clientes: selectedEntityId || null,
+        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
+        cd_func: Number(selectedSellerId),
+        tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
+        meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
+        itens: cart.map(item => ({
+          cd_produto: item?.cd_produto,
+          nome_produto: item?.nome || 'Produto sem nome',
+          valor: item?.finalPrice || 0,
+          custo: item?.costPrice || 0,
+          qtde: item?.quantity || 0,
+          subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
+          un: item?.selectedUnit || 'UN'
+        }))
+      };
+
+      await db.vendas.add(payload);
+      
+      for (const item of cart) {
+        const prod = products.find(p => p.cd_produto === item.cd_produto);
+        if (prod) {
+          let qtyToDeduct = item.quantity;
+          if (item.isFractional && item.conversionFactor > 0) {
+            qtyToDeduct = item.quantity / item.conversionFactor;
+          }
+          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
+        }
+      }
+      setLastActionData({ ...payload, type: 'Venda' });
+      setIsPrintOpen(true);
     }
 
-    setLastActionData({ ...payload, type: 'Venda' });
     setCart([]);
     setSelectedSellerId("");
     setIsCheckoutOpen(false);
-    setIsPrintOpen(true);
     loadAllData();
   };
 
   const handleSupervisorRelease = async (e: React.FormEvent) => {
     e.preventDefault();
     const supervisor = sellers.find(s => s.senha === supervisorPassword && s.permissoes?.is_supervisor);
-    
     if (supervisor) {
-      showSuccess(`Venda liberada pelo supervisor: ${supervisor.nome}`);
+      showSuccess(`Liberado por: ${supervisor.nome}`);
       setIsSupervisorModalOpen(false);
       setSupervisorPassword("");
       executeFinalize(pendingCheckoutData);
-    } else {
-      showError("Senha de supervisor inválida ou usuário sem permissão.");
-    }
+    } else { showError("Senha inválida."); }
   };
 
   const formatCurrency = (value: number | string) => {
@@ -445,20 +539,25 @@ const POS = () => {
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Ações Principais</h3>
               <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", theme.bg, theme.hover)} onClick={() => handleShortcut('F10')}>
-                <CheckCircle size={20} /> FINALIZAR (F10)
+                <CheckCircle size={20} /> {mode === 'COMPRA' ? 'CONCLUIR COMPRA' : 'FINALIZAR (F10)'}
               </Button>
-              {mode === 'VENDA' && (
-                <Button variant="outline" className="w-full h-10 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold text-xs" onClick={handleSaveQuote}>
-                  <Save size={16} /> SALVAR ORÇAMENTO (F9)
+              
+              {mode === 'COMPRA' && (
+                <Button variant="outline" className="w-full h-10 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-bold text-xs" onClick={generateAutoQuote}>
+                  <RefreshCw size={16} /> GERAR AUTOMÁTICA
                 </Button>
               )}
+
+              <Button variant="outline" className="w-full h-10 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold text-xs" onClick={handleSaveQuote}>
+                <Save size={16} /> {mode === 'COMPRA' ? 'SALVAR COTAÇÃO' : 'SALVAR ORÇAMENTO'} (F9)
+              </Button>
             </div>
             <div className="space-y-2">
               <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
               <div className="space-y-1.5">
                 <ShortcutItem keyName="F5" label="HISTÓRICO" onClick={() => setIsHistoryOpen(true)} icon={<History size={12} />} />
                 <ShortcutItem keyName="F7" label="RECEBER" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={12} />} color="emerald" />
-                <ShortcutItem keyName="F8" label="ORÇAMENTOS" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={12} />} color="amber" />
+                <ShortcutItem keyName="F8" label={mode === 'COMPRA' ? 'COTAÇÕES' : 'ORÇAMENTOS'} onClick={() => setIsQuotesOpen(true)} icon={<FileText size={12} />} color="amber" />
               </div>
             </div>
             <div className="pt-4">
@@ -499,21 +598,59 @@ const POS = () => {
               <TableRow className="bg-slate-800 hover:bg-transparent border-none">
                 <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 w-20">CÓDIGO</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10">PRODUTO</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">VALOR UNIT.</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-20">QTDE</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-16">UN</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-20">QTDE</TableHead>
+                
+                {mode === 'COMPRA' ? (
+                  <>
+                    <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-24">CUSTO UNIT.</TableHead>
+                    <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-20">MARGEM %</TableHead>
+                    <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-24">VENDA SUG.</TableHead>
+                  </>
+                ) : (
+                  <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">VALOR UNIT.</TableHead>
+                )}
+                
                 <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">SUB TOTAL</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-7 text-center w-14">AÇÕES</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {cart.map((item, idx) => (
-                <TableRow key={idx} className="h-7 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer">
+                <TableRow key={idx} className="h-8 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer">
                   <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200">{item?.id_manual?.padStart(5, '0')}</TableCell>
                   <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
                   <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold">{item?.selectedUnit}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
+                  
+                  {mode === 'COMPRA' ? (
+                    <>
+                      <TableCell className="py-0 border-r border-slate-200">
+                        <input 
+                          className="w-full bg-transparent text-right text-[11px] font-bold focus:bg-white outline-none"
+                          value={item.finalPrice}
+                          onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell className="py-0 border-r border-slate-200">
+                        <input 
+                          className="w-full bg-transparent text-center text-[11px] font-bold text-indigo-600 focus:bg-white outline-none"
+                          value={item.margin.toFixed(1)}
+                          onChange={(e) => updateCartItem(idx, 'margin', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell className="py-0 border-r border-slate-200">
+                        <input 
+                          className="w-full bg-transparent text-right text-[11px] font-black text-emerald-700 focus:bg-white outline-none"
+                          value={item.salePrice.toFixed(2)}
+                          onChange={(e) => updateCartItem(idx, 'salePrice', e.target.value)}
+                        />
+                      </TableCell>
+                    </>
+                  ) : (
+                    <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
+                  )}
+                  
                   <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
                   <TableCell className="py-0 text-center"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
                 </TableRow>
@@ -572,7 +709,28 @@ const POS = () => {
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} />
-      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
+      
+      <QuotesModal 
+        isOpen={isQuotesOpen} 
+        onClose={() => setIsQuotesOpen(false)} 
+        onLoadQuote={(q) => { 
+          if (mode === 'COMPRA') {
+            setCart(q.itens.map(i => ({ 
+              ...i, 
+              nome: i.nome_fornecedor, 
+              finalPrice: i.valor_unit, 
+              quantity: i.qtde, 
+              selectedUnit: i.un,
+              margin: i.margem || 40,
+              salePrice: i.valor_venda || (i.valor_unit * 1.4)
+            })));
+          } else {
+            setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); 
+          }
+          setIsQuotesOpen(false); 
+        }} 
+      />
+
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
