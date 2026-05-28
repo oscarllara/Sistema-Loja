@@ -281,6 +281,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 </Label>
                 <Input {...register("nome")} className="uppercase" placeholder="EX: CIMENTO CAUE 50KG" />
               </div>
+              <div className="space-y-2">
+                <Label className="text-amber-600 font-bold">Código Antigo (Importado)</Label>
+                <Input {...register("id_importado")} placeholder="Ex: 1234" className="border-amber-200" />
+              </div>
               <div className="space-y-2"><Label>Código de Barras</Label><Input {...register("cod_barras")} /></div>
               <div className="space-y-2"><Label>NCM</Label><Input {...register("ncm")} /></div>
               <div className="space-y-2"><Label>Unidade Principal</Label><Input {...register("un")} className="uppercase" /></div>

@@ -101,25 +101,9 @@ const ImportData = () => {
 
     if (!kNome) throw new Error("Coluna de Descrição não identificada.");
 
-    addLog("Filtrando e ordenando produtos alfabeticamente...");
+    addLog("Mapeando produtos e gerando novos IDs sequenciais...");
 
-    // 1. Filtra apenas itens com nome válido
-    const validItems = data.filter(item => {
-      const nome = (item[kNome] || "").toString().trim();
-      return nome && nome.length > 1;
-    });
-
-    // 2. Ordena por nome (A-Z)
-    validItems.sort((a, b) => {
-      const nameA = (a[kNome] || "").toString().trim().toUpperCase();
-      const nameB = (b[kNome] || "").toString().trim().toUpperCase();
-      return nameA.localeCompare(nameB, 'pt-BR');
-    });
-
-    addLog("Gerando novos IDs sequenciais...");
-
-    // 3. Mapeia para o formato do banco com o novo ID sequencial
-    const mapped = validItems.map((item, index) => ({
+    const mapped = data.map((item, index) => ({
       nome: (item[kNome] || "").toString().trim().toUpperCase(),
       id_importado: kCodOriginal ? (item[kCodOriginal] || "").toString() : "",
       cod_barras: kBarras ? (item[kBarras] || "").toString() : "",
@@ -127,23 +111,20 @@ const ImportData = () => {
       compra: parseNum(item[kPrecoCusto]),
       estoque: parseNum(item[kEstoque]),
       un: kUn ? (item[kUn] || "UN").toString().toUpperCase() : "UN",
-      id_manual: (index + 1).toString().padStart(5, '0'), // Novo ID sequencial baseado na ordem A-Z
+      id_manual: (index + 1).toString().padStart(5, '0'), // Novo ID sequencial
       venda_vista: parseNum(item[kPrecoVenda]),
       data_atualizacao: new Date().toISOString()
-    }));
+    })).filter(p => p.nome && p.nome.length > 1);
 
     const chunkSize = 100;
     for (let i = 0; i < mapped.length; i += chunkSize) {
       const chunk = mapped.slice(i, i + chunkSize);
       addLog(`Enviando lote ${Math.floor(i/chunkSize) + 1} de ${Math.ceil(mapped.length/chunkSize)}...`);
       const { error } = await db.produtos.bulkAdd(chunk);
-      if (error) {
-        addLog(`Erro no lote: ${error.message}`);
-        throw error;
-      }
+      if (error) throw error;
     }
 
-    addLog(`Sucesso: ${mapped.length} produtos importados e re-indexados.`);
+    addLog(`Sucesso: ${mapped.length} produtos importados.`);
   };
 
   const importClientes = async (data: any[]) => {
@@ -179,8 +160,8 @@ const ImportData = () => {
             <Database size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Importação e Re-indexação</h1>
-            <p className="text-slate-500">Os produtos serão organizados de A-Z e receberão novos códigos sequenciais.</p>
+            <h1 className="text-2xl font-bold text-slate-900">Importação de Dados</h1>
+            <p className="text-slate-500">Suba suas planilhas Excel (.xlsx) para alimentar o sistema.</p>
           </div>
         </div>
 
@@ -191,7 +172,7 @@ const ImportData = () => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-emerald-900">Importação Concluída!</h3>
-              <p className="text-sm text-emerald-700">Todos os dados foram salvos e os códigos foram gerados em ordem alfabética.</p>
+              <p className="text-sm text-emerald-700">Todos os dados foram processados e salvos com sucesso.</p>
             </div>
             <Button onClick={() => window.location.reload()} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
               <RefreshCw size={18} /> Atualizar Sistema
@@ -216,6 +197,7 @@ const ImportData = () => {
                   Selecionar PRODUTO.xlsx
                 </Button>
               </div>
+              <p className="text-[10px] text-slate-400 text-center">Colunas esperadas: Nome, Código, Preço Venda, Preço Custo, Estoque, Unidade, Barras.</p>
             </CardContent>
           </Card>
 
@@ -235,6 +217,7 @@ const ImportData = () => {
                   Selecionar CLIENTES.xlsx
                 </Button>
               </div>
+              <p className="text-[10px] text-slate-400 text-center">Colunas esperadas: Nome, CPF/CNPJ, Telefone.</p>
             </CardContent>
           </Card>
         </div>
@@ -242,7 +225,7 @@ const ImportData = () => {
         {(logs.length > 0 || isImporting) && (
           <Card className="border-none shadow-sm bg-slate-900 text-slate-300 font-mono text-[10px]">
             <CardHeader className="border-b border-slate-800 py-2 px-4 flex flex-row items-center gap-2">
-              <Terminal size={14} /> <span>Log de Importação em Tempo Real</span>
+              <Terminal size={14} /> <span>Log de Importação</span>
             </CardHeader>
             <CardContent className="p-4 max-h-60 overflow-y-auto">
               {logs.map((log, i) => <div key={i}>{log}</div>)}

@@ -104,6 +104,7 @@ const Inventory = () => {
       const matchesSearch = (
         p.nome.toLowerCase().includes(term) ||
         p.id_manual?.includes(term) ||
+        p.id_importado?.includes(term) ||
         p.cod_barras?.includes(term)
       );
       const matchesSite = filterSiteOnly ? p.disponivel_site : true;
@@ -165,7 +166,8 @@ const Inventory = () => {
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow className="text-[10px] uppercase font-bold">
-                  <TableHead className="w-14">Cód.</TableHead>
+                  <TableHead className="w-14">Novo ID</TableHead>
+                  <TableHead className="w-14">ID Antigo</TableHead>
                   <TableHead className="min-w-[150px]">Produto</TableHead>
                   <TableHead className="text-center w-20">Estoque</TableHead>
                   <TableHead className="text-right w-24">Custo (R$)</TableHead>
@@ -179,9 +181,9 @@ const Inventory = () => {
               </TableHeader>
               <TableBody>
                 {isLoadingProducts ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-12"><Loader2 className="animate-spin mx-auto" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-12"><Loader2 className="animate-spin mx-auto" /></TableCell></TableRow>
                 ) : filteredProducts.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-12 text-slate-400 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-12 text-slate-400 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell></TableRow>
                 ) : (
                   filteredProducts.map((product) => {
                     const custoOriginal = product.compra || 0;
@@ -195,6 +197,7 @@ const Inventory = () => {
                     return (
                       <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors group h-10">
                         <TableCell className="font-bold text-indigo-600 text-[10px]">{product.id_manual}</TableCell>
+                        <TableCell className="font-bold text-amber-600 text-[10px]">{product.id_importado || "-"}</TableCell>
                         <TableCell>
                           <div 
                             className="flex items-center gap-1 cursor-pointer hover:text-indigo-600"

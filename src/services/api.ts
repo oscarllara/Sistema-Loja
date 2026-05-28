@@ -65,14 +65,26 @@ export const db = {
       }
     },
     add: async (p: any) => {
-      const { data: lastProd } = await supabase.from('produtos').select('id_manual').order('id_manual', { ascending: false }).limit(1).maybeSingle();
-      const nextId = lastProd ? (parseInt(lastProd.id_manual) + 1).toString().padStart(5, '0') : '00001';
-      const { data, error } = await supabase.from('produtos').insert([{ ...p, id_manual: nextId }]).select().single();
+      // Busca o último id_manual para gerar o próximo sequencial
+      const { data: lastProd } = await supabase
+        .from('produtos')
+        .select('id_manual')
+        .order('id_manual', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextId = lastProd 
+        ? (parseInt(lastProd.id_manual) + 1).toString().padStart(5, '0') 
+        : '00001';
+
+      const { data, error } = await supabase
+        .from('produtos')
+        .insert([{ ...p, id_manual: nextId }])
+        .select()
+        .single();
+      
       if (error) throw error;
       return data;
-    },
-    bulkAdd: async (items: any[]) => {
-      return await supabase.from('produtos').insert(items);
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
@@ -106,9 +118,6 @@ export const db = {
     add: async (c: any) => {
       const { error } = await supabase.from('clientes').insert([c]);
       if (error) throw error;
-    },
-    bulkAdd: async (items: any[]) => {
-      return await supabase.from('clientes').insert(items);
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('clientes').update(data).eq('cd_clientes', id);
