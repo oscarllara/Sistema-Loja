@@ -205,7 +205,7 @@ const POS = () => {
   }, [handleShortcut]);
 
   const startInsertion = (product: any) => {
-    if (!selectedSellerId) { showError("Selecione o Operador antes de iniciar!"); return; }
+    // Removida a trava de operador aqui para permitir que o nome do produto apareça no campo de bipe
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
@@ -222,6 +222,14 @@ const POS = () => {
 
   const commitToCart = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    // A trava de operador agora acontece aqui, no momento de confirmar a inserção
+    if (!selectedSellerId) { 
+      showError("Selecione o Operador antes de adicionar ao carrinho!"); 
+      sellerRef.current?.focus();
+      return; 
+    }
+
     if (!pendingProduct) return;
     const qty = parseFloat(inputQty.replace(',', '.')) || 1;
     const price = getProductPrice(pendingProduct, inputUnit, priceMode);
@@ -232,7 +240,7 @@ const POS = () => {
       ...pendingProduct, 
       quantity: qty, 
       selectedUnit: inputUnit,
-      finalPrice: Number(price.toFixed(2)), // No modo compra, isso é o custo
+      finalPrice: Number(price.toFixed(2)),
       costPrice: pendingProduct.compra || 0,
       salePrice: pendingProduct.venda || 0,
       margin: margin,
@@ -267,7 +275,7 @@ const POS = () => {
     const newCart = [...cart];
     const item = { ...newCart[idx] };
     
-    if (field === 'finalPrice') { // Custo
+    if (field === 'finalPrice') {
       item.finalPrice = parseFloat(value) || 0;
       item.salePrice = item.finalPrice * (1 + (item.margin / 100));
     } else if (field === 'margin') {
@@ -328,7 +336,7 @@ const POS = () => {
           }))
         };
         await db.orcamentos.add(payload);
-        showSuccess("Orçamento de venda salvo!");
+        showSuccess("Orçamento de venda salva!");
       }
       setCart([]);
     } catch (err) {
@@ -391,7 +399,6 @@ const POS = () => {
     const entity = clients.find(e => e.cd_clientes === selectedEntityId);
     
     if (mode === 'COMPRA') {
-      // Finalizar Compra: Atualiza Estoque e Cadastro de Produtos
       const compraPayload = {
         cd_compra: Date.now(),
         data: new Date().toISOString(),
@@ -414,7 +421,6 @@ const POS = () => {
 
       await db.compras.save(compraPayload);
 
-      // Atualiza cada produto no cadastro
       for (const item of cart) {
         await db.produtos.update(item.cd_produto, {
           compra: item.finalPrice,
@@ -424,7 +430,6 @@ const POS = () => {
       }
       showSuccess("Compra finalizada e estoque atualizado!");
     } else {
-      // Finalizar Venda
       const payload = {
         total: Number(total.toFixed(2)),
         custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
@@ -461,7 +466,6 @@ const POS = () => {
     }
 
     setCart([]);
-    setSelectedSellerId("");
     setIsCheckoutOpen(false);
     loadAllData();
   };
