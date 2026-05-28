@@ -16,7 +16,8 @@ import {
   Truck, 
   Lock, 
   Shield,
-  Heart
+  Heart,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +92,7 @@ const clientSchema = z.object({
     settings: z.boolean().default(false),
     rentals: z.boolean().default(false),
     calculator: z.boolean().default(false),
+    is_supervisor: z.boolean().default(false),
   }).optional().nullable(),
 });
 
@@ -102,7 +104,6 @@ interface ClientFormProps {
 }
 
 const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
-  const [isSearchingCep, setIsSearchingCep] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ClientFormValues>({
@@ -117,6 +118,8 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       conjuge_salario: client.conjuge_salario ? client.conjuge_salario.toString() : "",
       dia_pagamento: client.dia_pagamento?.toString() || "",
       tipo_pessoa: client.cpf_cnpj?.length === 14 ? 'F' : 'J',
+      usuario: client.usuario || "",
+      senha: client.senha || "",
       permissoes: client.permissoes || {
         dashboard: true,
         pos: true,
@@ -128,6 +131,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         settings: false,
         rentals: false,
         calculator: false,
+        is_supervisor: false,
       }
     } : {
       tipo_entidade: 'C',
@@ -146,14 +150,13 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         settings: false,
         rentals: false,
         calculator: false,
+        is_supervisor: false,
       }
     }
   });
 
-  const tipoPessoa = watch("tipo_pessoa");
   const tipoEntidade = watch("tipo_entidade");
   const isFuncionario = watch("is_funcionario");
-  const estadoCivil = watch("estado_civil");
   const permissoes = watch("permissoes");
 
   const onSubmit = async (data: ClientFormValues) => {
@@ -199,7 +202,8 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     reports: "Relatórios / Gráficos",
     settings: "Configurações do Sistema",
     rentals: "Locação / Aluguel",
-    calculator: "Calculadora Técnica"
+    calculator: "Calculadora Técnica",
+    is_supervisor: "Supervisor de Vendas (Libera Travas)"
   };
 
   return (
@@ -228,11 +232,11 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className={cn("grid w-full bg-slate-100 p-1 rounded-xl", isFuncionario ? "grid-cols-5" : "grid-cols-4")}>
-          <TabsTrigger value="geral" className="gap-2"><User size={16} /> Geral</TabsTrigger>
-          <TabsTrigger value="endereco" className="gap-2"><MapPin size={16} /> Endereços</TabsTrigger>
-          <TabsTrigger value="pessoal" className="gap-2"><Briefcase size={16} /> Pessoal</TabsTrigger>
-          {isFuncionario && <TabsTrigger value="acesso" className="gap-2"><Lock size={16} /> Acesso</TabsTrigger>}
-          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && <TabsTrigger value="financeiro" className="gap-2"><ShieldCheck size={16} /> Financeiro</TabsTrigger>}
+          <TabsTrigger value="geral" className="gap-2 cursor-pointer"><User size={16} /> Geral</TabsTrigger>
+          <TabsTrigger value="endereco" className="gap-2 cursor-pointer"><MapPin size={16} /> Endereços</TabsTrigger>
+          <TabsTrigger value="pessoal" className="gap-2 cursor-pointer"><Briefcase size={16} /> Pessoal</TabsTrigger>
+          {isFuncionario && <TabsTrigger value="acesso" className="gap-2 cursor-pointer"><Lock size={16} /> Acesso</TabsTrigger>}
+          {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && <TabsTrigger value="financeiro" className="gap-2 cursor-pointer"><ShieldCheck size={16} /> Financeiro</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="geral" className="mt-6 space-y-4">
@@ -280,13 +284,22 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões</h4>
                 <div className="grid grid-cols-1 gap-3">
                   {(Object.keys(permissionLabels) as Array<keyof Permissoes>).map((key) => (
-                    <div key={key} className="flex items-center space-x-3 bg-white p-2 rounded-lg border border-indigo-50">
+                    <div key={key} className={cn(
+                      "flex items-center space-x-3 p-2 rounded-lg border transition-colors",
+                      key === 'is_supervisor' ? "bg-amber-50 border-amber-100" : "bg-white border-indigo-50"
+                    )}>
                       <Checkbox 
                         id={`perm-${key}`} 
                         checked={permissoes?.[key]} 
                         onCheckedChange={(checked) => setValue(`permissoes.${key}`, !!checked)}
                       />
-                      <Label htmlFor={`perm-${key}`} className="text-sm font-medium cursor-pointer flex-1">{permissionLabels[key]}</Label>
+                      <Label htmlFor={`perm-${key}`} className={cn(
+                        "text-sm font-medium cursor-pointer flex-1 flex items-center gap-2",
+                        key === 'is_supervisor' && "text-amber-700 font-bold"
+                      )}>
+                        {key === 'is_supervisor' && <ShieldAlert size={14} />}
+                        {permissionLabels[key]}
+                      </Label>
                     </div>
                   ))}
                 </div>

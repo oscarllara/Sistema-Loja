@@ -35,7 +35,8 @@ import {
   Calendar,
   FileCode,
   FileSearch,
-  WifiOff
+  WifiOff,
+  ShieldAlert
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,6 @@ const POS = () => {
   const [mode, setMode] = React.useState<POSMode>('VENDA');
   const [priceMode, setPriceMode] = React.useState<'PRAZO' | 'VISTA'>('PRAZO');
   
-  // Operadores independentes por guia
   const [selectedSellersIds, setSelectedSellersIds] = React.useState<Record<POSMode, number | "">>({
     VENDA: "",
     COMPRA: "",
@@ -132,7 +132,6 @@ const POS = () => {
     loadAllData();
   }, [loadAllData]);
 
-  // Gestão de Foco
   React.useEffect(() => {
     if (!selectedSellerId) {
       sellerRef.current?.focus();
@@ -174,6 +173,12 @@ const POS = () => {
   
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [adminPassword, setAdminPassword] = React.useState("");
+
+  // Estados para Liberação de Supervisor
+  const [isSupervisorModalOpen, setIsSupervisorModalOpen] = React.useState(false);
+  const [supervisorPassword, setSupervisorPassword] = React.useState("");
+  const [pendingCheckoutData, setPendingCheckoutData] = React.useState<any>(null);
+  const [blockReason, setBlockBlockReason] = React.useState("");
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
@@ -287,58 +292,86 @@ const POS = () => {
         }
         
         const status = await db.clientes.checkStatus(Number(selectedEntityId));
+        let blocked = false;
+        let reason = "";
+
         if (status.atrasado) {
-          showError("CLIENTE COM CONTAS EM ATRASO! Venda bloqueada.");
-          return;
+          blocked = true;
+          reason = "CLIENTE COM CONTAS EM ATRASO!";
         }
         
         const limite = entity?.limite || 0;
         if (limite > 0 && (status.totalPendente + total) > limite) {
-          showError(`LIMITE EXCEDIDO! Limite: R$ ${limite.toFixed(2)} | Pendente: R$ ${status.totalPendente.toFixed(2)}`);
+          blocked = true;
+          reason = `LIMITE EXCEDIDO! Limite: R$ ${limite.toFixed(2)} | Pendente: R$ ${status.totalPendente.toFixed(2)}`;
+        }
+
+        if (blocked) {
+          setBlockBlockReason(reason);
+          setPendingCheckoutData(payments);
+          setIsSupervisorModalOpen(true);
           return;
         }
       }
 
-      const payload = {
-        total: Number(total.toFixed(2)),
-        custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
-        cd_clientes: selectedEntityId || null,
-        nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
-        cd_func: Number(selectedSellerId),
-        tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
-        meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
-        itens: cart.map(item => ({
-          cd_produto: item?.cd_produto,
-          nome_produto: item?.nome || 'Produto sem nome',
-          valor: item?.finalPrice || 0,
-          custo: item?.costPrice || 0,
-          qtde: item?.quantity || 0,
-          subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
-          un: item?.selectedUnit || 'UN'
-        }))
-      };
-
-      await db.vendas.add(payload);
-      
-      // Baixa de Estoque
-      for (const item of cart) {
-        const prod = products.find(p => p.cd_produto === item.cd_produto);
-        if (prod) {
-          let qtyToDeduct = item.quantity;
-          if (item.isFractional && item.conversionFactor > 0) {
-            qtyToDeduct = item.quantity / item.conversionFactor;
-          }
-          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
-        }
-      }
-
-      setLastActionData({ ...payload, type: 'Venda' });
-      setCart([]);
-      setSelectedSellerId(""); // Reseta operador após venda conforme pedido
-      setIsCheckoutOpen(false);
-      setIsPrintOpen(true);
-      loadAllData();
+      executeFinalize(payments);
     } catch (err) { showError("Erro ao processar a operação."); }
+  };
+
+  const executeFinalize = async (payments: any[]) => {
+    const entity = clients.find(e => e.cd_clientes === selectedEntityId);
+    const payload = {
+      total: Number(total.toFixed(2)),
+      custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
+      cd_clientes: selectedEntityId || null,
+      nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
+      cd_func: Number(selectedSellerId),
+      tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
+      meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
+      itens: cart.map(item => ({
+        cd_produto: item?.cd_produto,
+        nome_produto: item?.nome || 'Produto sem nome',
+        valor: item?.finalPrice || 0,
+        custo: item?.costPrice || 0,
+        qtde: item?.quantity || 0,
+        subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
+        un: item?.selectedUnit || 'UN'
+      }))
+    };
+
+    await db.vendas.add(payload);
+    
+    for (const item of cart) {
+      const prod = products.find(p => p.cd_produto === item.cd_produto);
+      if (prod) {
+        let qtyToDeduct = item.quantity;
+        if (item.isFractional && item.conversionFactor > 0) {
+          qtyToDeduct = item.quantity / item.conversionFactor;
+        }
+        db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
+      }
+    }
+
+    setLastActionData({ ...payload, type: 'Venda' });
+    setCart([]);
+    setSelectedSellerId("");
+    setIsCheckoutOpen(false);
+    setIsPrintOpen(true);
+    loadAllData();
+  };
+
+  const handleSupervisorRelease = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const supervisor = sellers.find(s => s.senha === supervisorPassword && s.permissoes?.is_supervisor);
+    
+    if (supervisor) {
+      showSuccess(`Venda liberada pelo supervisor: ${supervisor.nome}`);
+      setIsSupervisorModalOpen(false);
+      setSupervisorPassword("");
+      executeFinalize(pendingCheckoutData);
+    } else {
+      showError("Senha de supervisor inválida ou usuário sem permissão.");
+    }
   };
 
   const formatCurrency = (value: number | string) => {
@@ -489,6 +522,40 @@ const POS = () => {
           </form>
         </footer>
       </main>
+
+      {/* Modal de Liberação de Supervisor */}
+      <Dialog open={isSupervisorModalOpen} onOpenChange={setIsSupervisorModalOpen}>
+        <DialogContent className="max-w-md border-none shadow-2xl">
+          <DialogHeader className="flex flex-col items-center text-center space-y-2">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-2">
+              <ShieldAlert size={32} />
+            </div>
+            <DialogTitle className="text-xl font-black text-rose-600 uppercase">Venda Bloqueada</DialogTitle>
+            <p className="text-sm font-bold text-slate-500">{blockReason}</p>
+          </DialogHeader>
+          
+          <form onSubmit={handleSupervisorRelease} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-slate-400">Senha do Supervisor</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Input 
+                  type="password" 
+                  autoFocus 
+                  value={supervisorPassword} 
+                  onChange={(e) => setSupervisorPassword(e.target.value)} 
+                  className="pl-10 h-12 text-lg font-black border-2 border-slate-200 focus:border-indigo-500"
+                  placeholder="Digite a senha..."
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl" onClick={() => setIsSupervisorModalOpen(false)}>Cancelar</Button>
+              <Button type="submit" className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-black">LIBERAR VENDA</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} />

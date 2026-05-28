@@ -14,6 +14,7 @@ export interface Permissoes {
   settings: boolean;
   rentals: boolean;
   calculator: boolean;
+  is_supervisor: boolean; // Nova permissão para liberação de travas
 }
 
 export interface Cliente {
