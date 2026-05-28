@@ -205,7 +205,6 @@ const POS = () => {
   }, [handleShortcut]);
 
   const startInsertion = (product: any) => {
-    // Removida a trava de operador aqui para permitir que o nome do produto apareça no campo de bipe
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
@@ -220,10 +219,14 @@ const POS = () => {
     return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
   };
 
+  const parseBRNumber = (val: string) => {
+    if (!val) return 0;
+    return parseFloat(val.replace(/\./g, "").replace(",", ".")) || 0;
+  };
+
   const commitToCart = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
-    // A trava de operador agora acontece aqui, no momento de confirmar a inserção
     if (!selectedSellerId) { 
       showError("Selecione o Operador antes de adicionar ao carrinho!"); 
       sellerRef.current?.focus();
@@ -231,7 +234,7 @@ const POS = () => {
     }
 
     if (!pendingProduct) return;
-    const qty = parseFloat(inputQty.replace(',', '.')) || 1;
+    const qty = parseBRNumber(inputQty);
     const price = getProductPrice(pendingProduct, inputUnit, priceMode);
     
     const margin = pendingProduct.compra > 0 ? ((pendingProduct.venda / pendingProduct.compra) - 1) * 100 : 40;
@@ -271,18 +274,19 @@ const POS = () => {
     else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
   };
 
-  const updateCartItem = (idx: number, field: string, value: any) => {
+  const updateCartItem = (idx: number, field: string, value: string) => {
     const newCart = [...cart];
     const item = { ...newCart[idx] };
+    const numValue = parseBRNumber(value);
     
     if (field === 'finalPrice') {
-      item.finalPrice = parseFloat(value) || 0;
+      item.finalPrice = numValue;
       item.salePrice = item.finalPrice * (1 + (item.margin / 100));
     } else if (field === 'margin') {
-      item.margin = parseFloat(value) || 0;
+      item.margin = numValue;
       item.salePrice = item.finalPrice * (1 + (item.margin / 100));
     } else if (field === 'salePrice') {
-      item.salePrice = parseFloat(value) || 0;
+      item.salePrice = numValue;
       if (item.finalPrice > 0) {
         item.margin = ((item.salePrice / item.finalPrice) - 1) * 100;
       }
@@ -622,41 +626,41 @@ const POS = () => {
             <TableBody>
               {cart.map((item, idx) => (
                 <TableRow key={idx} className="h-8 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer">
-                  <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200">{item?.id_manual?.padStart(5, '0')}</TableCell>
+                  <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200 w-20">{item?.id_manual?.padStart(5, '0')}</TableCell>
                   <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold">{item?.selectedUnit}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold w-16">{item?.selectedUnit}</TableCell>
+                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 w-20">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
                   
                   {mode === 'COMPRA' ? (
                     <>
-                      <TableCell className="py-0 border-r border-slate-200">
+                      <TableCell className="py-0 border-r border-slate-200 w-24">
                         <input 
                           className="w-full bg-transparent text-right text-[11px] font-bold focus:bg-white outline-none"
-                          value={item.finalPrice}
+                          value={item.finalPrice.toFixed(2).replace('.', ',')}
                           onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
                         />
                       </TableCell>
-                      <TableCell className="py-0 border-r border-slate-200">
+                      <TableCell className="py-0 border-r border-slate-200 w-20">
                         <input 
                           className="w-full bg-transparent text-center text-[11px] font-bold text-indigo-600 focus:bg-white outline-none"
-                          value={item.margin.toFixed(1)}
+                          value={item.margin.toFixed(1).replace('.', ',')}
                           onChange={(e) => updateCartItem(idx, 'margin', e.target.value)}
                         />
                       </TableCell>
-                      <TableCell className="py-0 border-r border-slate-200">
+                      <TableCell className="py-0 border-r border-slate-200 w-24">
                         <input 
                           className="w-full bg-transparent text-right text-[11px] font-black text-emerald-700 focus:bg-white outline-none"
-                          value={item.salePrice.toFixed(2)}
+                          value={item.salePrice.toFixed(2).replace('.', ',')}
                           onChange={(e) => updateCartItem(idx, 'salePrice', e.target.value)}
                         />
                       </TableCell>
                     </>
                   ) : (
-                    <TableCell className="py-0 text-[11px] text-right border-r border-slate-200">{formatCurrency(item?.finalPrice)}</TableCell>
+                    <TableCell className="py-0 text-[11px] text-right border-r border-slate-200 w-28">{formatCurrency(item?.finalPrice)}</TableCell>
                   )}
                   
-                  <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
-                  <TableCell className="py-0 text-center"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
+                  <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200 w-28">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
+                  <TableCell className="py-0 text-center w-14"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -672,7 +676,7 @@ const POS = () => {
             <div className="w-20 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Qtde</label><Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-9 bg-[#E1FFFF] border-none text-base font-black text-slate-900 text-center" /></div>
             <div className="w-28 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Unidade</label><div className="w-full h-9 rounded flex items-center justify-center font-black text-[10px] uppercase bg-[#E1FFFF] text-slate-900">{inputUnit || "UN"}</div></div>
             <div className="w-32 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Valor Unitário</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}</div></div>
-            <div className="w-40 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Sub Total</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseFloat(inputQty.replace(',', '.')) || 1)) : "0,00"}</div></div>
+            <div className="w-40 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Sub Total</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseBRNumber(inputQty) || 1)) : "0,00"}</div></div>
           </form>
         </footer>
       </main>
