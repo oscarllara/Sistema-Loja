@@ -38,6 +38,15 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
     }).format(number);
   };
 
+  const parseNumericInput = (value: string | null | undefined) => {
+    if (!value) return 0;
+    const s = value.toString().trim();
+    if (s.includes(',')) {
+      return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+    }
+    return parseFloat(s) || 0;
+  };
+
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
     defaultValues: account ? {
@@ -55,7 +64,7 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
 
   const onSubmit = (data: AccountFormValues) => {
     try {
-      const saldoInicialNum = parseFloat(data.saldo_inicial.replace(/\./g, "").replace(",", "."));
+      const saldoInicialNum = parseNumericInput(data.saldo_inicial);
       
       const payload = {
         nome: data.nome.toUpperCase(),
@@ -64,7 +73,6 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
         conta_numero: data.conta_numero,
         tipo: data.tipo,
         saldo_inicial: saldoInicialNum,
-        // Se for conta nova, o saldo atual começa igual ao inicial
         ...(account ? {} : { saldo: saldoInicialNum })
       };
 

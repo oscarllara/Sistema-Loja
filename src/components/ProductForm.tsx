@@ -106,7 +106,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
       estoque: product.estoque?.toString() || "0",
       minimo: product.minimo?.toString() || "0",
-      fator_conversao: product.fator_conversao?.toString() || "",
+      fator_conversao: product.fator_conversao?.toString().replace('.', ',') || "",
       integrar_calculadora: product.integrar_calculadora || false,
       cd_fornecedores: product.cd_fornecedores?.toString() || "",
     } : {
@@ -187,10 +187,16 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     }
   };
 
-  const parseCurrencyToNumber = (value: string | null | undefined) => {
+  // Função universal para converter input de texto em número float válido
+  const parseNumericInput = (value: string | null | undefined) => {
     if (!value) return 0;
-    const cleanValue = value.replace(/\./g, "").replace(",", ".");
-    return parseFloat(cleanValue) || 0;
+    const s = value.toString().trim();
+    // Se contém vírgula, tratamos como formato brasileiro (ponto é milhar, vírgula é decimal)
+    if (s.includes(',')) {
+      return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+    }
+    // Se não contém vírgula, mas contém ponto, tratamos como decimal direto (formato US)
+    return parseFloat(s) || 0;
   };
 
   const formatCurrencyInput = (value: string | number) => {
@@ -208,8 +214,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const formatted = formatCurrencyInput(e.target.value);
     setValue("venda", formatted);
     
-    // Recalcula o preço à vista baseado no desconto atual
-    const venda = parseCurrencyToNumber(formatted);
+    const venda = parseNumericInput(formatted);
     const desconto = parseFloat(descontoValue || "0");
     const vista = venda * (1 - (desconto / 100));
     setValue("venda_vista", formatCurrencyInput(vista));
@@ -219,8 +224,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const desconto = parseFloat(e.target.value) || 0;
     setValue("desconto_vista_valor", e.target.value);
     
-    // Calcula o preço à vista
-    const venda = parseCurrencyToNumber(vendaValue);
+    const venda = parseNumericInput(vendaValue);
     const vista = venda * (1 - (desconto / 100));
     setValue("venda_vista", formatCurrencyInput(vista));
   };
@@ -229,9 +233,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const formatted = formatCurrencyInput(e.target.value);
     setValue("venda_vista", formatted);
     
-    // Recalcula a porcentagem de desconto baseada no novo preço à vista
-    const venda = parseCurrencyToNumber(vendaValue);
-    const vista = parseCurrencyToNumber(formatted);
+    const venda = parseNumericInput(vendaValue);
+    const vista = parseNumericInput(formatted);
     if (venda > 0) {
       const desconto = ((1 - (vista / venda)) * 100).toFixed(2);
       setValue("desconto_vista_valor", desconto);
@@ -245,27 +248,27 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         id_importado: data.id_importado || null,
         un: data.un.toUpperCase(),
         cod_barras: data.cod_barras || null,
-        compra: parseCurrencyToNumber(data.compra),
-        venda: parseCurrencyToNumber(data.venda),
-        venda_vista: parseCurrencyToNumber(data.venda_vista),
-        venda_fracionada: parseCurrencyToNumber(data.venda_fracionada),
+        compra: parseNumericInput(data.compra),
+        venda: parseNumericInput(data.venda),
+        venda_vista: parseNumericInput(data.venda_vista),
+        venda_fracionada: parseNumericInput(data.venda_fracionada),
         desconto_vista_tipo: data.desconto_vista_tipo,
-        desconto_vista_valor: parseFloat(data.desconto_vista_valor || "0"),
-        estoque: parseFloat(data.estoque || "0"),
-        minimo: parseFloat(data.minimo || "0"),
+        desconto_vista_valor: parseNumericInput(data.desconto_vista_valor),
+        estoque: parseNumericInput(data.estoque),
+        minimo: parseNumericInput(data.minimo),
         ncm: data.ncm || null,
         fracionado: !!data.fracionado,
         un_fracionada: data.un_fracionada || null,
-        fator_conversao: data.fator_conversao ? parseFloat(data.fator_conversao.replace(',', '.')) : null,
+        fator_conversao: parseNumericInput(data.fator_conversao),
         is_kit: !!data.is_kit,
         itens_kit: data.itens_kit || null,
         is_locacao: !!data.is_locacao,
-        valor_diaria: parseCurrencyToNumber(data.valor_diaria),
-        valor_semana: parseCurrencyToNumber(data.valor_semana),
-        valor_quinzena: parseCurrencyToNumber(data.valor_quinzena),
-        valor_mes: parseCurrencyToNumber(data.valor_mes),
+        valor_diaria: parseNumericInput(data.valor_diaria),
+        valor_semana: parseNumericInput(data.valor_semana),
+        valor_quinzena: parseNumericInput(data.valor_quinzena),
+        valor_mes: parseNumericInput(data.valor_mes),
         disponivel_site: !!data.disponivel_site,
-        preco_site: parseCurrencyToNumber(data.preco_site),
+        preco_site: parseNumericInput(data.preco_site),
         imagem_url: data.imagem_url || null,
         link_externo: data.link_externo || null,
         descricao_site: data.descricao_site || null,
@@ -284,7 +287,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar produto:", err);
-      showError("Erro ao salvar no banco de dados.");
+      showError("Erro ao salvar no banco de dados. Verifique os valores digitados.");
     }
   };
 
@@ -344,8 +347,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
           <TabsContent value="estoque" className="space-y-6 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Estoque Atual</Label><Input type="number" step="0.001" {...register("estoque")} className="font-bold" /></div>
-              <div className="space-y-2"><Label>Estoque Mínimo</Label><Input type="number" step="0.001" {...register("minimo")} /></div>
+              <div className="space-y-2"><Label>Estoque Atual</Label><Input type="text" {...register("estoque")} className="font-bold" placeholder="0,00" /></div>
+              <div className="space-y-2"><Label>Estoque Mínimo</Label><Input type="text" {...register("minimo")} placeholder="0,00" /></div>
             </div>
 
             {product && (
@@ -460,8 +463,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </div>
               {isFracionado && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="space-y-2"><Label>Unidade Fracionada</Label><Input {...register("un_fracionada")} className="uppercase" /></div>
-                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} /></div>
+                  <div className="space-y-2"><Label>Unidade Fracionada</Label><Input {...register("un_fracionada")} className="uppercase" placeholder="Ex: KG, MT" /></div>
+                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} placeholder="Ex: 0,02" /></div>
                   <div className="space-y-2">
                     <Label>Preço da Fração (R$)</Label>
                     <Input 

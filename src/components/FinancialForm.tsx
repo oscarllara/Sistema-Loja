@@ -48,6 +48,15 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
     }).format(number);
   };
 
+  const parseNumericInput = (value: string | null | undefined) => {
+    if (!value) return 0;
+    const s = value.toString().trim();
+    if (s.includes(',')) {
+      return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+    }
+    return parseFloat(s) || 0;
+  };
+
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FinancialFormValues>({
     resolver: zodResolver(financialSchema),
     defaultValues: entry ? {
@@ -97,7 +106,7 @@ const FinancialForm = ({ onSuccess, defaultType = 'P', entry }: FinancialFormPro
 
   const onSubmit = async (data: FinancialFormValues) => {
     try {
-      const valorNum = parseFloat(data.valor.replace(/\./g, "").replace(",", "."));
+      const valorNum = parseNumericInput(data.valor);
       if (isNaN(valorNum) || valorNum <= 0) throw new Error("Informe um valor válido");
 
       if (data.status === 'Pago' && !data.cd_account) {
