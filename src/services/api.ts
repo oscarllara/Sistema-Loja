@@ -1,7 +1,7 @@
 "use client";
 
 import { supabase } from '@/integrations/supabase/client';
-import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Transferencia } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio } from '../types/database';
 
 const AUTH_KEY = 'dyaderp_auth';
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
@@ -65,7 +65,6 @@ export const db = {
       }
     },
     add: async (p: any) => {
-      // Busca o último id_manual para gerar o próximo sequencial
       const { data: lastProd } = await supabase
         .from('produtos')
         .select('id_manual')
@@ -85,6 +84,10 @@ export const db = {
       
       if (error) throw error;
       return data;
+    },
+    bulkAdd: async (products: any[]) => {
+      const { error } = await supabase.from('produtos').insert(products);
+      return { error };
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
@@ -118,6 +121,10 @@ export const db = {
     add: async (c: any) => {
       const { error } = await supabase.from('clientes').insert([c]);
       if (error) throw error;
+    },
+    bulkAdd: async (clients: any[]) => {
+      const { error } = await supabase.from('clientes').insert(clients);
+      return { error };
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('clientes').update(data).eq('cd_clientes', id);

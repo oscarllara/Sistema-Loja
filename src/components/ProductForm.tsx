@@ -94,15 +94,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
-      compra: product.compra ? product.compra.toFixed(2).replace('.', ',') : "0,00",
-      venda: product.venda ? product.venda.toFixed(2).replace('.', ',') : "0,00",
-      venda_vista: product.venda_vista ? product.venda_vista.toFixed(2).replace('.', ',') : "0,00",
-      venda_fracionada: product.venda_fracionada ? product.venda_fracionada.toFixed(2).replace('.', ',') : "0,00",
-      valor_diaria: product.valor_diaria ? product.valor_diaria.toFixed(2).replace('.', ',') : "0,00",
-      valor_semana: product.valor_semana ? product.valor_semana.toFixed(2).replace('.', ',') : "0,00",
-      valor_quinzena: product.valor_quinzena ? product.valor_quinzena.toFixed(2).replace('.', ',') : "0,00",
-      valor_mes: product.valor_mes ? product.valor_mes.toFixed(2).replace('.', ',') : "0,00",
-      preco_site: product.preco_site ? product.preco_site.toFixed(2).replace('.', ',') : "0,00",
+      compra: product.compra?.toString().replace('.', ',') || "0,00",
+      venda: product.venda?.toString().replace('.', ',') || "0,00",
+      venda_vista: product.venda_vista?.toString().replace('.', ',') || "0,00",
+      venda_fracionada: product.venda_fracionada?.toString().replace('.', ',') || "0,00",
+      valor_diaria: product.valor_diaria?.toString().replace('.', ',') || "0,00",
+      valor_semana: product.valor_semana?.toString().replace('.', ',') || "0,00",
+      valor_quinzena: product.valor_quinzena?.toString().replace('.', ',') || "0,00",
+      valor_mes: product.valor_mes?.toString().replace('.', ',') || "0,00",
+      preco_site: product.preco_site?.toString().replace('.', ',') || "0,00",
       desconto_vista_valor: product.desconto_vista_valor?.toString().replace('.', ',') || "0",
       estoque: product.estoque?.toString().replace('.', ',') || "0",
       minimo: product.minimo?.toString().replace('.', ',') || "0",
@@ -187,72 +187,37 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     }
   };
 
-  // Função robusta para converter qualquer string numérica (com vírgula ou ponto) em Number
+  // Função para tratar o input em tempo real: substitui vírgula por ponto e permite apenas um separador
+  const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
+    let val = e.target.value;
+    // Substitui vírgula por ponto
+    val = val.replace(',', '.');
+    // Remove qualquer caractere que não seja número ou ponto
+    val = val.replace(/[^\d.]/g, '');
+    // Garante que haja apenas um ponto
+    const parts = val.split('.');
+    if (parts.length > 2) {
+      val = parts[0] + '.' + parts.slice(1).join('');
+    }
+    setValue(fieldName, val);
+  };
+
+  // Função robusta para converter string para Number real (float)
   const cleanAndParseFloat = (value: any): number => {
     if (value === null || value === undefined || value === "") return 0;
-    
-    // Converte para string e remove espaços
     let s = value.toString().trim();
-    
-    // Se tiver vírgula e ponto (ex: 1.234,56), remove o ponto (milhar) e troca a vírgula por ponto
-    if (s.includes(',') && s.includes('.')) {
-      s = s.replace(/\./g, '').replace(',', '.');
-    } 
-    // Se tiver apenas vírgula (ex: 38,95), troca por ponto
-    else if (s.includes(',')) {
-      s = s.replace(',', '.');
-    }
-    
+    // Se tiver vírgula, troca por ponto
+    s = s.replace(',', '.');
+    // Remove qualquer caractere que não seja número ou ponto (ex: R$)
+    s = s.replace(/[^\d.-]/g, '');
     const result = parseFloat(s);
     return isNaN(result) ? 0 : result;
-  };
-
-  const formatCurrencyInput = (value: string | number) => {
-    const valStr = typeof value === 'number' ? value.toFixed(2).replace('.', '') : value.replace(/\D/g, "");
-    const number = parseInt(valStr) / 100;
-    if (isNaN(number)) return "0,00";
-    return new Intl.NumberFormat("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(number);
-  };
-
-  // Lógica de cálculo automático
-  const handleVendaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCurrencyInput(e.target.value);
-    setValue("venda", formatted);
-    
-    const venda = cleanAndParseFloat(formatted);
-    const desconto = cleanAndParseFloat(descontoValue);
-    const vista = venda * (1 - (desconto / 100));
-    setValue("venda_vista", formatCurrencyInput(vista));
-  };
-
-  const handleDescontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setValue("desconto_vista_valor", e.target.value);
-    
-    const venda = cleanAndParseFloat(vendaValue);
-    const desconto = cleanAndParseFloat(e.target.value);
-    const vista = venda * (1 - (desconto / 100));
-    setValue("venda_vista", formatCurrencyInput(vista));
-  };
-
-  const handleVistaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCurrencyInput(e.target.value);
-    setValue("venda_vista", formatted);
-    
-    const venda = cleanAndParseFloat(vendaValue);
-    const vista = cleanAndParseFloat(formatted);
-    if (venda > 0) {
-      const desconto = ((1 - (vista / venda)) * 100).toFixed(2);
-      setValue("desconto_vista_valor", desconto.replace('.', ','));
-    }
   };
 
   const onSubmit = async (data: ProductFormValues) => {
     try {
       // Sanitização rigorosa de todos os campos numéricos antes do envio
-      const payload = {
+      const payload: any = {
         nome: data.nome.toUpperCase(),
         id_importado: data.id_importado || null,
         un: data.un.toUpperCase(),
@@ -286,19 +251,21 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         data_atualizacao: new Date().toISOString()
       };
 
-      console.log("Enviando payload sanitizado:", payload);
-
+      // Se for edição, mantém o id_manual original. Se for novo, deixa o api.ts gerar.
       if (product) {
+        payload.id_manual = data.id_manual;
         await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado!");
       } else {
+        // Remove id_manual vazio para não conflitar com a geração automática no api.ts
+        delete payload.id_manual;
         await db.produtos.add(payload);
         showSuccess("Produto cadastrado com sucesso!");
       }
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar produto:", err);
-      showError("Erro ao salvar no banco de dados. Verifique se os valores numéricos estão corretos.");
+      showError("Erro ao salvar no banco de dados. Verifique os valores numéricos.");
     }
   };
 
@@ -358,8 +325,23 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
           <TabsContent value="estoque" className="space-y-6 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Estoque Atual</Label><Input type="text" {...register("estoque")} className="font-bold" placeholder="0,00" /></div>
-              <div className="space-y-2"><Label>Estoque Mínimo</Label><Input type="text" {...register("minimo")} placeholder="0,00" /></div>
+              <div className="space-y-2">
+                <Label>Estoque Atual</Label>
+                <Input 
+                  {...register("estoque")} 
+                  onChange={(e) => handleNumericInput(e, "estoque")}
+                  className="font-bold" 
+                  placeholder="0.00" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estoque Mínimo</Label>
+                <Input 
+                  {...register("minimo")} 
+                  onChange={(e) => handleNumericInput(e, "minimo")}
+                  placeholder="0.00" 
+                />
+              </div>
             </div>
 
             {product && (
@@ -427,15 +409,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <Label>Valor de Venda (A Prazo)</Label>
                   <Input 
                     {...register("venda")} 
-                    onChange={handleVendaChange}
+                    onChange={(e) => handleNumericInput(e, "venda")}
                     className="text-lg font-black" 
+                    placeholder="0.00"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Preço de Custo</Label>
                   <Input 
                     {...register("compra")} 
-                    onChange={(e) => setValue("compra", formatCurrencyInput(e.target.value))} 
+                    onChange={(e) => handleNumericInput(e, "compra")}
+                    placeholder="0.00"
                   />
                 </div>
               </div>
@@ -446,7 +430,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     <Label>Desconto (%)</Label>
                     <Input 
                       {...register("desconto_vista_valor")} 
-                      onChange={handleDescontoChange}
+                      onChange={(e) => handleNumericInput(e, "desconto_vista_valor")}
                       placeholder="0"
                     />
                   </div>
@@ -454,14 +438,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     <Label>Preço Final À Vista</Label>
                     <Input 
                       {...register("venda_vista")} 
-                      onChange={handleVistaChange}
+                      onChange={(e) => handleNumericInput(e, "venda_vista")}
                       className="bg-white font-black text-emerald-700" 
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-emerald-600 font-medium italic">
-                  * Você pode alterar o % ou o Preço Final. O sistema recalcula o outro automaticamente.
-                </p>
               </div>
             </div>
           </TabsContent>
@@ -475,13 +457,14 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               {isFracionado && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
                   <div className="space-y-2"><Label>Unidade Fracionada</Label><Input {...register("un_fracionada")} className="uppercase" placeholder="Ex: KG, MT" /></div>
-                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} placeholder="Ex: 0,02" /></div>
+                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} onChange={(e) => handleNumericInput(e, "fator_conversao")} placeholder="Ex: 0.02" /></div>
                   <div className="space-y-2">
                     <Label>Preço da Fração (R$)</Label>
                     <Input 
                       {...register("venda_fracionada")} 
-                      onChange={(e) => setValue("venda_fracionada", formatCurrencyInput(e.target.value))}
+                      onChange={(e) => handleNumericInput(e, "venda_fracionada")}
                       className="font-black text-indigo-600" 
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
@@ -494,10 +477,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-4">
                 <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs"><CalendarClock size={16} /> Tabela de Preços de Locação</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} onChange={(e) => setValue("valor_diaria", formatCurrencyInput(e.target.value))} /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} onChange={(e) => setValue("valor_semana", formatCurrencyInput(e.target.value))} /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} onChange={(e) => setValue("valor_quinzena", formatCurrencyInput(e.target.value))} /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} onChange={(e) => setValue("valor_mes", formatCurrencyInput(e.target.value))} /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} onChange={(e) => handleNumericInput(e, "valor_diaria")} placeholder="0.00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} onChange={(e) => handleNumericInput(e, "valor_semana")} placeholder="0.00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} onChange={(e) => handleNumericInput(e, "valor_quinzena")} placeholder="0.00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} onChange={(e) => handleNumericInput(e, "valor_mes")} placeholder="0.00" /></div>
                 </div>
               </div>
             </TabsContent>
@@ -512,7 +495,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               {disponivelSite && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} onChange={(e) => setValue("preco_site", formatCurrencyInput(e.target.value))} /></div>
+                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} onChange={(e) => handleNumericInput(e, "preco_site")} placeholder="0.00" /></div>
                     <div className="space-y-2"><Label>URL da Imagem</Label><Input {...register("imagem_url")} /></div>
                   </div>
                   <div className="space-y-2"><Label>Descrição para o Site</Label><Textarea {...register("descricao_site")} className="min-h-[100px]" /></div>
