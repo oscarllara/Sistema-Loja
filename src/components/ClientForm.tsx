@@ -16,7 +16,11 @@ import {
   Truck, 
   Lock, 
   Shield,
-  ShieldAlert
+  ShieldAlert,
+  Heart,
+  Phone,
+  Smartphone,
+  Mail
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,6 +132,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       tipo_entidade: 'C',
       is_funcionario: false,
       nome: "",
+      estado_civil: "Solteiro(a)",
       permissoes: {
         dashboard: true,
         pos: true,
@@ -147,54 +152,21 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const tipoEntidade = watch("tipo_entidade");
   const isFuncionario = watch("is_funcionario");
   const permissoes = watch("permissoes");
+  const estadoCivil = watch("estado_civil");
 
   const onSubmit = async (data: ClientFormValues) => {
     setIsSaving(true);
     try {
-      // Limpeza de dados para evitar erros de coluna inexistente
       const payload = {
-        tipo_entidade: data.tipo_entidade,
-        is_funcionario: data.is_funcionario,
+        ...data,
         nome: data.nome.toUpperCase(),
-        apelido_fantasia: data.apelido_fantasia,
-        cpf_cnpj: data.cpf_cnpj,
-        rg_ie: data.rg_ie,
-        inscricao_municipal: data.inscricao_municipal,
-        sexo: data.sexo,
-        estado_civil: data.estado_civil,
-        naturalidade: data.naturalidade,
-        profissao: data.profissao,
-        data_nascimento: data.data_nascimento,
-        filiacao_pai: data.filiacao_pai,
-        filiacao_mae: data.filiacao_mae,
-        conjuge_nome: data.conjuge_nome,
-        conjuge_cpf: data.conjuge_cpf,
-        conjuge_nascimento: data.conjuge_nascimento,
-        conjuge_empresa: data.conjuge_empresa,
-        conjuge_telefone: data.conjuge_telefone,
-        conjuge_salario: parseFloat(data.conjuge_salario || "0"),
-        local_trabalho: data.local_trabalho,
-        cargo: data.cargo,
-        data_admissao: data.data_admissao,
         salario: parseFloat(data.salario || "0"),
-        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
-        cep: data.cep,
-        endereco: data.endereco,
-        numero: data.numero,
-        complemento: data.complemento,
-        bairro: data.bairro,
-        cidade: data.cidade,
-        uf: data.uf,
-        referencia: data.referencia,
-        tel1: data.tel1,
-        tel2: data.tel2,
-        cel: data.cel,
-        email: data.email || null,
         limite: parseFloat(data.limite || "0"),
         despesa_fixa: parseFloat(data.despesa_fixa || "0"),
         despesa_alimentacao: parseFloat(data.despesa_alimentacao || "0"),
         despesa_aluguel: parseFloat(data.despesa_aluguel || "0"),
-        obs1: data.obs1,
+        conjuge_salario: parseFloat(data.conjuge_salario || "0"),
+        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
         usuario: data.usuario || null,
         senha: data.senha || null,
         permissoes: data.permissoes || null
@@ -265,10 +237,16 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
         <TabsContent value="geral" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Nome Completo *</Label><Input {...register("nome")} /></div>
+            <div className="space-y-2"><Label>Nome Completo *</Label><Input {...register("nome")} className="uppercase" /></div>
             <div className="space-y-2"><Label>CPF/CNPJ</Label><Input {...register("cpf_cnpj")} /></div>
-            <div className="space-y-2"><Label>E-mail</Label><Input type="email" {...register("email")} /></div>
-            <div className="space-y-2"><Label>Celular</Label><Input {...register("cel")} /></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Mail size={14} /> E-mail Principal</Label><Input type="email" {...register("email")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Smartphone size={14} /> Celular / WhatsApp</Label><Input {...register("cel")} /></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 1</Label><Input {...register("tel1")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 2</Label><Input {...register("tel2")} /></div>
           </div>
         </TabsContent>
 
@@ -276,17 +254,51 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} /></div>
             <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} /></div>
+            <div className="space-y-2"><Label>Número</Label><Input {...register("numero")} /></div>
+            <div className="space-y-2"><Label>Bairro</Label><Input {...register("bairro")} /></div>
             <div className="space-y-2"><Label>Cidade</Label><Input {...register("cidade")} /></div>
             <div className="space-y-2"><Label>UF</Label><Input {...register("uf")} maxLength={2} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Referência / Complemento</Label><Input {...register("referencia")} /></div>
           </div>
         </TabsContent>
 
         <TabsContent value="pessoal" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" {...register("data_nascimento")} /></div>
-            <div className="space-y-2"><Label>Estado Civil</Label><Input {...register("estado_civil")} /></div>
+            <div className="space-y-2">
+              <Label>Estado Civil</Label>
+              <select {...register("estado_civil")} className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+                <option value="União Estável">União Estável</option>
+              </select>
+            </div>
             <div className="space-y-2"><Label>Profissão</Label><Input {...register("profissao")} /></div>
           </div>
+
+          {estadoCivil === 'Casado(a)' && (
+            <div className="p-6 bg-rose-50 rounded-2xl border border-rose-100 space-y-4 animate-in fade-in slide-in-from-top-2">
+              <h4 className="text-sm font-black text-rose-900 flex items-center gap-2 uppercase tracking-wider">
+                <Heart size={16} className="fill-rose-500 text-rose-500" /> Dados do Cônjuge
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1 space-y-2">
+                  <Label className="text-rose-700 font-bold">Nome do Cônjuge</Label>
+                  <Input {...register("conjuge_nome")} className="bg-white border-rose-200 uppercase" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-rose-700 font-bold">CPF do Cônjuge</Label>
+                  <Input {...register("conjuge_cpf")} className="bg-white border-rose-200" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-rose-700 font-bold">Data de Nascimento</Label>
+                  <Input type="date" {...register("conjuge_nascimento")} className="bg-white border-rose-200" />
+                </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {isFuncionario && (

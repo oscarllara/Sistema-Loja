@@ -19,25 +19,38 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { db } from '@/services/api';
-import { TrendingUp, DollarSign, PieChart as PieIcon, Calendar, Loader2, ArrowUpRight } from 'lucide-react';
+import { 
+  TrendingUp, 
+  DollarSign, 
+  PieChart as PieIcon, 
+  Calendar, 
+  Loader2, 
+  ArrowUpRight,
+  Cake,
+  User,
+  Heart
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const Reports = () => {
   const navigate = useNavigate();
   const [data, setData] = React.useState<any>(null);
+  const [birthdays, setBirthdays] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [lancamentos, vendas] = await Promise.all([
+      const [lancamentos, vendas, clientes] = await Promise.all([
         db.financeiro.getAll(),
-        db.vendas.getAll()
+        db.vendas.getAll(),
+        db.clientes.getAll()
       ]);
 
-      // 1. Faturamento Real (Apenas Vendas e Receitas Operacionais)
+      // 1. Faturamento Real
       const totalVendas = vendas.reduce((acc, v) => acc + v.total, 0);
       const receitasOperacionais = lancamentos
         .filter(l => l.tipo === 'R' && !l.is_non_operational && l.status === 'Pago' && !l.cd_venda)
@@ -87,6 +100,39 @@ const Reports = () => {
         };
       });
 
+      // 7. Lógica de Aniversariantes do Mês (Cliente e Cônjuge)
+      const currentMonth = new Date().getMonth() + 1;
+      const bdays: any[] = [];
+
+      clientes.forEach(c => {
+        // Aniversário do Cliente
+        if (c.data_nascimento) {
+          const bMonth = new Date(c.data_nascimento).getUTCMonth() + 1;
+          if (bMonth === currentMonth) {
+            bdays.push({
+              nome: c.nome,
+              data: c.data_nascimento,
+              tipo: 'CLIENTE',
+              dia: new Date(c.data_nascimento).getUTCDate()
+            });
+          }
+        }
+        // Aniversário do Cônjuge
+        if (c.conjuge_nascimento) {
+          const bMonth = new Date(c.conjuge_nascimento).getUTCMonth() + 1;
+          if (bMonth === currentMonth) {
+            bdays.push({
+              nome: c.conjuge_nome,
+              data: c.conjuge_nascimento,
+              tipo: 'CÔNJUGE',
+              vinculo: c.nome,
+              dia: new Date(c.conjuge_nascimento).getUTCDate()
+            });
+          }
+        }
+      });
+
+      setBirthdays(bdays.sort((a, b) => a.dia - b.dia));
       setData({
         faturamentoTotal,
         lucroLiquido,
@@ -123,7 +169,7 @@ const Reports = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Inteligência de Negócio</h1>
-            <p className="text-slate-500">Análise de lucratividade real, excluindo movimentações não operacionais.</p>
+            <p className="text-slate-500">Análise de lucratividade real e engajamento com clientes.</p>
           </div>
           <Button variant="outline" onClick={loadData} className="gap-2">
             Atualizar Dados
@@ -161,8 +207,8 @@ const Reports = () => {
           />
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-none shadow-sm">
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-2 border-none shadow-sm">
             <CardHeader><CardTitle className="text-lg font-bold">Fluxo de Caixa (Últimos 7 dias)</CardTitle></CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -179,28 +225,46 @@ const Reports = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg font-bold">Vendas por Meio de Pagamento</CardTitle></CardHeader>
-            <CardContent className="h-[300px] flex items-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={data.salesByMethod}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {data.salesByMethod.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+          {/* NOVO: Relatório de Aniversariantes */}
+          <Card className="border-none shadow-sm bg-white flex flex-col">
+            <CardHeader className="bg-rose-50 border-b border-rose-100 rounded-t-xl">
+              <CardTitle className="text-sm font-black text-rose-900 flex items-center gap-2 uppercase">
+                <Cake size={18} className="text-rose-500" /> Aniversariantes do Mês
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1">
+              <ScrollArea className="h-[300px]">
+                <div className="p-4 space-y-3">
+                  {birthdays.map((b, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs",
+                          b.tipo === 'CLIENTE' ? "bg-indigo-500" : "bg-rose-500"
+                        )}>
+                          {b.tipo === 'CLIENTE' ? <User size={16} /> : <Heart size={16} />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-900 uppercase truncate max-w-[140px]">{b.nome}</p>
+                          <p className="text-[10px] text-slate-500 font-bold">
+                            {b.tipo === 'CLIENTE' ? 'Cliente Principal' : `Cônjuge de ${b.vinculo}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-rose-600">{b.dia.toString().padStart(2, '0')}</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase">DIA</p>
+                      </div>
+                    </div>
+                  ))}
+                  {birthdays.length === 0 && (
+                    <div className="py-20 text-center text-slate-400">
+                      <Cake size={40} className="mx-auto mb-2 opacity-10" />
+                      <p className="text-xs font-bold">Nenhum aniversário este mês.</p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
         </div>
