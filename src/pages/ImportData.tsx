@@ -79,16 +79,12 @@ const ImportData = () => {
     
     let s = val.toString().replace('R$', '').trim();
     
-    // Lógica robusta para números brasileiros:
-    // 1. Se tem vírgula e ponto (ex: 1.200,50), remove o ponto e troca vírgula por ponto
     if (s.includes(',') && s.includes('.')) {
       s = s.replace(/\./g, '').replace(',', '.');
     } 
-    // 2. Se tem apenas vírgula (ex: 10,50), troca por ponto
     else if (s.includes(',')) {
       s = s.replace(',', '.');
     }
-    // 3. Se tem apenas ponto, assumimos que já é o formato decimal (ex: 10.50)
     
     return parseFloat(s) || 0;
   };
@@ -101,22 +97,40 @@ const ImportData = () => {
     const kPrecoCusto = findKey(first, ['PRECO_CUSTO', 'CUSTO', 'COMPRA', 'VLR_CUSTO']);
     const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QUANTIDADE', 'ESTOQUE_ST']);
     const kUn = findKey(first, ['UNIDADE', 'UN', 'MEDIDA']);
+    const kBarras = findKey(first, ['BARRAS', 'EAN', 'GTIN', 'COD_BARRAS']);
 
     if (!kNome) throw new Error("Coluna de Descrição não identificada.");
 
-    addLog("Preparando dados para o banco de dados...");
+    addLog("Filtrando e ordenando produtos alfabeticamente...");
 
-    const mapped = data.map((item, index) => ({
+    // 1. Filtra apenas itens com nome válido
+    const validItems = data.filter(item => {
+      const nome = (item[kNome] || "").toString().trim();
+      return nome && nome.length > 1;
+    });
+
+    // 2. Ordena por nome (A-Z)
+    validItems.sort((a, b) => {
+      const nameA = (a[kNome] || "").toString().trim().toUpperCase();
+      const nameB = (b[kNome] || "").toString().trim().toUpperCase();
+      return nameA.localeCompare(nameB, 'pt-BR');
+    });
+
+    addLog("Gerando novos IDs sequenciais...");
+
+    // 3. Mapeia para o formato do banco com o novo ID sequencial
+    const mapped = validItems.map((item, index) => ({
       nome: (item[kNome] || "").toString().trim().toUpperCase(),
       id_importado: kCodOriginal ? (item[kCodOriginal] || "").toString() : "",
+      cod_barras: kBarras ? (item[kBarras] || "").toString() : "",
       venda: parseNum(item[kPrecoVenda]),
       compra: parseNum(item[kPrecoCusto]),
       estoque: parseNum(item[kEstoque]),
       un: kUn ? (item[kUn] || "UN").toString().toUpperCase() : "UN",
-      id_manual: (index + 1).toString().padStart(5, '0'),
+      id_manual: (index + 1).toString().padStart(5, '0'), // Novo ID sequencial baseado na ordem A-Z
       venda_vista: parseNum(item[kPrecoVenda]),
       data_atualizacao: new Date().toISOString()
-    })).filter(p => p.nome && p.nome.length > 1);
+    }));
 
     const chunkSize = 100;
     for (let i = 0; i < mapped.length; i += chunkSize) {
@@ -129,7 +143,7 @@ const ImportData = () => {
       }
     }
 
-    addLog(`Sucesso: ${mapped.length} produtos importados para o Supabase.`);
+    addLog(`Sucesso: ${mapped.length} produtos importados e re-indexados.`);
   };
 
   const importClientes = async (data: any[]) => {
@@ -165,8 +179,8 @@ const ImportData = () => {
             <Database size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Importação Profissional (Supabase)</h1>
-            <p className="text-slate-500">Seus dados agora são salvos na nuvem, sem limites de memória.</p>
+            <h1 className="text-2xl font-bold text-slate-900">Importação e Re-indexação</h1>
+            <p className="text-slate-500">Os produtos serão organizados de A-Z e receberão novos códigos sequenciais.</p>
           </div>
         </div>
 
@@ -177,7 +191,7 @@ const ImportData = () => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-emerald-900">Importação Concluída!</h3>
-              <p className="text-sm text-emerald-700">Todos os dados foram salvos no banco de dados Supabase.</p>
+              <p className="text-sm text-emerald-700">Todos os dados foram salvos e os códigos foram gerados em ordem alfabética.</p>
             </div>
             <Button onClick={() => window.location.reload()} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
               <RefreshCw size={18} /> Atualizar Sistema

@@ -268,10 +268,23 @@ const POS = () => {
     e.preventDefault();
     if (!inputCode.trim()) return;
     if (pendingProduct) { commitToCart(); return; }
+    
     const paddedVal = inputCode.padStart(5, '0');
-    const product = products.find(p => p.id_manual === inputCode || p.id_manual === paddedVal || p.cod_barras === inputCode);
-    if (product) startInsertion(product);
-    else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
+    
+    // Busca por: Novo ID, Novo ID com zeros, Código de Barras ou Código Antigo (Importado)
+    const product = products.find(p => 
+      p.id_manual === inputCode || 
+      p.id_manual === paddedVal || 
+      p.cod_barras === inputCode ||
+      p.id_importado === inputCode
+    );
+
+    if (product) {
+      startInsertion(product);
+    } else {
+      setSearchInitialTerm(inputCode);
+      setIsSearchOpen(true);
+    }
   };
 
   const updateCartItem = (idx: number, field: string, value: string) => {
