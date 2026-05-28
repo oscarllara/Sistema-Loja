@@ -20,7 +20,11 @@ import {
   Heart,
   Phone,
   Smartphone,
-  Mail
+  Mail,
+  Facebook,
+  Instagram,
+  Linkedin,
+  Globe
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +62,10 @@ const clientSchema = z.object({
   data_admissao: z.string().optional().nullable(),
   salario: z.string().optional().nullable(),
   dia_pagamento: z.string().optional().nullable(),
+  site: z.string().optional().nullable(),
+  facebook: z.string().optional().nullable(),
+  instagram: z.string().optional().nullable(),
+  linkedin: z.string().optional().nullable(),
   cep: z.string().optional().nullable(),
   endereco: z.string().optional().nullable(),
   numero: z.string().optional().nullable(),
@@ -227,7 +235,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       </div>
 
       <Tabs defaultValue="geral" className="w-full">
-        <TabsList className={cn("grid w-full bg-slate-100 p-1 rounded-xl", isFuncionario ? "grid-cols-5" : "grid-cols-4")}>
+        <TabsList className={cn("grid w-full bg-slate-100 p-1 rounded-xl h-auto overflow-x-auto", isFuncionario ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="geral" className="gap-2 cursor-pointer"><User size={16} /> Geral</TabsTrigger>
           <TabsTrigger value="endereco" className="gap-2 cursor-pointer"><MapPin size={16} /> Endereços</TabsTrigger>
           <TabsTrigger value="pessoal" className="gap-2 cursor-pointer"><Briefcase size={16} /> Pessoal</TabsTrigger>
@@ -235,10 +243,15 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           {(tipoEntidade !== 'F' && tipoEntidade !== 'T') && <TabsTrigger value="financeiro" className="gap-2 cursor-pointer"><ShieldCheck size={16} /> Financeiro</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="geral" className="mt-6 space-y-4">
+        <TabsContent value="geral" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Nome Completo *</Label><Input {...register("nome")} className="uppercase" /></div>
-            <div className="space-y-2"><Label>CPF/CNPJ</Label><Input {...register("cpf_cnpj")} /></div>
+            <div className="space-y-2"><Label>Nome / Razão Social *</Label><Input {...register("nome")} className="uppercase" /></div>
+            <div className="space-y-2"><Label>Apelido / Nome Fantasia</Label><Input {...register("apelido_fantasia")} className="uppercase" /></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2"><Label>CPF / CNPJ</Label><Input {...register("cpf_cnpj")} /></div>
+            <div className="space-y-2"><Label>RG / Inscrição Estadual</Label><Input {...register("rg_ie")} /></div>
+            <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...register("inscricao_municipal")} /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2"><Label className="flex items-center gap-2"><Mail size={14} /> E-mail Principal</Label><Input type="email" {...register("email")} /></div>
@@ -247,6 +260,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 1</Label><Input {...register("tel1")} /></div>
             <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 2</Label><Input {...register("tel2")} /></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Globe size={14} /> Site</Label><Input {...register("site")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Facebook size={14} /> Facebook</Label><Input {...register("facebook")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Instagram size={14} /> Instagram</Label><Input {...register("instagram")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Linkedin size={14} /> Linkedin</Label><Input {...register("linkedin")} /></div>
           </div>
         </TabsContent>
 
@@ -275,7 +294,23 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 <option value="União Estável">União Estável</option>
               </select>
             </div>
+            <div className="space-y-2"><Label>Sexo</Label>
+              <select {...register("sexo")} className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="">Selecione...</option>
+                <option value="M">Masculino</option>
+                <option value="F">Feminino</option>
+                <option value="O">Outro</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2"><Label>Naturalidade</Label><Input {...register("naturalidade")} /></div>
             <div className="space-y-2"><Label>Profissão</Label><Input {...register("profissao")} /></div>
+            <div className="space-y-2"><Label>Local de Trabalho</Label><Input {...register("local_trabalho")} /></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2"><Label>Nome do Pai</Label><Input {...register("filiacao_pai")} /></div>
+            <div className="space-y-2"><Label>Nome da Mãe</Label><Input {...register("filiacao_mae")} /></div>
           </div>
 
           {estadoCivil === 'Casado(a)' && (
@@ -297,15 +332,25 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                   <Input type="date" {...register("conjuge_nascimento")} className="bg-white border-rose-200" />
                 </div>
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2"><Label className="text-rose-700 font-bold">Empresa</Label><Input {...register("conjuge_empresa")} className="bg-white border-rose-200" /></div>
+                <div className="space-y-2"><Label className="text-rose-700 font-bold">Telefone</Label><Input {...register("conjuge_telefone")} className="bg-white border-rose-200" /></div>
+                <div className="space-y-2"><Label className="text-rose-700 font-bold">Salário</Label><Input {...register("conjuge_salario")} className="bg-white border-rose-200" /></div>
+              </div>
             </div>
           )}
         </TabsContent>
 
         {isFuncionario && (
           <TabsContent value="acesso" className="mt-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2"><Label>Cargo / Função</Label><Input {...register("cargo")} /></div>
+              <div className="space-y-2"><Label>Data de Admissão</Label><Input type="date" {...register("data_admissao")} /></div>
+              <div className="space-y-2"><Label>Salário Base</Label><Input {...register("salario")} /></div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Lock size={16} /> Credenciais</h4>
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Lock size={16} /> Credenciais de Acesso</h4>
                 <div className="space-y-2">
                   <Label>Usuário (Login)</Label>
                   <Input {...register("usuario")} />
@@ -317,7 +362,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               </div>
 
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-4">
-                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões</h4>
+                <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Shield size={16} /> Permissões do Sistema</h4>
                 <div className="grid grid-cols-1 gap-3">
                   {(Object.keys(permissionLabels) as Array<keyof Permissoes>).map((key) => (
                     <div key={key} className={cn(
@@ -346,7 +391,20 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
         <TabsContent value="financeiro" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2"><Label>Limite de Crédito</Label><Input {...register("limite")} /></div>
+            <div className="space-y-2"><Label>Limite de Crédito (R$)</Label><Input {...register("limite")} className="font-bold text-indigo-600" /></div>
+            <div className="space-y-2"><Label>Dia de Pagamento</Label><Input type="number" {...register("dia_pagamento")} /></div>
+          </div>
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 uppercase">Estimativa de Despesas Mensais</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2"><Label>Despesa Fixa</Label><Input {...register("despesa_fixa")} /></div>
+              <div className="space-y-2"><Label>Alimentação</Label><Input {...register("despesa_alimentacao")} /></div>
+              <div className="space-y-2"><Label>Aluguel / Moradia</Label><Input {...register("despesa_aluguel")} /></div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Observações Gerais</Label>
+            <Input {...register("obs1")} />
           </div>
         </TabsContent>
       </Tabs>
