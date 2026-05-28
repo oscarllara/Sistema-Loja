@@ -271,7 +271,6 @@ const POS = () => {
     
     const paddedVal = inputCode.padStart(5, '0');
     
-    // Busca por: Novo ID, Novo ID com zeros, Código de Barras ou Código Antigo (Importado)
     const product = products.find(p => 
       p.id_manual === inputCode || 
       p.id_manual === paddedVal || 
@@ -525,27 +524,31 @@ const POS = () => {
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
-      <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-100 flex flex-col items-center text-center bg-slate-50">
+      {/* Sidebar Operacional */}
+      <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0 shadow-2xl z-20">
+        <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center bg-slate-50">
           {config?.logo_url ? (
-            <div className="w-full h-24 flex items-center justify-center p-2 bg-white rounded-xl border border-slate-200 shadow-sm mb-2">
+            <div className="w-full h-24 flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm mb-3">
               <img src={config.logo_url} alt="Logo Loja" className="max-h-full max-w-full object-contain" />
             </div>
           ) : (
-            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg mb-2", theme.bg)}>
+            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg mb-3", theme.bg)}>
               <ShoppingCart size={32} />
             </div>
           )}
-          <h2 className={cn("text-lg font-black tracking-tighter italic uppercase", theme.text)}>{config?.nome_empresa || 'DyadERP'}</h2>
-          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{config?.slogan}</p>
+          <h2 className={cn("text-xl font-black tracking-tighter italic uppercase leading-none", theme.text)}>{config?.nome_empresa || 'DyadERP'}</h2>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{config?.slogan}</p>
         </div>
 
-        <div className={cn("p-3 text-white space-y-2", theme.header)}>
-          <div className="space-y-1">
-            <label className="text-[8px] font-bold text-slate-500 uppercase">Operador Logado *</label>
+        <div className={cn("p-4 text-white space-y-3", theme.header)}>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Operador Logado *</label>
             <select 
               ref={sellerRef}
-              className={cn("w-full border-none text-[10px] font-bold h-9 rounded px-2", !selectedSellerId ? "bg-rose-600 text-white animate-pulse" : "bg-white/10 text-white")}
+              className={cn(
+                "w-full border-none text-xs font-black h-10 rounded-xl px-3 transition-all",
+                !selectedSellerId ? "bg-rose-600 text-white animate-pulse ring-4 ring-rose-600/20" : "bg-white/10 text-white hover:bg-white/20"
+              )}
               value={selectedSellerId}
               onChange={(e) => setSelectedSellerId(e.target.value ? Number(e.target.value) : "")}
             >
@@ -555,174 +558,255 @@ const POS = () => {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-3">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Ações Principais</h3>
-              <Button className={cn("w-full h-14 text-white font-black text-base gap-2 shadow-lg rounded-xl", theme.bg, theme.hover)} onClick={() => handleShortcut('F10')}>
-                <CheckCircle size={20} /> {mode === 'COMPRA' ? 'CONCLUIR COMPRA' : 'FINALIZAR (F10)'}
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Ações Principais</h3>
+              <Button 
+                className={cn("w-full h-16 text-white font-black text-lg gap-3 shadow-xl rounded-2xl transition-transform active:scale-95", theme.bg, theme.hover)} 
+                onClick={() => handleShortcut('F10')}
+              >
+                <CheckCircle size={24} /> {mode === 'COMPRA' ? 'CONCLUIR' : 'FINALIZAR'}
+                <span className="text-[10px] opacity-50 ml-auto">F10</span>
               </Button>
               
               {mode === 'COMPRA' && (
-                <Button variant="outline" className="w-full h-10 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-bold text-xs" onClick={generateAutoQuote}>
-                  <RefreshCw size={16} /> GERAR AUTOMÁTICA
+                <Button variant="outline" className="w-full h-11 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-black text-xs uppercase" onClick={generateAutoQuote}>
+                  <RefreshCw size={16} /> Gerar por Estoque Mínimo
                 </Button>
               )}
 
-              <Button variant="outline" className="w-full h-10 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold text-xs" onClick={handleSaveQuote}>
-                <Save size={16} /> {mode === 'COMPRA' ? 'SALVAR COTAÇÃO' : 'SALVAR ORÇAMENTO'} (F9)
+              <Button variant="outline" className="w-full h-11 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-black text-xs uppercase" onClick={handleSaveQuote}>
+                <Save size={16} /> {mode === 'COMPRA' ? 'Salvar Cotação' : 'Salvar Orçamento'}
+                <span className="text-[10px] opacity-50 ml-auto">F9</span>
               </Button>
             </div>
-            <div className="space-y-2">
-              <h3 className="text-[9px] font-black text-slate-400 uppercase border-b pb-1">Consultas</h3>
-              <div className="space-y-1.5">
-                <ShortcutItem keyName="F5" label="HISTÓRICO" onClick={() => setIsHistoryOpen(true)} icon={<History size={12} />} />
-                <ShortcutItem keyName="F7" label="RECEBER" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={12} />} color="emerald" />
-                <ShortcutItem keyName="F8" label={mode === 'COMPRA' ? 'COTAÇÕES' : 'ORÇAMENTOS'} onClick={() => setIsQuotesOpen(true)} icon={<FileText size={12} />} color="amber" />
+
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
+              <div className="grid grid-cols-1 gap-2">
+                <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
+                <ShortcutItem keyName="F7" label="Receber Contas" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
+                <ShortcutItem keyName="F8" label={mode === 'COMPRA' ? 'Cotações' : 'Orçamentos'} onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} color="amber" />
               </div>
             </div>
+
             <div className="pt-4">
               <SyncStatus />
             </div>
           </div>
         </ScrollArea>
 
-        <div className="p-3 border-t border-slate-100 bg-slate-50">
-          <Button variant="ghost" className="w-full h-9 gap-2 text-rose-600 hover:bg-rose-50 font-bold text-xs" onClick={() => setIsAdminAuthOpen(true)}>
-            <LogOut size={14} /> SAIR DO PDV
+        <div className="p-4 border-t border-slate-100 bg-slate-50">
+          <Button variant="ghost" className="w-full h-10 gap-2 text-rose-600 hover:bg-rose-100 font-black text-xs uppercase rounded-xl" onClick={() => setIsAdminAuthOpen(true)}>
+            <LogOut size={16} /> Sair do PDV
           </Button>
         </div>
       </aside>
 
+      {/* Área Principal do PDV */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("h-16 text-white flex items-center justify-between px-6 shrink-0 border-b", theme.header, theme.border)}>
-          <div className="flex items-center gap-6">
-            <div className="flex bg-white/10 p-1 rounded-lg">
-              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'VENDA' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('VENDA')}>VENDA</Button>
-              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'COMPRA' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
-              <Button variant="ghost" size="sm" className={cn("h-7 px-3 text-[9px] font-bold rounded-md", mode === 'LOCACAO' ? "bg-white text-slate-900" : "text-white")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
+        <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b shadow-lg z-10", theme.header, theme.border)}>
+          <div className="flex items-center gap-8">
+            <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-sm">
+              <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('VENDA')}>VENDA</Button>
+              <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
+              <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
             </div>
-            <div className="space-y-0.5">
-              <p className="text-[8px] font-bold text-slate-400 uppercase">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
-              <select className="bg-transparent border-none text-xs font-bold focus:ring-0 p-0 h-auto min-w-[150px]" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
-                <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
-                {(mode === 'COMPRA' ? clients.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A') : clients).map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
-              </select>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
+              <div className="flex items-center gap-2">
+                <select 
+                  className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[200px] cursor-pointer hover:text-primary transition-colors" 
+                  value={selectedEntityId} 
+                  onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
+                  {(mode === 'COMPRA' ? clients.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A') : clients).map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
+                </select>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-white/40 hover:text-white" onClick={() => setIsAddEntityOpen(true)}><UserPlus size={16} /></Button>
+              </div>
             </div>
           </div>
-          <div className="text-right"><p className="text-[9px] font-bold uppercase text-indigo-400">Total Geral</p><p className="text-4xl font-black text-white tracking-tighter">{total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div>
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Total da Operação</p>
+            <p className="text-5xl font-black text-white tracking-tighter drop-shadow-md">
+              <span className="text-2xl opacity-50 mr-1">R$</span>
+              {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
         </header>
 
-        <div className="flex-1 bg-[#FFFFE1] overflow-hidden flex flex-col">
-          <Table className="border-collapse">
-            <TableHeader className="sticky top-0 z-10">
-              <TableRow className="bg-slate-800 hover:bg-transparent border-none">
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 w-20">CÓDIGO</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10">PRODUTO</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-16">UN</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-20">QTDE</TableHead>
-                
-                {mode === 'COMPRA' ? (
-                  <>
-                    <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-24">CUSTO UNIT.</TableHead>
-                    <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-center w-20">MARGEM %</TableHead>
-                    <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-24">VENDA SUG.</TableHead>
-                  </>
-                ) : (
-                  <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">VALOR UNIT.</TableHead>
-                )}
-                
-                <TableHead className="text-white font-bold text-[10px] h-7 border-r border-white/10 text-right w-28">SUB TOTAL</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-7 text-center w-14">AÇÕES</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cart.map((item, idx) => (
-                <TableRow key={idx} className="h-8 border-b border-slate-200 hover:bg-indigo-50 cursor-pointer">
-                  <TableCell className="py-0 text-[11px] font-mono border-r border-slate-200 w-20">{item?.id_manual?.padStart(5, '0')}</TableCell>
-                  <TableCell className="py-0 text-[11px] font-bold uppercase border-r border-slate-200">{item?.nome}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 font-bold w-16">{item?.selectedUnit}</TableCell>
-                  <TableCell className="py-0 text-[11px] text-center border-r border-slate-200 w-20">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
+        {/* Lista de Itens (Estilo Papel/Terminal) */}
+        <div className="flex-1 bg-[#FFFFF0] overflow-hidden flex flex-col shadow-inner">
+          <div className="flex-1 overflow-auto">
+            <Table className="border-collapse">
+              <TableHeader className="sticky top-0 z-10">
+                <TableRow className="bg-slate-800 hover:bg-slate-800 border-none shadow-md">
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 w-24 px-6">CÓDIGO</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 px-6">DESCRIÇÃO DO PRODUTO</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-20">UN</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">QTDE</TableHead>
                   
                   {mode === 'COMPRA' ? (
                     <>
-                      <TableCell className="py-0 border-r border-slate-200 w-24">
-                        <input 
-                          className="w-full bg-transparent text-right text-[11px] font-bold focus:bg-white outline-none"
-                          value={item.finalPrice.toFixed(2).replace('.', ',')}
-                          onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell className="py-0 border-r border-slate-200 w-20">
-                        <input 
-                          className="w-full bg-transparent text-center text-[11px] font-bold text-indigo-600 focus:bg-white outline-none"
-                          value={item.margin.toFixed(1).replace('.', ',')}
-                          onChange={(e) => updateCartItem(idx, 'margin', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell className="py-0 border-r border-slate-200 w-24">
-                        <input 
-                          className="w-full bg-transparent text-right text-[11px] font-black text-emerald-700 focus:bg-white outline-none"
-                          value={item.salePrice.toFixed(2).replace('.', ',')}
-                          onChange={(e) => updateCartItem(idx, 'salePrice', e.target.value)}
-                        />
-                      </TableCell>
+                      <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-32">CUSTO UNIT.</TableHead>
+                      <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">MARGEM %</TableHead>
+                      <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-32">VENDA SUG.</TableHead>
                     </>
                   ) : (
-                    <TableCell className="py-0 text-[11px] text-right border-r border-slate-200 w-28">{formatCurrency(item?.finalPrice)}</TableCell>
+                    <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">VALOR UNIT.</TableHead>
                   )}
                   
-                  <TableCell className="py-0 text-[11px] text-right font-bold border-r border-slate-200 w-28">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
-                  <TableCell className="py-0 text-center w-14"><Button variant="ghost" size="icon" className="h-5 w-5 text-rose-500 hover:bg-rose-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={12} /></Button></TableCell>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">SUB TOTAL</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 text-center w-16">#</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {cart.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="h-[400px] text-center">
+                      <div className="flex flex-col items-center justify-center text-slate-300 gap-4">
+                        <ShoppingBag size={80} className="opacity-10" />
+                        <p className="text-xl font-black uppercase tracking-widest opacity-20">Carrinho Vazio</p>
+                        <p className="text-xs font-bold opacity-30">Bipe um produto ou pressione F1 para pesquisar</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  cart.map((item, idx) => (
+                    <TableRow key={idx} className="h-12 border-b border-slate-200 hover:bg-indigo-50/50 transition-colors group">
+                      <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
+                      <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">{item?.nome}</TableCell>
+                      <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
+                      <TableCell className="py-0 text-sm text-center border-r border-slate-100 font-black w-24 text-slate-900">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
+                      
+                      {mode === 'COMPRA' ? (
+                        <>
+                          <TableCell className="py-0 border-r border-slate-100 w-32 px-4">
+                            <input 
+                              className="w-full bg-transparent text-right text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
+                              value={item.finalPrice.toFixed(2).replace('.', ',')}
+                              onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
+                            />
+                          </TableCell>
+                          <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
+                            <input 
+                              className="w-full bg-transparent text-center text-sm font-black text-indigo-600 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
+                              value={item.margin.toFixed(1).replace('.', ',')}
+                              onChange={(e) => updateCartItem(idx, 'margin', e.target.value)}
+                            />
+                          </TableCell>
+                          <TableCell className="py-0 border-r border-slate-100 w-32 px-4">
+                            <input 
+                              className="w-full bg-transparent text-right text-sm font-black text-emerald-700 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
+                              value={item.salePrice.toFixed(2).replace('.', ',')}
+                              onChange={(e) => updateCartItem(idx, 'salePrice', e.target.value)}
+                            />
+                          </TableCell>
+                        </>
+                      ) : (
+                        <TableCell className="py-0 text-sm text-right border-r border-slate-100 w-36 px-6 font-bold text-slate-600">{formatCurrency(item?.finalPrice)}</TableCell>
+                      )}
+                      
+                      <TableCell className="py-0 text-base text-right font-black border-r border-slate-100 w-36 px-6 text-slate-900">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
+                      <TableCell className="py-0 text-center w-16">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full opacity-0 group-hover:opacity-100 transition-all" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}>
+                          <Trash2 size={16} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
-        <footer className="h-20 border-t p-3 shrink-0 bg-slate-900 border-slate-800">
-          <form onSubmit={handleCodeSubmit} className="flex items-end gap-3 h-full">
-            <div className="flex-1 space-y-1">
-              <label className="text-[8px] font-bold text-slate-400 uppercase">Bipe do Produto (F1 - Pesquisar)</label>
-              <Input ref={codeRef} value={inputCode} onChange={(e) => handleCodeChange(e.target.value)} className={cn("h-9 border-none text-base font-black", pendingProduct ? "bg-emerald-100 text-emerald-900" : "bg-[#E1FFFF] text-slate-900")} placeholder="Bipe o produto ou digite o nome..." />
+        {/* Barra de Entrada de Dados (Footer) */}
+        <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10">
+          <form onSubmit={handleCodeSubmit} className="flex items-end gap-4 h-full max-w-7xl mx-auto">
+            <div className="flex-1 space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Zap size={12} className="text-amber-500" /> Entrada de Produto (F1 - Pesquisar)
+              </label>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <Input 
+                  ref={codeRef} 
+                  value={inputCode} 
+                  onChange={(e) => handleCodeChange(e.target.value)} 
+                  className={cn(
+                    "h-12 border-none text-xl font-black pl-12 transition-all shadow-inner",
+                    pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20"
+                  )} 
+                  placeholder="Bipe o código ou digite o nome..." 
+                />
+              </div>
             </div>
-            <div className="w-20 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Qtde</label><Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-9 bg-[#E1FFFF] border-none text-base font-black text-slate-900 text-center" /></div>
-            <div className="w-28 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Unidade</label><div className="w-full h-9 rounded flex items-center justify-center font-black text-[10px] uppercase bg-[#E1FFFF] text-slate-900">{inputUnit || "UN"}</div></div>
-            <div className="w-32 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Valor Unitário</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}</div></div>
-            <div className="w-40 space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Sub Total</label><div className="h-9 bg-[#E1FFFF] rounded flex items-center justify-end px-3 font-black text-slate-900 text-sm">{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseBRNumber(inputQty) || 1)) : "0,00"}</div></div>
+            <div className="w-24 space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Qtde</label>
+              <Input 
+                ref={qtyRef} 
+                value={inputQty} 
+                onChange={(e) => setInputQty(e.target.value)} 
+                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} 
+                className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" 
+              />
+            </div>
+            <div className="w-28 space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Unidade</label>
+              <div className="w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase bg-slate-800 text-indigo-300 border border-slate-700 shadow-inner">
+                {inputUnit || "UN"}
+              </div>
+            </div>
+            <div className="w-40 space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Valor Unitário</label>
+              <div className="h-12 bg-slate-800 rounded-xl flex items-center justify-end px-4 font-black text-white text-lg border border-slate-700 shadow-inner">
+                <span className="text-xs opacity-30 mr-2">R$</span>
+                {pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}
+              </div>
+            </div>
+            <div className="w-48 space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Sub Total</label>
+              <div className="h-12 bg-primary rounded-xl flex items-center justify-end px-4 font-black text-white text-xl shadow-lg shadow-primary/20">
+                <span className="text-xs opacity-50 mr-2">R$</span>
+                {pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseBRNumber(inputQty) || 1)) : "0,00"}
+              </div>
+            </div>
           </form>
         </footer>
       </main>
 
-      {/* Modal de Liberação de Supervisor */}
+      {/* Modais */}
       <Dialog open={isSupervisorModalOpen} onOpenChange={setIsSupervisorModalOpen}>
-        <DialogContent className="max-w-md border-none shadow-2xl">
-          <DialogHeader className="flex flex-col items-center text-center space-y-2">
-            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-2">
-              <ShieldAlert size={32} />
+        <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
+          <DialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-2 shadow-inner">
+              <ShieldAlert size={40} />
             </div>
-            <DialogTitle className="text-xl font-black text-rose-600 uppercase">Venda Bloqueada</DialogTitle>
-            <p className="text-sm font-bold text-slate-500">{blockReason}</p>
+            <DialogTitle className="text-2xl font-black text-rose-600 uppercase tracking-tighter">Venda Bloqueada</DialogTitle>
+            <p className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">{blockReason}</p>
           </DialogHeader>
           
-          <form onSubmit={handleSupervisorRelease} className="space-y-4 py-4">
+          <form onSubmit={handleSupervisorRelease} className="space-y-5 py-4">
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-slate-400">Senha do Supervisor</Label>
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Supervisor</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                 <Input 
                   type="password" 
                   autoFocus 
                   value={supervisorPassword} 
                   onChange={(e) => setSupervisorPassword(e.target.value)} 
-                  className="pl-10 h-12 text-lg font-black border-2 border-slate-200 focus:border-indigo-500"
-                  placeholder="Digite a senha..."
+                  className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner"
+                  placeholder="••••••"
                 />
               </div>
             </div>
-            <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl" onClick={() => setIsSupervisorModalOpen(false)}>Cancelar</Button>
-              <Button type="submit" className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-black">LIBERAR VENDA</Button>
+            <DialogFooter className="gap-3">
+              <Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsSupervisorModalOpen(false)}>CANCELAR</Button>
+              <Button type="submit" className="flex-1 h-14 bg-primary hover:bg-primary/90 rounded-2xl font-black text-lg shadow-xl shadow-primary/20">LIBERAR AGORA</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -755,16 +839,37 @@ const POS = () => {
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
-      <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Cadastrar Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
-      <Dialog open={isAdminAuthOpen} onOpenChange={isAdminAuthOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso Restrito</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-4 py-4"><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Senha do Administrador..." /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsAdminAuthOpen(false)}>Cancelar</Button><Button type="submit" className="bg-indigo-600">Acessar ERP</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl"><DialogHeader><DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cadastrar Novo Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
+      <Dialog open={isAdminAuthOpen} onOpenChange={isAdminAuthOpen}><DialogContent className="max-w-md rounded-3xl"><DialogHeader><DialogTitle className="text-xl font-black uppercase tracking-tighter">Acesso Restrito ao ERP</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-5 py-4"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Administrador</Label><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner" placeholder="••••••" /></div><DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsAdminAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-black">ACESSAR ERP</Button></DialogFooter></form></DialogContent></Dialog>
     </div>
   );
 };
 
 const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { keyName: string, label: string, onClick: () => void, icon?: React.ReactNode, color?: string }) => (
-  <Button variant="outline" className={cn("w-full h-10 justify-between gap-2 border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-[10px] group transition-all", color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50", color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50", color === 'amber' && "border-amber-100 text-amber-700 hover:bg-amber-50")} onClick={onClick}>
-    <div className="flex items-center gap-2"><div className={cn("p-1 rounded-lg bg-slate-100 group-hover:bg-white transition-colors", color === 'rose' && "bg-rose-50 text-rose-600", color === 'emerald' && "bg-emerald-50 text-emerald-600", color === 'indigo' && "bg-indigo-50 text-indigo-600", color === 'amber' && "bg-amber-50 text-amber-600")}>{icon}</div><span className="uppercase">{label}</span></div>
-    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] font-black text-slate-500 border border-slate-200">{keyName}</span>
+  <Button 
+    variant="outline" 
+    className={cn(
+      "w-full h-12 justify-between gap-3 border-slate-200 hover:bg-slate-50 rounded-2xl font-black text-[11px] group transition-all active:scale-95 shadow-sm",
+      color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50",
+      color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50",
+      color === 'indigo' && "border-indigo-100 text-indigo-700 hover:bg-indigo-50",
+      color === 'amber' && "border-amber-100 text-amber-700 hover:bg-amber-50"
+    )} 
+    onClick={onClick}
+  >
+    <div className="flex items-center gap-3">
+      <div className={cn(
+        "p-2 rounded-xl bg-slate-100 group-hover:bg-white transition-colors shadow-inner",
+        color === 'rose' && "bg-rose-50 text-rose-600",
+        color === 'emerald' && "bg-emerald-50 text-emerald-600",
+        color === 'indigo' && "bg-indigo-50 text-indigo-600",
+        color === 'amber' && "bg-amber-50 text-amber-600"
+      )}>
+        {icon}
+      </div>
+      <span className="uppercase tracking-wider">{label}</span>
+    </div>
+    <span className="bg-slate-100 px-2 py-1 rounded-lg text-[10px] font-black text-slate-500 border border-slate-200 shadow-sm">{keyName}</span>
   </Button>
 );
 

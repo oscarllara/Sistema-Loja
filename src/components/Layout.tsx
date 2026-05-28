@@ -89,24 +89,37 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <aside className={cn("fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0", !isSidebarOpen && "-translate-x-full")}>
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 shadow-sm",
+        !isSidebarOpen && "-translate-x-full"
+      )}>
         <div className="flex flex-col h-full">
           <div className="p-6 flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-              <ShoppingCart size={24} />
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+              <ShoppingCart size={22} />
             </div>
-            <span className="text-xl font-bold text-slate-800 tracking-tight">DyadERP</span>
+            <span className="text-xl font-black text-slate-900 tracking-tight">Dyad<span className="text-primary">ERP</span></span>
           </div>
 
           <ScrollArea className="flex-1 px-4">
             <div className="space-y-6 pb-6">
               {filteredMenu.map((group, idx) => (
                 <div key={idx} className="space-y-2">
-                  <h3 className="px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">{group.title}</h3>
+                  <h3 className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">{group.title}</h3>
                   <div className="space-y-1">
                     {group.items.map((item) => (
-                      <Link key={item.path} to={item.path} className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200", location.pathname === item.path ? "bg-indigo-50 text-indigo-600 shadow-sm" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900")}>
-                        <item.icon size={18} />
+                      <Link 
+                        key={item.path} 
+                        to={item.path} 
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200",
+                          location.pathname === item.path 
+                            ? "bg-primary/10 text-primary shadow-sm" 
+                            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        )}
+                      >
+                        <item.icon size={18} className={cn(location.pathname === item.path ? "text-primary" : "text-slate-400")} />
                         {item.label}
                       </Link>
                     ))}
@@ -117,38 +130,37 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           </ScrollArea>
 
           <div className="p-4 border-t border-slate-100">
-            <div className="bg-slate-900 rounded-2xl p-4 text-white">
+            <div className="bg-slate-900 rounded-2xl p-4 text-white shadow-xl">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold uppercase">
+                <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-xs font-black uppercase border-2 border-white/10">
                   {user?.nome?.substring(0, 2)}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-slate-400 truncate">{user?.cargo || 'Usuário'}</p>
-                  <p className="text-sm font-semibold truncate">{user?.nome}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{user?.cargo || 'Usuário'}</p>
+                  <p className="text-sm font-bold truncate">{user?.nome}</p>
                 </div>
               </div>
-              <Button variant="ghost" className="w-full justify-start text-slate-400 hover:text-white hover:bg-white/10 h-8 px-2 text-xs gap-2" onClick={handleLogout}>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start text-slate-400 hover:text-white hover:bg-white/10 h-9 px-2 text-xs gap-2 font-bold" 
+                onClick={handleLogout}
+              >
                 <LogOut size={14} /> Sair do Sistema
               </Button>
             </div>
             
-            <div className="mt-4 flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
-              {config?.provider_logo ? (
-                <img src={config.provider_logo} alt="Provedor" className="h-5 object-contain grayscale" />
-              ) : (
-                <ShieldCheck size={14} className="text-slate-400" />
-              )}
+            <div className="mt-4 flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity cursor-default">
               <div className="text-center">
-                <p className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">{config?.provider_name || 'Key Of Innov'}</p>
-                <p className="text-[7px] font-bold text-slate-400 italic">{config?.provider_slogan}</p>
+                <p className="text-[9px] font-black text-slate-600 uppercase tracking-tighter">Powered by Key Of Innov</p>
               </div>
             </div>
           </div>
         </div>
       </aside>
 
+      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-8 shrink-0">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-8 shrink-0 shadow-sm z-10">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
             {isSidebarOpen ? <X /> : <Menu />}
           </Button>
@@ -156,7 +168,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <SyncStatus />
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</div>
+        <div className="flex-1 overflow-y-auto p-6 lg:p-8 bg-slate-50/50">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   );
