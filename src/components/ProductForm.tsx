@@ -19,7 +19,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   History,
-  Loader2
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ import { Produto, Cliente } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import ProductHistoryModal from './ProductHistoryModal';
 
 const productSchema = z.object({
   id_manual: z.string().optional().nullable(),
@@ -86,6 +88,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
   const [history, setHistory] = React.useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
+  const [isFullHistoryOpen, setIsFullHistoryOpen] = React.useState(false);
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -315,7 +318,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
                     <History size={14} /> Histórico de Movimentação (Últimas 10)
                   </h4>
-                  {isLoadingHistory && <Loader2 size={14} className="animate-spin text-indigo-600" />}
+                  <div className="flex items-center gap-3">
+                    {isLoadingHistory && <Loader2 size={14} className="animate-spin text-indigo-600" />}
+                    <Button 
+                      type="button" 
+                      variant="link" 
+                      className="h-auto p-0 text-indigo-600 font-bold text-[10px] uppercase flex items-center gap-1"
+                      onClick={() => setIsFullHistoryOpen(true)}
+                    >
+                      <ExternalLink size={12} /> Ver Histórico Completo
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="border rounded-lg overflow-hidden bg-white">
@@ -422,6 +435,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
         </div>
       </Tabs>
+
+      {product && isFullHistoryOpen && (
+        <ProductHistoryModal 
+          isOpen={isFullHistoryOpen} 
+          onClose={() => setIsFullHistoryOpen(false)} 
+          product={product} 
+        />
+      )}
+
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-10 h-12 rounded-xl font-black shadow-lg">SALVAR PRODUTO</Button>
       </div>

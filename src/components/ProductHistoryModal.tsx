@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { db } from '@/services/api';
-import { Produto, Venda, Compra } from '@/types/database';
-import { ArrowUpCircle, ArrowDownCircle, Loader2, Package } from 'lucide-react';
+import { Produto } from '@/types/database';
+import { ArrowUpCircle, ArrowDownCircle, Loader2, Package, Calendar, User, Hash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProductHistoryModalProps {
@@ -73,6 +73,7 @@ const ProductHistoryModal = ({ isOpen, onClose, product }: ProductHistoryModalPr
         }
       });
 
+      // Ordena por data (mais recente primeiro)
       setHistory(movements.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()));
     } finally {
       setIsLoading(false);
@@ -83,63 +84,119 @@ const ProductHistoryModal = ({ isOpen, onClose, product }: ProductHistoryModalPr
     if (isOpen) loadHistory();
   }, [isOpen, loadHistory]);
 
+  const totalEntradas = history.filter(h => h.tipo === 'ENTRADA').reduce((acc, h) => acc + h.qtde, 0);
+  const totalSaidas = history.filter(h => h.tipo === 'SAÍDA').reduce((acc, h) => acc + h.qtde, 0);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="text-indigo-600" />
-            Histórico de Movimentação: {product.nome}
-          </DialogTitle>
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+        <DialogHeader className="p-6 bg-slate-900 text-white shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-600 rounded-xl">
+                <Package size={24} />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black uppercase tracking-tight">Extrato de Movimentação</DialogTitle>
+                <p className="text-indigo-300 text-xs font-bold uppercase">{product.nome}</p>
+              </div>
+            </div>
+            <div className="flex gap-4 text-right">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Estoque Atual</p>
+                <p className="text-lg font-black text-white">{product.estoque} {product.un}</p>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto border rounded-lg mt-4">
+        <div className="grid grid-cols-3 gap-px bg-slate-200 border-b border-slate-200 shrink-0">
+          <div className="bg-white p-4 text-center">
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Total Entradas</p>
+            <p className="text-xl font-black text-emerald-600">+{totalEntradas}</p>
+          </div>
+          <div className="bg-white p-4 text-center">
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Total Saídas</p>
+            <p className="text-xl font-black text-rose-600">-{totalSaidas}</p>
+          </div>
+          <div className="bg-white p-4 text-center">
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Movimentações</p>
+            <p className="text-xl font-black text-indigo-600">{history.length}</p>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto bg-slate-50 p-6">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2">
               <Loader2 className="animate-spin" />
-              <p className="text-sm font-bold">Carregando histórico...</p>
+              <p className="text-sm font-bold">Buscando histórico completo...</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader className="bg-slate-50">
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Origem</TableHead>
-                  <TableHead>Cliente/Fornecedor</TableHead>
-                  <TableHead className="text-center">Qtde</TableHead>
-                  <TableHead className="text-right">Vlr. Unit.</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((m, i) => (
-                  <TableRow key={i} className="hover:bg-slate-50">
-                    <TableCell className="text-xs">{new Date(m.data).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Badge className={cn(
-                        "text-[9px] font-bold",
-                        m.tipo === 'ENTRADA' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                      )}>
-                        {m.tipo === 'ENTRADA' ? <ArrowUpCircle size={10} className="mr-1" /> : <ArrowDownCircle size={10} className="mr-1" />}
-                        {m.tipo}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-bold">{m.origem}</TableCell>
-                    <TableCell className="text-xs uppercase">{m.entidade}</TableCell>
-                    <TableCell className="text-center font-bold">{m.qtde}</TableCell>
-                    <TableCell className="text-right text-xs">R$ {m.valor.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold text-xs">R$ {m.total.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-                {history.length === 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-10 text-slate-400">Nenhuma movimentação registrada para este produto.</TableCell>
+                    <TableHead className="text-[10px] font-bold uppercase">Data / Hora</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase">Operação</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase">Documento / Origem</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase">Cliente / Fornecedor</TableHead>
+                    <TableHead className="text-center text-[10px] font-bold uppercase">Qtde</TableHead>
+                    <TableHead className="text-right text-[10px] font-bold uppercase">Vlr. Unit.</TableHead>
+                    <TableHead className="text-right text-[10px] font-bold uppercase">Subtotal</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {history.map((m, i) => (
+                    <TableRow key={i} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                          <Calendar size={12} className="text-slate-400" />
+                          {new Date(m.data).toLocaleString()}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn(
+                          "text-[9px] font-black border-none px-2 py-0.5",
+                          m.tipo === 'ENTRADA' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                        )}>
+                          {m.tipo === 'ENTRADA' ? <ArrowUpCircle size={10} className="mr-1" /> : <ArrowDownCircle size={10} className="mr-1" />}
+                          {m.tipo}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                          <Hash size={12} className="text-indigo-400" />
+                          {m.origem}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase">
+                          <User size={12} className="text-slate-400" />
+                          {m.entidade}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-black text-slate-900">{m.qtde}</TableCell>
+                      <TableCell className="text-right text-xs font-medium text-slate-500">R$ {m.valor.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-black text-slate-900">R$ {m.total.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {history.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-20 text-slate-400">
+                        <Package size={48} className="mx-auto mb-2 opacity-10" />
+                        <p className="font-bold">Nenhuma movimentação registrada para este produto.</p>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
+        </div>
+        
+        <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase">
+          <span>DyadERP - Sistema de Gestão</span>
+          <span>Total de registros: {history.length}</span>
         </div>
       </DialogContent>
     </Dialog>
