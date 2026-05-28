@@ -71,6 +71,9 @@ export const db = {
       if (error) throw error;
       return data;
     },
+    bulkAdd: async (items: any[]) => {
+      return await supabase.from('produtos').insert(items);
+    },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
       if (error) throw error;
@@ -103,6 +106,9 @@ export const db = {
     add: async (c: any) => {
       const { error } = await supabase.from('clientes').insert([c]);
       if (error) throw error;
+    },
+    bulkAdd: async (items: any[]) => {
+      return await supabase.from('clientes').insert(items);
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('clientes').update(data).eq('cd_clientes', id);
