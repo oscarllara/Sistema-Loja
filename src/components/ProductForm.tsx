@@ -103,9 +103,9 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       valor_quinzena: product.valor_quinzena ? product.valor_quinzena.toFixed(2).replace('.', ',') : "0,00",
       valor_mes: product.valor_mes ? product.valor_mes.toFixed(2).replace('.', ',') : "0,00",
       preco_site: product.preco_site ? product.preco_site.toFixed(2).replace('.', ',') : "0,00",
-      desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
-      estoque: product.estoque?.toString() || "0",
-      minimo: product.minimo?.toString() || "0",
+      desconto_vista_valor: product.desconto_vista_valor?.toString().replace('.', ',') || "0",
+      estoque: product.estoque?.toString().replace('.', ',') || "0",
+      minimo: product.minimo?.toString().replace('.', ',') || "0",
       fator_conversao: product.fator_conversao?.toString().replace('.', ',') || "",
       integrar_calculadora: product.integrar_calculadora || false,
       cd_fornecedores: product.cd_fornecedores?.toString() || "",
@@ -187,16 +187,24 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     }
   };
 
-  // Função universal para converter input de texto em número float válido
-  const parseNumericInput = (value: string | null | undefined) => {
-    if (!value) return 0;
-    const s = value.toString().trim();
-    // Se contém vírgula, tratamos como formato brasileiro (ponto é milhar, vírgula é decimal)
-    if (s.includes(',')) {
-      return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  // Função robusta para converter qualquer string numérica (com vírgula ou ponto) em Number
+  const cleanAndParseFloat = (value: any): number => {
+    if (value === null || value === undefined || value === "") return 0;
+    
+    // Converte para string e remove espaços
+    let s = value.toString().trim();
+    
+    // Se tiver vírgula e ponto (ex: 1.234,56), remove o ponto (milhar) e troca a vírgula por ponto
+    if (s.includes(',') && s.includes('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } 
+    // Se tiver apenas vírgula (ex: 38,95), troca por ponto
+    else if (s.includes(',')) {
+      s = s.replace(',', '.');
     }
-    // Se não contém vírgula, mas contém ponto, tratamos como decimal direto (formato US)
-    return parseFloat(s) || 0;
+    
+    const result = parseFloat(s);
+    return isNaN(result) ? 0 : result;
   };
 
   const formatCurrencyInput = (value: string | number) => {
@@ -214,17 +222,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const formatted = formatCurrencyInput(e.target.value);
     setValue("venda", formatted);
     
-    const venda = parseNumericInput(formatted);
-    const desconto = parseFloat(descontoValue || "0");
+    const venda = cleanAndParseFloat(formatted);
+    const desconto = cleanAndParseFloat(descontoValue);
     const vista = venda * (1 - (desconto / 100));
     setValue("venda_vista", formatCurrencyInput(vista));
   };
 
   const handleDescontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const desconto = parseFloat(e.target.value) || 0;
     setValue("desconto_vista_valor", e.target.value);
     
-    const venda = parseNumericInput(vendaValue);
+    const venda = cleanAndParseFloat(vendaValue);
+    const desconto = cleanAndParseFloat(e.target.value);
     const vista = venda * (1 - (desconto / 100));
     setValue("venda_vista", formatCurrencyInput(vista));
   };
@@ -233,42 +241,43 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const formatted = formatCurrencyInput(e.target.value);
     setValue("venda_vista", formatted);
     
-    const venda = parseNumericInput(vendaValue);
-    const vista = parseNumericInput(formatted);
+    const venda = cleanAndParseFloat(vendaValue);
+    const vista = cleanAndParseFloat(formatted);
     if (venda > 0) {
       const desconto = ((1 - (vista / venda)) * 100).toFixed(2);
-      setValue("desconto_vista_valor", desconto);
+      setValue("desconto_vista_valor", desconto.replace('.', ','));
     }
   };
 
   const onSubmit = async (data: ProductFormValues) => {
     try {
+      // Sanitização rigorosa de todos os campos numéricos antes do envio
       const payload = {
         nome: data.nome.toUpperCase(),
         id_importado: data.id_importado || null,
         un: data.un.toUpperCase(),
         cod_barras: data.cod_barras || null,
-        compra: parseNumericInput(data.compra),
-        venda: parseNumericInput(data.venda),
-        venda_vista: parseNumericInput(data.venda_vista),
-        venda_fracionada: parseNumericInput(data.venda_fracionada),
+        compra: cleanAndParseFloat(data.compra),
+        venda: cleanAndParseFloat(data.venda),
+        venda_vista: cleanAndParseFloat(data.venda_vista),
+        venda_fracionada: cleanAndParseFloat(data.venda_fracionada),
         desconto_vista_tipo: data.desconto_vista_tipo,
-        desconto_vista_valor: parseNumericInput(data.desconto_vista_valor),
-        estoque: parseNumericInput(data.estoque),
-        minimo: parseNumericInput(data.minimo),
+        desconto_vista_valor: cleanAndParseFloat(data.desconto_vista_valor),
+        estoque: cleanAndParseFloat(data.estoque),
+        minimo: cleanAndParseFloat(data.minimo),
         ncm: data.ncm || null,
         fracionado: !!data.fracionado,
         un_fracionada: data.un_fracionada || null,
-        fator_conversao: parseNumericInput(data.fator_conversao),
+        fator_conversao: cleanAndParseFloat(data.fator_conversao),
         is_kit: !!data.is_kit,
         itens_kit: data.itens_kit || null,
         is_locacao: !!data.is_locacao,
-        valor_diaria: parseNumericInput(data.valor_diaria),
-        valor_semana: parseNumericInput(data.valor_semana),
-        valor_quinzena: parseNumericInput(data.valor_quinzena),
-        valor_mes: parseNumericInput(data.valor_mes),
+        valor_diaria: cleanAndParseFloat(data.valor_diaria),
+        valor_semana: cleanAndParseFloat(data.valor_semana),
+        valor_quinzena: cleanAndParseFloat(data.valor_quinzena),
+        valor_mes: cleanAndParseFloat(data.valor_mes),
         disponivel_site: !!data.disponivel_site,
-        preco_site: parseNumericInput(data.preco_site),
+        preco_site: cleanAndParseFloat(data.preco_site),
         imagem_url: data.imagem_url || null,
         link_externo: data.link_externo || null,
         descricao_site: data.descricao_site || null,
@@ -276,6 +285,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         cd_fornecedores: data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null,
         data_atualizacao: new Date().toISOString()
       };
+
+      console.log("Enviando payload sanitizado:", payload);
 
       if (product) {
         await db.produtos.update(product.cd_produto, payload);
@@ -287,7 +298,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar produto:", err);
-      showError("Erro ao salvar no banco de dados. Verifique os valores digitados.");
+      showError("Erro ao salvar no banco de dados. Verifique se os valores numéricos estão corretos.");
     }
   };
 
