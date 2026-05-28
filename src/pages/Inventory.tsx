@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { Produto } from '@/types/database';
 import { db } from '@/services/api';
 import ProductForm from '@/components/ProductForm';
+import ProductHistoryModal from '@/components/ProductHistoryModal';
 import { showSuccess, showError } from '@/utils/toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -36,6 +37,8 @@ const Inventory = () => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingProduct, setEditingProduct] = React.useState<Produto | undefined>(undefined);
   const [filterSiteOnly, setFilterSiteOnly] = React.useState(false);
+  
+  const [selectedProductForHistory, setSelectedProductForHistory] = React.useState<Produto | null>(null);
 
   // 1. Busca de dados
   const { data: products = [], isLoading: isLoadingProducts } = useQuery({
@@ -108,7 +111,6 @@ const Inventory = () => {
     });
   }, [products, searchTerm, filterSiteOnly]);
 
-  // Totais baseados no que está filtrado na tela
   const viewStats = React.useMemo(() => {
     const totalItens = filteredProducts.length;
     const valorEstoque = filteredProducts.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0);
@@ -128,7 +130,7 @@ const Inventory = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
-            <p className="text-slate-500 text-sm">Os totais abaixo refletem os filtros aplicados.</p>
+            <p className="text-slate-500 text-sm">Clique no nome do produto para ver o histórico de movimentação.</p>
           </div>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -145,50 +147,17 @@ const Inventory = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <SummaryCard 
-            title="Peso Custos Fixos" 
-            value={`${(stats.cfWeight * 100).toFixed(2)}%`} 
-            subtitle="Impacto nas vendas"
-            icon={Calculator}
-            color="bg-indigo-500"
-          />
-          <SummaryCard 
-            title="Valor em Estoque" 
-            value={`R$ ${viewStats.valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
-            subtitle="Dos itens filtrados"
-            icon={DollarSign}
-            color="bg-amber-500"
-            onClick={() => setSearchTerm("")}
-          />
-          <SummaryCard 
-            title="Total de Itens" 
-            value={viewStats.totalItens} 
-            subtitle="Listados na tela"
-            icon={Package}
-            color="bg-emerald-500"
-            onClick={() => { setSearchTerm(""); setFilterSiteOnly(false); }}
-          />
-          <SummaryCard 
-            title="No Site" 
-            value={viewStats.noSite} 
-            subtitle="Visíveis online"
-            icon={Globe}
-            color="bg-blue-500"
-            isActive={filterSiteOnly}
-            onClick={() => setFilterSiteOnly(!filterSiteOnly)}
-          />
+          <SummaryCard title="Peso Custos Fixos" value={`${(stats.cfWeight * 100).toFixed(2)}%`} subtitle="Impacto nas vendas" icon={Calculator} color="bg-indigo-500" />
+          <SummaryCard title="Valor em Estoque" value={`R$ ${viewStats.valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} subtitle="Dos itens filtrados" icon={DollarSign} color="bg-amber-500" />
+          <SummaryCard title="Total de Itens" value={viewStats.totalItens} subtitle="Listados na tela" icon={Package} color="bg-emerald-500" />
+          <SummaryCard title="No Site" value={viewStats.noSite} subtitle="Visíveis online" icon={Globe} color="bg-blue-500" isActive={filterSiteOnly} onClick={() => setFilterSiteOnly(!filterSiteOnly)} />
         </div>
 
         <Card className="border-none shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 bg-white">
             <div className="relative max-w-md w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <Input 
-                placeholder="Buscar por nome, código ou barras..." 
-                className="pl-10 border-slate-200 h-11 rounded-lg" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <Input placeholder="Buscar por nome, código ou barras..." className="pl-10 border-slate-200 h-11 rounded-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           </div>
 
@@ -219,8 +188,6 @@ const Inventory = () => {
                     const custoCF = custoOriginal * stats.cfWeight;
                     const custoReal = custoOriginal + custoCF;
                     const precoVenda = product.venda || 0;
-                    
-                    // Lógica de Markup: ((Venda / Custo) - 1) * 100
                     const markupNominal = custoOriginal > 0 ? ((precoVenda / custoOriginal) - 1) * 100 : 0;
                     const markupReal = custoReal > 0 ? ((precoVenda / custoReal) - 1) * 100 : 0;
                     const totalVendido = stats.salesMap[product.cd_produto] || 0;
@@ -229,58 +196,38 @@ const Inventory = () => {
                       <TableRow key={product.cd_produto} className="hover:bg-slate-50/50 transition-colors group h-10">
                         <TableCell className="font-bold text-indigo-600 text-[10px]">{product.id_manual}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <p className="font-bold text-slate-900 text-[11px] truncate uppercase max-w-[140px]">{product.nome}</p>
+                          <div 
+                            className="flex items-center gap-1 cursor-pointer hover:text-indigo-600"
+                            onClick={() => setSelectedProductForHistory(product)}
+                          >
+                            <p className="font-bold text-slate-900 text-[11px] truncate uppercase max-w-[140px] group-hover:underline">{product.nome}</p>
                             {product.disponivel_site && <Globe size={10} className="text-blue-500 shrink-0" />}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Input 
-                            defaultValue={product.estoque}
-                            onBlur={(e) => handleQuickUpdate(product.cd_produto, 'estoque', e.target.value)}
-                            className="h-6 text-[10px] font-bold text-center border-transparent hover:border-slate-200 focus:bg-white w-14 mx-auto p-0"
-                          />
+                          <Input defaultValue={product.estoque} onBlur={(e) => handleQuickUpdate(product.cd_produto, 'estoque', e.target.value)} className="h-6 text-[10px] font-bold text-center border-transparent hover:border-slate-200 focus:bg-white w-14 mx-auto p-0" />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Input 
-                            defaultValue={custoOriginal.toFixed(2).replace('.', ',')}
-                            onBlur={(e) => handleQuickUpdate(product.cd_produto, 'compra', e.target.value)}
-                            className="h-6 text-[10px] font-bold text-right border-transparent hover:border-slate-200 text-slate-600 w-16 ml-auto p-0"
-                          />
+                          <Input defaultValue={custoOriginal.toFixed(2).replace('.', ',')} onBlur={(e) => handleQuickUpdate(product.cd_produto, 'compra', e.target.value)} className="h-6 text-[10px] font-bold text-right border-transparent hover:border-slate-200 text-slate-600 w-16 ml-auto p-0" />
                         </TableCell>
                         <TableCell className="text-right">
                           <TooltipProvider>
                             <Tooltip>
-                              <TooltipTrigger className="text-right font-bold text-slate-400 text-[10px] w-full">
-                                R$ {custoReal.toFixed(2)}
-                              </TooltipTrigger>
+                              <TooltipTrigger className="text-right font-bold text-slate-400 text-[10px] w-full">R$ {custoReal.toFixed(2)}</TooltipTrigger>
                               <TooltipContent><p className="text-[10px]">Custo + R$ {custoCF.toFixed(2)} (Desp. Fixas)</p></TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Input 
-                            defaultValue={precoVenda.toFixed(2).replace('.', ',')}
-                            onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda', e.target.value)}
-                            className="h-6 text-[10px] font-black text-right border-transparent hover:border-slate-200 text-indigo-700 w-16 ml-auto p-0"
-                          />
+                          <Input defaultValue={precoVenda.toFixed(2).replace('.', ',')} onBlur={(e) => handleQuickUpdate(product.cd_produto, 'venda', e.target.value)} className="h-6 text-[10px] font-black text-right border-transparent hover:border-slate-200 text-indigo-700 w-16 ml-auto p-0" />
                         </TableCell>
+                        <TableCell className="text-center"><span className="text-[10px] font-bold text-slate-500">{markupNominal.toFixed(0)}%</span></TableCell>
                         <TableCell className="text-center">
-                          <span className="text-[10px] font-bold text-slate-500">{markupNominal.toFixed(0)}%</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={cn(
-                            "text-[9px] font-black border-none h-5 px-1.5",
-                            markupReal > 40 ? "bg-emerald-100 text-emerald-700" : 
-                            markupReal > 15 ? "bg-amber-100 text-amber-700" : 
-                            "bg-rose-100 text-rose-700"
-                          )}>
+                          <Badge className={cn("text-[9px] font-black border-none h-5 px-1.5", markupReal > 40 ? "bg-emerald-100 text-emerald-700" : markupReal > 15 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700")}>
                             {markupReal.toFixed(0)}%
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <span className="text-[10px] font-bold text-slate-700">{totalVendido}</span>
-                        </TableCell>
+                        <TableCell className="text-center"><span className="text-[10px] font-bold text-slate-700">{totalVendido}</span></TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}><Edit size={12} /></Button>
@@ -295,24 +242,23 @@ const Inventory = () => {
             </Table>
           </div>
         </Card>
+
+        {selectedProductForHistory && (
+          <ProductHistoryModal 
+            isOpen={!!selectedProductForHistory} 
+            onClose={() => setSelectedProductForHistory(null)} 
+            product={selectedProductForHistory} 
+          />
+        )}
       </div>
     </Layout>
   );
 };
 
 const SummaryCard = ({ title, value, subtitle, icon: Icon, color, onClick, isActive }: any) => (
-  <Card 
-    className={cn(
-      "border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02] active:scale-95",
-      isActive && "ring-2 ring-indigo-500 ring-offset-2",
-      !onClick && "cursor-default hover:scale-100"
-    )}
-    onClick={onClick}
-  >
+  <Card className={cn("border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02] active:scale-95", isActive && "ring-2 ring-indigo-500 ring-offset-2", !onClick && "cursor-default hover:scale-100")} onClick={onClick}>
     <CardContent className="p-4 flex items-center gap-4">
-      <div className={cn("p-3 rounded-xl text-white shadow-lg", color)}>
-        <Icon size={20} />
-      </div>
+      <div className={cn("p-3 rounded-xl text-white shadow-lg", color)}><Icon size={20} /></div>
       <div>
         <p className="text-[10px] font-bold text-slate-500 uppercase">{title}</p>
         <p className="text-lg font-black text-slate-900">{value}</p>

@@ -19,7 +19,8 @@ import {
   CalendarClock,
   Database,
   Calculator,
-  ShieldCheck
+  ShieldCheck,
+  FileText
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       title: "Operacional",
       items: [
         { icon: ClipboardList, label: 'Compras / XML', path: '/purchases', perm: 'purchases' },
+        { icon: FileText, label: 'Cotações de Compra', path: '/purchase-quotes', perm: 'purchases' },
         { icon: Wallet, label: 'Financeiro', path: '/financial', perm: 'financial' },
         { icon: History, label: 'Caixa Diário', path: '/daily-cash', perm: 'financial' },
         { icon: Calculator, label: 'Calculadora Técnica', path: '/calculator', perm: 'dashboard' },
@@ -130,7 +132,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               </Button>
             </div>
             
-            {/* Identidade do Provedor no Rodapé do Menu */}
             <div className="mt-4 flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
               {config?.provider_logo ? (
                 <img src={config.provider_logo} alt="Provedor" className="h-5 object-contain grayscale" />

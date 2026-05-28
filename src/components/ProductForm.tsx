@@ -14,7 +14,8 @@ import {
   CalendarClock,
   Image as ImageIcon,
   Calculator,
-  Scale
+  Scale,
+  Building2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Produto } from '@/types/database';
+import { Produto, Cliente } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,7 @@ const productSchema = z.object({
   link_externo: z.string().optional().nullable(),
   descricao_site: z.string().optional().nullable(),
   integrar_calculadora: z.boolean().default(false).nullable(),
+  cd_fornecedores: z.string().optional().nullable(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -68,6 +70,8 @@ interface ProductFormProps {
 }
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
+  const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
+
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
@@ -86,6 +90,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       minimo: product.minimo?.toString() || "0",
       fator_conversao: product.fator_conversao?.toString() || "",
       integrar_calculadora: product.integrar_calculadora || false,
+      cd_fornecedores: product.cd_fornecedores?.toString() || "",
     } : {
       id_manual: "",
       un: "UN",
@@ -99,8 +104,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       compra: "0,00",
       estoque: "0",
       integrar_calculadora: false,
+      cd_fornecedores: "",
     }
   });
+
+  React.useEffect(() => {
+    db.clientes.getAll().then(data => {
+      setSuppliers(data.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A'));
+    });
+  }, []);
 
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
@@ -121,31 +133,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       maximumFractionDigits: 2,
     }).format(number);
   };
-
-  React.useEffect(() => {
-    const subscription = watch((value, { name }) => {
-      if (name === 'venda' || name === 'desconto_vista_valor' || name === 'desconto_vista_tipo') {
-        const venda = parseCurrencyToNumber(value.venda || "0");
-        const descValor = parseFloat(value.desconto_vista_valor || "0");
-        let calculado = 0;
-        if (value.desconto_vista_tipo === 'P') {
-          calculado = venda * (1 - descValor / 100);
-        } else {
-          calculado = venda - descValor;
-        }
-        setValue("venda_vista", calculado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-      }
-      if (name === 'venda' || name === 'fator_conversao') {
-        const venda = parseCurrencyToNumber(value.venda || "0");
-        const fator = parseFloat(value.fator_conversao || "0");
-        if (fator > 0) {
-          const sugerido = venda / fator;
-          setValue("venda_fracionada", sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [watch, setValue]);
 
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
     const formatted = formatCurrencyInput(e.target.value);
@@ -184,6 +171,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         link_externo: data.link_externo || null,
         descricao_site: data.descricao_site || null,
         integrar_calculadora: !!data.integrar_calculadora,
+        cd_fornecedores: data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null,
         data_atualizacao: new Date().toISOString()
       };
 
@@ -230,6 +218,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="space-y-2"><Label>NCM</Label><Input {...register("ncm")} /></div>
               <div className="space-y-2"><Label>Unidade Principal</Label><Input {...register("un")} className="uppercase" /></div>
             </div>
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2"><Building2 size={14} /> Fornecedor Preferencial</Label>
+              <select {...register("cd_fornecedores")} className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="">Selecione um fornecedor...</option>
+                {suppliers.map(s => <option key={s.cd_clientes} value={s.cd_clientes}>{s.nome}</option>)}
+              </select>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div className="flex items-center space-x-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                 <Checkbox id="is_locacao_geral" checked={!!isLocacao} onCheckedChange={(checked) => setValue("is_locacao", !!checked)} />

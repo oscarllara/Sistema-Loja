@@ -11,6 +11,7 @@ import Registrations from "./pages/Registrations";
 import Financial from "./pages/Financial";
 import DailyCash from "./pages/DailyCash";
 import Purchases from "./pages/Purchases";
+import PurchaseQuotes from "./pages/PurchaseQuotes";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Rentals from "./pages/Rentals";
@@ -49,6 +50,7 @@ const App = () => (
           <Route path="/financial" element={<ProtectedRoute permission="financial"><Financial /></ProtectedRoute>} />
           <Route path="/daily-cash" element={<ProtectedRoute permission="financial"><DailyCash /></ProtectedRoute>} />
           <Route path="/purchases" element={<ProtectedRoute permission="purchases"><Purchases /></ProtectedRoute>} />
+          <Route path="/purchase-quotes" element={<ProtectedRoute permission="purchases"><PurchaseQuotes /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute permission="reports"><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute permission="settings"><Settings /></ProtectedRoute>} />
           <Route path="/import" element={<ProtectedRoute permission="settings"><ImportData /></ProtectedRoute>} />

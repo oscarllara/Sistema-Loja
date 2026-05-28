@@ -16,17 +16,14 @@ import {
   Truck, 
   Lock, 
   Shield,
-  Heart,
   ShieldAlert
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Cliente, TipoPessoa, Permissoes } from '@/types/database';
+import { Cliente, Permissoes } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
@@ -34,16 +31,11 @@ import { cn } from '@/lib/utils';
 const clientSchema = z.object({
   tipo_entidade: z.enum(['C', 'F', 'A', 'T']),
   is_funcionario: z.boolean(),
-  tipo_pessoa: z.enum(['F', 'J']),
   nome: z.string().min(3, "Nome/Razão Social obrigatório"),
   apelido_fantasia: z.string().optional().nullable(),
   cpf_cnpj: z.string().optional().nullable(),
   rg_ie: z.string().optional().nullable(),
   inscricao_municipal: z.string().optional().nullable(),
-  site: z.string().optional().nullable(),
-  facebook: z.string().optional().nullable(),
-  instagram: z.string().optional().nullable(),
-  linkedin: z.string().optional().nullable(),
   sexo: z.string().optional().nullable(),
   estado_civil: z.string().optional().nullable(),
   naturalidade: z.string().optional().nullable(),
@@ -117,7 +109,6 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       despesa_aluguel: client.despesa_aluguel ? client.despesa_aluguel.toString() : "",
       conjuge_salario: client.conjuge_salario ? client.conjuge_salario.toString() : "",
       dia_pagamento: client.dia_pagamento?.toString() || "",
-      tipo_pessoa: client.cpf_cnpj?.length === 14 ? 'F' : 'J',
       usuario: client.usuario || "",
       senha: client.senha || "",
       permissoes: client.permissoes || {
@@ -136,9 +127,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     } : {
       tipo_entidade: 'C',
       is_funcionario: false,
-      tipo_pessoa: 'F',
       nome: "",
-      estado_civil: "Solteiro(a)",
       permissoes: {
         dashboard: true,
         pos: true,
@@ -162,16 +151,50 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const onSubmit = async (data: ClientFormValues) => {
     setIsSaving(true);
     try {
+      // Limpeza de dados para evitar erros de coluna inexistente
       const payload = {
-        ...data,
+        tipo_entidade: data.tipo_entidade,
+        is_funcionario: data.is_funcionario,
         nome: data.nome.toUpperCase(),
+        apelido_fantasia: data.apelido_fantasia,
+        cpf_cnpj: data.cpf_cnpj,
+        rg_ie: data.rg_ie,
+        inscricao_municipal: data.inscricao_municipal,
+        sexo: data.sexo,
+        estado_civil: data.estado_civil,
+        naturalidade: data.naturalidade,
+        profissao: data.profissao,
+        data_nascimento: data.data_nascimento,
+        filiacao_pai: data.filiacao_pai,
+        filiacao_mae: data.filiacao_mae,
+        conjuge_nome: data.conjuge_nome,
+        conjuge_cpf: data.conjuge_cpf,
+        conjuge_nascimento: data.conjuge_nascimento,
+        conjuge_empresa: data.conjuge_empresa,
+        conjuge_telefone: data.conjuge_telefone,
+        conjuge_salario: parseFloat(data.conjuge_salario || "0"),
+        local_trabalho: data.local_trabalho,
+        cargo: data.cargo,
+        data_admissao: data.data_admissao,
         salario: parseFloat(data.salario || "0"),
+        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
+        cep: data.cep,
+        endereco: data.endereco,
+        numero: data.numero,
+        complemento: data.complemento,
+        bairro: data.bairro,
+        cidade: data.cidade,
+        uf: data.uf,
+        referencia: data.referencia,
+        tel1: data.tel1,
+        tel2: data.tel2,
+        cel: data.cel,
+        email: data.email || null,
         limite: parseFloat(data.limite || "0"),
         despesa_fixa: parseFloat(data.despesa_fixa || "0"),
         despesa_alimentacao: parseFloat(data.despesa_alimentacao || "0"),
         despesa_aluguel: parseFloat(data.despesa_aluguel || "0"),
-        conjuge_salario: parseFloat(data.conjuge_salario || "0"),
-        dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
+        obs1: data.obs1,
         usuario: data.usuario || null,
         senha: data.senha || null,
         permissoes: data.permissoes || null
@@ -179,14 +202,15 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
       if (client) {
         await db.clientes.update(client.cd_clientes, payload);
-        showSuccess("Cadastro atualizado!");
+        showSuccess("Cadastro atualizado com sucesso!");
       } else {
         await db.clientes.add(payload);
         showSuccess("Cadastro realizado com sucesso!");
       }
       onSuccess();
     } catch (err: any) {
-      showError("Erro ao salvar cadastro.");
+      console.error("Erro ao salvar:", err);
+      showError("Erro ao salvar cadastro. Verifique os dados.");
     } finally {
       setIsSaving(false);
     }
