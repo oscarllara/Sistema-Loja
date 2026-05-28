@@ -15,7 +15,11 @@ import {
   Image as ImageIcon,
   Calculator,
   Scale,
-  Building2
+  Building2,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  History,
+  Loader2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +27,15 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Produto, Cliente } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
@@ -71,6 +84,8 @@ interface ProductFormProps {
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
+  const [history, setHistory] = React.useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -112,7 +127,56 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     db.clientes.getAll().then(data => {
       setSuppliers(data.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A'));
     });
-  }, []);
+
+    if (product) {
+      loadHistory();
+    }
+  }, [product]);
+
+  const loadHistory = async () => {
+    if (!product) return;
+    setIsLoadingHistory(true);
+    try {
+      const [vendas, compras] = await Promise.all([
+        db.vendas.getAll(),
+        db.compras.getAll()
+      ]);
+
+      const movements: any[] = [];
+
+      vendas.forEach(v => {
+        const item = v.itens?.find(i => i.cd_produto === product.cd_produto);
+        if (item) {
+          movements.push({
+            data: v.data,
+            tipo: 'SAÍDA',
+            origem: `Venda #${v.cd_venda}`,
+            entidade: v.nome_cliente || 'Consumidor',
+            qtde: item.qtde,
+            total: item.subtotal
+          });
+        }
+      });
+
+      compras.forEach(c => {
+        const item = c.itens?.find(i => i.cd_produto === product.cd_produto);
+        if (item) {
+          movements.push({
+            data: c.data,
+            tipo: 'ENTRADA',
+            origem: `Compra NF ${c.nota_fiscal || 'S/N'}`,
+            entidade: c.nome_fornecedor || 'Fornecedor',
+            qtde: item.qtde,
+            total: item.subtotal
+          });
+        }
+      });
+
+      setHistory(movements.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()));
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
@@ -201,7 +265,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <TabsTrigger value="site" className="flex-1 gap-1"><Globe size={14} /> Site</TabsTrigger>
         </TabsList>
 
-        <div className="min-h-[350px] mt-4">
+        <div className="min-h-[400px] mt-4">
           <TabsContent value="geral" className="space-y-4 m-0">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -239,11 +303,57 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             </div>
           </TabsContent>
 
-          <TabsContent value="estoque" className="space-y-4 m-0">
+          <TabsContent value="estoque" className="space-y-6 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Estoque Atual</Label><Input type="number" step="0.001" {...register("estoque")} className="font-bold" /></div>
               <div className="space-y-2"><Label>Estoque Mínimo</Label><Input type="number" step="0.001" {...register("minimo")} /></div>
             </div>
+
+            {product && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
+                    <History size={14} /> Histórico de Movimentação (Últimas 10)
+                  </h4>
+                  {isLoadingHistory && <Loader2 size={14} className="animate-spin text-indigo-600" />}
+                </div>
+                
+                <div className="border rounded-lg overflow-hidden bg-white">
+                  <Table>
+                    <TableHeader className="bg-slate-50">
+                      <TableRow className="h-8">
+                        <TableHead className="text-[9px] font-bold uppercase">Data</TableHead>
+                        <TableHead className="text-[9px] font-bold uppercase">Tipo</TableHead>
+                        <TableHead className="text-[9px] font-bold uppercase">Origem</TableHead>
+                        <TableHead className="text-[9px] font-bold uppercase text-right">Qtde</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.slice(0, 10).map((m, i) => (
+                        <TableRow key={i} className="h-8 hover:bg-slate-50">
+                          <TableCell className="py-1 text-[10px]">{new Date(m.data).toLocaleDateString()}</TableCell>
+                          <TableCell className="py-1">
+                            <Badge className={cn(
+                              "text-[8px] font-bold h-4 px-1 border-none",
+                              m.tipo === 'ENTRADA' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                            )}>
+                              {m.tipo}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-1 text-[10px] font-medium truncate max-w-[120px]">{m.origem}</TableCell>
+                          <TableCell className="py-1 text-[10px] text-right font-bold">{m.qtde}</TableCell>
+                        </TableRow>
+                      ))}
+                      {history.length === 0 && !isLoadingHistory && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-6 text-[10px] text-slate-400">Sem movimentações registradas.</TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="precos" className="space-y-6 m-0">
