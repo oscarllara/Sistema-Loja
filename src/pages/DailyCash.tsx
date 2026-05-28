@@ -13,7 +13,8 @@ import {
   Loader2,
   FilterX,
   Edit,
-  Trash2
+  Trash2,
+  Infinity
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ import { LancamentoFinanceiro, ContaBancaria } from '@/types/database';
 
 const DailyCash = () => {
   const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [showAllTime, setShowAllTime] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
   const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
@@ -91,13 +93,15 @@ const DailyCash = () => {
     setIsEditOpen(true);
   };
 
-  // Cálculos baseados nos dados carregados
-  const movDia = lancamentos.filter(l => 
-    l.status === 'Pago' && 
-    (l.data_pagamento?.startsWith(selectedDate) || l.data_vencimento.startsWith(selectedDate))
-  );
+  // Filtra as movimentações baseadas na data ou mostra tudo
+  const movDia = lancamentos.filter(l => {
+    if (l.status !== 'Pago') return false;
+    if (showAllTime) return true;
+    return l.data_pagamento?.startsWith(selectedDate) || l.data_vencimento.startsWith(selectedDate);
+  }).sort((a, b) => new Date(a.data_pagamento || a.data_vencimento).getTime() - new Date(b.data_pagamento || b.data_vencimento).getTime());
 
-  const saldoAnterior = lancamentos
+  // Saldo anterior: se mostrar tudo, o saldo anterior é zero (ou o saldo inicial das contas)
+  const saldoAnterior = showAllTime ? 0 : lancamentos
     .filter(l => l.status === 'Pago' && (l.data_pagamento || l.data_vencimento).split('T')[0] < selectedDate)
     .reduce((acc, l) => l.tipo === 'R' ? acc + l.valor : acc - l.valor, 0);
 
@@ -113,7 +117,7 @@ const DailyCash = () => {
   }, {} as Record<string, number>);
 
   const printData = {
-    date: selectedDate,
+    date: showAllTime ? "HISTÓRICO COMPLETO" : selectedDate,
     saldoAnterior,
     totalEntradas,
     totalSaidas,
@@ -130,7 +134,6 @@ const DailyCash = () => {
     return { ...l, anterior, atual: runningBalance, contaNome };
   });
 
-  // Aplica o filtro visual (Entrada/Saída)
   const filteredExtrato = filterType === 'All' ? extrato : extrato.filter(i => i.tipo === filterType);
 
   return (
@@ -142,22 +145,33 @@ const DailyCash = () => {
               <History size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Caixa Diário</h1>
-              <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Calendar size={14} />
-                <input 
-                  type="date" 
-                  value={selectedDate} 
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="border-none p-0 focus:ring-0 font-medium cursor-pointer bg-transparent"
-                />
+              <h1 className="text-xl font-bold text-slate-900">Caixa Diário / Fluxo</h1>
+              <div className="flex items-center gap-3 mt-1">
+                <div className={cn("flex items-center gap-2 text-sm font-medium px-2 py-1 rounded-lg transition-colors", showAllTime ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-700")}>
+                  <Calendar size={14} />
+                  <input 
+                    type="date" 
+                    disabled={showAllTime}
+                    value={selectedDate} 
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="border-none p-0 focus:ring-0 font-bold cursor-pointer bg-transparent disabled:cursor-not-allowed"
+                  />
+                </div>
+                <Button 
+                  variant={showAllTime ? "default" : "outline"} 
+                  size="sm" 
+                  onClick={() => setShowAllTime(!showAllTime)}
+                  className={cn("h-8 gap-2 rounded-lg font-bold text-[10px] uppercase", showAllTime && "bg-slate-900")}
+                >
+                  <Infinity size={14} /> {showAllTime ? "Filtrar por Data" : "Ver Tudo (Histórico)"}
+                </Button>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => setIsPrintOpen(true)}>
-              <Printer size={18} /> Imprimir Fechamento
+              <Printer size={18} /> Imprimir {showAllTime ? 'Histórico' : 'Fechamento'}
             </Button>
 
             <Dialog open={isEntradaOpen} onOpenChange={setIsEntradaOpen}>
@@ -195,7 +209,7 @@ const DailyCash = () => {
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <SummaryCard 
-                title="Saldo Anterior" 
+                title={showAllTime ? "Saldo Inicial" : "Saldo Anterior"} 
                 value={saldoAnterior} 
                 color="text-slate-600" 
                 onClick={() => setFilterType('All')}
@@ -222,7 +236,7 @@ const DailyCash = () => {
                 onClick={() => setFilterType('All')}
               />
               <SummaryCard 
-                title="Saldo do Dia" 
+                title={showAllTime ? "Saldo Acumulado" : "Saldo do Dia"} 
                 value={saldoFinal} 
                 color="text-indigo-700" 
                 isHighlight 
@@ -233,7 +247,7 @@ const DailyCash = () => {
             <Card className="border-none shadow-sm overflow-hidden bg-white">
               <div className="p-3 bg-slate-50 border-b flex items-center justify-between">
                 <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                  {filterType === 'All' ? 'Extrato Completo' : filterType === 'R' ? 'Apenas Entradas' : 'Apenas Saídas'}
+                  {showAllTime ? 'Histórico Completo de Movimentações' : (filterType === 'All' ? 'Extrato do Dia' : filterType === 'R' ? 'Apenas Entradas' : 'Apenas Saídas')}
                 </h3>
                 {filterType !== 'All' && (
                   <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-indigo-600 font-bold" onClick={() => setFilterType('All')}>
@@ -244,7 +258,7 @@ const DailyCash = () => {
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
-                    <TableHead className="w-20">Hora</TableHead>
+                    <TableHead className="w-24">Data/Hora</TableHead>
                     <TableHead>Descrição / Destino</TableHead>
                     <TableHead className="text-right">Entrada</TableHead>
                     <TableHead className="text-right">Saída</TableHead>
@@ -256,10 +270,10 @@ const DailyCash = () => {
                   {filteredExtrato.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-20 text-slate-400">Nenhuma movimentação encontrada.</TableCell></TableRow>
                   ) : (
-                    filteredExtrato.map((item, i) => (
+                    [...filteredExtrato].reverse().map((item, i) => (
                       <TableRow key={i} className={cn(item.tipo === 'R' ? "hover:bg-emerald-50/30" : "hover:bg-rose-50/30", "group")}>
                         <TableCell className="text-[10px] font-mono text-slate-400">
-                          {item.data_pagamento ? new Date(item.data_pagamento).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                          {item.data_pagamento ? new Date(item.data_pagamento).toLocaleString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : '--/-- --:--'}
                         </TableCell>
                         <TableCell>
                           <div className="text-xs font-bold text-slate-800">{item.descricao}</div>
