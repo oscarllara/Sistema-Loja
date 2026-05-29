@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/services/api';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const StatCard = ({ title, value, icon: Icon, trendValue, trendType = 'up', color, onClick }: any) => (
   <Card 
