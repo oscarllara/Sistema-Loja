@@ -45,9 +45,9 @@ import ProductHistoryModal from './ProductHistoryModal';
 
 const productSchema = z.object({
   id_manual: z.string().optional().nullable(),
-  nome: z.string().min(2, "Nome é obrigatório"),
+  nome: z.string().min(2, "O nome do produto é obrigatório"),
   id_importado: z.string().optional().nullable(),
-  un: z.string().min(1, "Unidade é obrigatória").default("UN"),
+  un: z.string().min(1, "A unidade é obrigatória").default("UN"),
   cod_barras: z.string().optional().nullable().or(z.literal("")),
   compra: z.string().optional().nullable(),
   venda: z.string().optional().nullable(),
@@ -128,9 +128,20 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const vendaValue = watch("venda");
   const descontoValue = watch("desconto_vista_valor");
+  const vendaVistaValue = watch("venda_vista");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
   const isFracionado = watch("fracionado");
+
+  // Lógica de cálculo automático de Preço à Vista
+  React.useEffect(() => {
+    const v = cleanAndParseFloat(vendaValue);
+    const d = cleanAndParseFloat(descontoValue);
+    if (v > 0 && d > 0) {
+      const final = v * (1 - d / 100);
+      setValue("venda_vista", final.toFixed(2).replace('.', ','), { shouldValidate: true });
+    }
+  }, [vendaValue, descontoValue, setValue]);
 
   React.useEffect(() => {
     db.clientes.getAll().then(data => {
@@ -187,36 +198,29 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     }
   };
 
-  // Função para tratar o input em tempo real: substitui vírgula por ponto e permite apenas um separador
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
     let val = e.target.value;
-    // Substitui vírgula por ponto
     val = val.replace(',', '.');
-    // Remove qualquer caractere que não seja número ou ponto
     val = val.replace(/[^\d.]/g, '');
-    // Garante que haja apenas um ponto
     const parts = val.split('.');
     if (parts.length > 2) {
       val = parts[0] + '.' + parts.slice(1).join('');
     }
-    setValue(fieldName, val);
+    // Mantemos a vírgula visualmente se o usuário preferir, mas o setValue lida com a string
+    setValue(fieldName, e.target.value.replace('.', ','), { shouldValidate: true });
   };
 
-  // Função robusta para converter string para Number real (float)
-  const cleanAndParseFloat = (value: any): number => {
+  function cleanAndParseFloat(value: any): number {
     if (value === null || value === undefined || value === "") return 0;
     let s = value.toString().trim();
-    // Se tiver vírgula, troca por ponto
     s = s.replace(',', '.');
-    // Remove qualquer caractere que não seja número ou ponto (ex: R$)
     s = s.replace(/[^\d.-]/g, '');
     const result = parseFloat(s);
     return isNaN(result) ? 0 : result;
-  };
+  }
 
   const onSubmit = async (data: ProductFormValues) => {
     try {
-      // Sanitização rigorosa de todos os campos numéricos antes do envio
       const payload: any = {
         nome: data.nome.toUpperCase(),
         id_importado: data.id_importado || null,
@@ -251,13 +255,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         data_atualizacao: new Date().toISOString()
       };
 
-      // Se for edição, mantém o id_manual original. Se for novo, deixa o api.ts gerar.
       if (product) {
         payload.id_manual = data.id_manual;
         await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado!");
       } else {
-        // Remove id_manual vazio para não conflitar com a geração automática no api.ts
         delete payload.id_manual;
         await db.produtos.add(payload);
         showSuccess("Produto cadastrado com sucesso!");
@@ -265,7 +267,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao salvar produto:", err);
-      showError("Erro ao salvar no banco de dados. Verifique os valores numéricos.");
+      showError("Erro ao salvar no banco de dados. Verifique os valores.");
     }
   };
 
@@ -293,6 +295,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <Package size={14} /> Nome do Produto <span className="text-rose-500 font-bold">*</span>
                 </Label>
                 <Input {...register("nome")} className="uppercase" placeholder="EX: CIMENTO CAUE 50KG" />
+                {errors.nome && <p className="text-[10px] text-rose-500 font-bold">{errors.nome.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label className="text-amber-600 font-bold">Código Antigo (Importado)</Label>
@@ -300,7 +303,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </div>
               <div className="space-y-2"><Label>Código de Barras</Label><Input {...register("cod_barras")} /></div>
               <div className="space-y-2"><Label>NCM</Label><Input {...register("ncm")} /></div>
-              <div className="space-y-2"><Label>Unidade Principal</Label><Input {...register("un")} className="uppercase" /></div>
+              <div className="space-y-2">
+                <Label className={cn(errors.un && "text-rose-600")}>Unidade Principal <span className="text-rose-500 font-bold">*</span></Label>
+                <Input {...register("un")} className="uppercase" />
+                {errors.un && <p className="text-[10px] text-rose-500 font-bold">{errors.un.message}</p>}
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -331,7 +338,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   {...register("estoque")} 
                   onChange={(e) => handleNumericInput(e, "estoque")}
                   className="font-bold" 
-                  placeholder="0.00" 
+                  placeholder="0,00" 
                 />
               </div>
               <div className="space-y-2">
@@ -339,7 +346,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Input 
                   {...register("minimo")} 
                   onChange={(e) => handleNumericInput(e, "minimo")}
-                  placeholder="0.00" 
+                  placeholder="0,00" 
                 />
               </div>
             </div>
@@ -411,7 +418,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     {...register("venda")} 
                     onChange={(e) => handleNumericInput(e, "venda")}
                     className="text-lg font-black" 
-                    placeholder="0.00"
+                    placeholder="0,00"
                   />
                 </div>
                 <div className="space-y-2">
@@ -419,7 +426,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <Input 
                     {...register("compra")} 
                     onChange={(e) => handleNumericInput(e, "compra")}
-                    placeholder="0.00"
+                    placeholder="0,00"
                   />
                 </div>
               </div>
@@ -440,10 +447,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                       {...register("venda_vista")} 
                       onChange={(e) => handleNumericInput(e, "venda_vista")}
                       className="bg-white font-black text-emerald-700" 
-                      placeholder="0.00"
+                      placeholder="0,00"
                     />
                   </div>
                 </div>
+                <p className="text-[10px] text-emerald-600 font-bold italic">* O preço à vista é calculado automaticamente ao informar o desconto.</p>
               </div>
             </div>
           </TabsContent>
@@ -464,7 +472,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                       {...register("venda_fracionada")} 
                       onChange={(e) => handleNumericInput(e, "venda_fracionada")}
                       className="font-black text-indigo-600" 
-                      placeholder="0.00"
+                      placeholder="0,00"
                     />
                   </div>
                 </div>
@@ -477,10 +485,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-4">
                 <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs"><CalendarClock size={16} /> Tabela de Preços de Locação</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} onChange={(e) => handleNumericInput(e, "valor_diaria")} placeholder="0.00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} onChange={(e) => handleNumericInput(e, "valor_semana")} placeholder="0.00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} onChange={(e) => handleNumericInput(e, "valor_quinzena")} placeholder="0.00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} onChange={(e) => handleNumericInput(e, "valor_mes")} placeholder="0.00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} onChange={(e) => handleNumericInput(e, "valor_diaria")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} onChange={(e) => handleNumericInput(e, "valor_semana")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} onChange={(e) => handleNumericInput(e, "valor_quinzena")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} onChange={(e) => handleNumericInput(e, "valor_mes")} placeholder="0,00" /></div>
                 </div>
               </div>
             </TabsContent>
@@ -495,7 +503,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               {disponivelSite && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} onChange={(e) => handleNumericInput(e, "preco_site")} placeholder="0.00" /></div>
+                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} onChange={(e) => handleNumericInput(e, "preco_site")} placeholder="0,00" /></div>
                     <div className="space-y-2"><Label>URL da Imagem</Label><Input {...register("imagem_url")} /></div>
                   </div>
                   <div className="space-y-2"><Label>Descrição para o Site</Label><Textarea {...register("descricao_site")} className="min-h-[100px]" /></div>
