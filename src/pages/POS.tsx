@@ -162,7 +162,7 @@ const POS = () => {
   };
   
   const [inputCode, setInputCode] = React.useState("");
-  const [inputQty, setInputQty] = React.useState("1,000");
+  const [inputQty, setInputQty] = React.useState("0,000");
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
   
@@ -186,9 +186,11 @@ const POS = () => {
   const [blockReason, setBlockBlockReason] = React.useState("");
 
   const formatQtyMask = (value: string) => {
-    const digits = value.replace(/\D/g, "");
-    const number = parseInt(digits || "0") / 1000;
-    return number.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    // Permite apenas números e uma única vírgula
+    let val = value.replace(/[^\d,]/g, "");
+    const parts = val.split(",");
+    if (parts.length > 2) val = parts[0] + "," + parts.slice(1).join("");
+    return val;
   };
 
   const handleShortcut = React.useCallback((key: string) => {
@@ -218,7 +220,7 @@ const POS = () => {
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
-    setInputQty("1,000");
+    setInputQty("1"); // Sugere 1 ao selecionar, mas permite editar
     setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
@@ -271,7 +273,7 @@ const POS = () => {
     }]);
     setPendingProduct(null);
     setInputCode("");
-    setInputQty("1,000");
+    setInputQty("0,000");
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
@@ -638,10 +640,33 @@ const POS = () => {
       <main className="flex-1 flex flex-col min-w-0">
         <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b shadow-lg z-10", theme.header, theme.border)}>
           <div className="flex items-center gap-8">
-            <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-sm">
-              <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('VENDA')}>VENDA</Button>
-              <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
-              <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
+            <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-sm items-center gap-2">
+              <div className="flex">
+                <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('VENDA')}>VENDA</Button>
+                <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
+                <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
+              </div>
+              
+              {mode === 'VENDA' && (
+                <>
+                  <div className="w-px h-6 bg-white/20 mx-2" />
+                  <div 
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer transition-all border-2",
+                      priceMode === 'VISTA' ? "bg-emerald-500 border-emerald-400 shadow-lg scale-105" : "bg-white/5 border-white/10 hover:bg-white/10"
+                    )}
+                    onClick={() => setPriceMode(priceMode === 'VISTA' ? 'PRAZO' : 'VISTA')}
+                  >
+                    <Checkbox 
+                      id="price-mode-header" 
+                      checked={priceMode === 'VISTA'} 
+                      onCheckedChange={(checked) => setPriceMode(checked ? 'VISTA' : 'PRAZO')}
+                      className="h-4 w-4 border-white data-[state=checked]:bg-white data-[state=checked]:text-emerald-600"
+                    />
+                    <label htmlFor="price-mode-header" className="text-[11px] font-black text-white uppercase cursor-pointer select-none">Preço À Vista</label>
+                  </div>
+                </>
+              )}
             </div>
             <div className="space-y-1">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
@@ -733,6 +758,7 @@ const POS = () => {
                 value={inputQty} 
                 onChange={(e) => setInputQty(formatQtyMask(e.target.value))} 
                 onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} 
+                onBlur={() => { if (inputQty && !inputQty.includes(",")) setInputQty(parseBRNumber(inputQty).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })); }}
                 className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" 
               />
             </div>
@@ -745,17 +771,6 @@ const POS = () => {
             <div className="w-44 space-y-1.5">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor Unitário</label>
-                {mode === 'VENDA' && (
-                  <div className="flex items-center gap-1.5 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">
-                    <Checkbox 
-                      id="price-mode" 
-                      checked={priceMode === 'VISTA'} 
-                      onCheckedChange={(checked) => setPriceMode(checked ? 'VISTA' : 'PRAZO')}
-                      className="h-3 w-3 border-indigo-500 data-[state=checked]:bg-indigo-500"
-                    />
-                    <label htmlFor="price-mode" className="text-[8px] font-black text-indigo-300 uppercase cursor-pointer">À Vista</label>
-                  </div>
-                )}
               </div>
               <div className="h-12 bg-slate-800 rounded-xl flex items-center justify-end px-4 font-black text-white text-lg border border-slate-700 shadow-inner">
                 <span className="text-xs opacity-30 mr-2">R$</span>
