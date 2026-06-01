@@ -37,12 +37,14 @@ import {
   FileSearch,
   WifiOff,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  Percent
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Table, 
   TableBody, 
@@ -160,7 +162,7 @@ const POS = () => {
   };
   
   const [inputCode, setInputCode] = React.useState("");
-  const [inputQty, setInputQty] = React.useState("1");
+  const [inputQty, setInputQty] = React.useState("1,000");
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
   
@@ -182,6 +184,12 @@ const POS = () => {
   const [supervisorPassword, setSupervisorPassword] = React.useState("");
   const [pendingCheckoutData, setPendingCheckoutData] = React.useState<any>(null);
   const [blockReason, setBlockBlockReason] = React.useState("");
+
+  const formatQtyMask = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    const number = parseInt(digits || "0") / 1000;
+    return number.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  };
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
@@ -210,7 +218,7 @@ const POS = () => {
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
-    setInputQty("1");
+    setInputQty("1,000");
     setTimeout(() => qtyRef.current?.focus(), 50);
   };
 
@@ -263,7 +271,7 @@ const POS = () => {
     }]);
     setPendingProduct(null);
     setInputCode("");
-    setInputQty("1");
+    setInputQty("1,000");
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
@@ -717,18 +725,44 @@ const POS = () => {
                 <Input ref={codeRef} value={inputCode} onChange={(e) => handleCodeChange(e.target.value)} className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")} placeholder="Bipe o código ou digite o nome..." />
               </div>
             </div>
-            <div className="w-24 space-y-1.5">
+            
+            <div className="w-32 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Qtde</label>
-              <Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
+              <Input 
+                ref={qtyRef} 
+                value={inputQty} 
+                onChange={(e) => setInputQty(formatQtyMask(e.target.value))} 
+                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} 
+                className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" 
+              />
             </div>
+
             <div className="w-28 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Unidade</label>
               <div className="w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase bg-slate-800 text-indigo-300 border border-slate-700 shadow-inner">{inputUnit || "UN"}</div>
             </div>
-            <div className="w-40 space-y-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Valor Unitário</label>
-              <div className="h-12 bg-slate-800 rounded-xl flex items-center justify-end px-4 font-black text-white text-lg border border-slate-700 shadow-inner"><span className="text-xs opacity-30 mr-2">R$</span>{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}</div>
+
+            <div className="w-44 space-y-1.5">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor Unitário</label>
+                {mode === 'VENDA' && (
+                  <div className="flex items-center gap-1.5 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">
+                    <Checkbox 
+                      id="price-mode" 
+                      checked={priceMode === 'VISTA'} 
+                      onCheckedChange={(checked) => setPriceMode(checked ? 'VISTA' : 'PRAZO')}
+                      className="h-3 w-3 border-indigo-500 data-[state=checked]:bg-indigo-500"
+                    />
+                    <label htmlFor="price-mode" className="text-[8px] font-black text-indigo-300 uppercase cursor-pointer">À Vista</label>
+                  </div>
+                )}
+              </div>
+              <div className="h-12 bg-slate-800 rounded-xl flex items-center justify-end px-4 font-black text-white text-lg border border-slate-700 shadow-inner">
+                <span className="text-xs opacity-30 mr-2">R$</span>
+                {pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}
+              </div>
             </div>
+
             <div className="w-48 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Sub Total</label>
               <div className="h-12 bg-primary rounded-xl flex items-center justify-end px-4 font-black text-white text-xl shadow-lg shadow-primary/20"><span className="text-xs opacity-50 mr-2">R$</span>{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseBRNumber(inputQty) || 1)) : "0,00"}</div>
