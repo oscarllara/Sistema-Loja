@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { db } from '@/services/api';
 import { Produto } from '@/types/database';
 import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
 interface ProductSearchModalProps {
   isOpen: boolean;
@@ -32,13 +33,17 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
   const [search, setSearch] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [products, setProducts] = React.useState<Produto[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
   
   const loadProducts = React.useCallback(async () => {
+    setIsLoading(true);
     try {
       const data = await db.produtos.getAll();
       setProducts(data || []);
     } catch (e) {
       console.error("Erro ao carregar produtos na busca:", e);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -106,14 +111,21 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
             {filterIntegratedOnly ? "Pesquisa de Produtos Integrados (Calculadora)" : "Pesquisa de Produtos"}
           </p>
           <div className="flex gap-2">
-            <Input 
-              autoFocus
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setSelectedIndex(0); }}
-              onKeyDown={handleKeyDown}
-              className="h-10 bg-white border-slate-400 rounded-none focus-visible:ring-0 focus-visible:border-indigo-500 font-bold text-lg"
-              placeholder="Digite o nome ou código do produto..."
-            />
+            <div className="relative flex-1">
+              <Input 
+                autoFocus
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setSelectedIndex(0); }}
+                onKeyDown={handleKeyDown}
+                className="h-10 bg-white border-slate-400 rounded-none focus-visible:ring-0 focus-visible:border-indigo-500 font-bold text-lg pr-10"
+                placeholder="Digite o nome ou código do produto..."
+              />
+              {isLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="animate-spin text-slate-400" size={20} />
+                </div>
+              )}
+            </div>
             <button 
               type="button" 
               onClick={() => { if(filtered[selectedIndex]) { onSelect(filtered[selectedIndex]); onClose(); } }}
@@ -137,7 +149,16 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {isLoading && products.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-20">
+                    <div className="flex flex-col items-center gap-2 text-slate-500">
+                      <Loader2 className="animate-spin" />
+                      <p className="font-bold">CARREGANDO LISTA DE PRODUTOS...</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
                 </TableRow>

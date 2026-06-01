@@ -100,19 +100,23 @@ export const db = {
         .single();
       
       if (error) throw error;
+      localStorage.removeItem(PRODUCTS_CACHE_KEY);
       return data;
     },
     bulkAdd: async (products: any[]) => {
       const { error } = await supabase.from('produtos').insert(products);
+      localStorage.removeItem(PRODUCTS_CACHE_KEY);
       return { error };
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
       if (error) throw error;
+      localStorage.removeItem(PRODUCTS_CACHE_KEY);
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);
       if (error) throw error;
+      localStorage.removeItem(PRODUCTS_CACHE_KEY);
     }
   },
   clientes: {
