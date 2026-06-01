@@ -109,17 +109,30 @@ interface ClientFormProps {
 
 const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const [isSaving, setIsSaving] = React.useState(false);
+
+  const formatAsCurrency = (value: string | number) => {
+    if (value === undefined || value === null || value === "") return "0,00";
+    const num = typeof value === 'number' ? value : parseFloat(value.toString().replace(/\./g, "").replace(",", "."));
+    if (isNaN(num)) return "0,00";
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const parseToNumber = (value: string): number => {
+    if (!value) return 0;
+    const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
+    return parseFloat(cleanValue) || 0;
+  };
   
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
     defaultValues: client ? {
       ...client,
-      salario: client.salario ? client.salario.toString() : "",
-      limite: client.limite ? client.limite.toString() : "",
-      despesa_fixa: client.despesa_fixa ? client.despesa_fixa.toString() : "",
-      despesa_alimentacao: client.despesa_alimentacao ? client.despesa_alimentacao.toString() : "",
-      despesa_aluguel: client.despesa_aluguel ? client.despesa_aluguel.toString() : "",
-      conjuge_salario: client.conjuge_salario ? client.conjuge_salario.toString() : "",
+      salario: formatAsCurrency(client.salario || 0),
+      limite: formatAsCurrency(client.limite || 0),
+      despesa_fixa: formatAsCurrency(client.despesa_fixa || 0),
+      despesa_alimentacao: formatAsCurrency(client.despesa_alimentacao || 0),
+      despesa_aluguel: formatAsCurrency(client.despesa_aluguel || 0),
+      conjuge_salario: formatAsCurrency(client.conjuge_salario || 0),
       dia_pagamento: client.dia_pagamento?.toString() || "",
       usuario: client.usuario || "",
       senha: client.senha || "",
@@ -141,6 +154,8 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       is_funcionario: false,
       nome: "",
       estado_civil: "Solteiro(a)",
+      limite: "0,00",
+      salario: "0,00",
       permissoes: {
         dashboard: true,
         pos: true,
@@ -168,12 +183,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       const payload = {
         ...data,
         nome: data.nome.toUpperCase(),
-        salario: parseFloat(data.salario || "0"),
-        limite: parseFloat(data.limite || "0"),
-        despesa_fixa: parseFloat(data.despesa_fixa || "0"),
-        despesa_alimentacao: parseFloat(data.despesa_alimentacao || "0"),
-        despesa_aluguel: parseFloat(data.despesa_aluguel || "0"),
-        conjuge_salario: parseFloat(data.conjuge_salario || "0"),
+        salario: parseToNumber(data.salario || "0"),
+        limite: parseToNumber(data.limite || "0"),
+        despesa_fixa: parseToNumber(data.despesa_fixa || "0"),
+        despesa_alimentacao: parseToNumber(data.despesa_alimentacao || "0"),
+        despesa_aluguel: parseToNumber(data.despesa_aluguel || "0"),
+        conjuge_salario: parseToNumber(data.conjuge_salario || "0"),
         dia_pagamento: data.dia_pagamento ? parseInt(data.dia_pagamento) : null,
         usuario: data.usuario || null,
         senha: data.senha || null,
@@ -391,7 +406,14 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
 
         <TabsContent value="financeiro" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2"><Label>Limite de Crédito (R$)</Label><Input {...register("limite")} className="font-bold text-indigo-600" /></div>
+            <div className="space-y-2">
+              <Label className="text-indigo-700 font-black uppercase text-[10px]">Limite de Crédito (R$)</Label>
+              <Input 
+                {...register("limite")} 
+                className="font-black text-indigo-600 text-lg border-2 border-indigo-100 focus:border-indigo-500" 
+                placeholder="0,00"
+              />
+            </div>
             <div className="space-y-2"><Label>Dia de Pagamento</Label><Input type="number" {...register("dia_pagamento")} /></div>
           </div>
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
