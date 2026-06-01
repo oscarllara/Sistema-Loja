@@ -1,4 +1,3 @@
-Margem -> Venda com cálculos automáticos.">
 "use client";
 
 import React from 'react';
@@ -151,7 +150,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const disponivelSite = watch("disponivel_site");
   const isFracionado = watch("fracionado");
 
-  // Lógica de recálculo ao mudar o Custo
   const handleCostChange = (val: string) => {
     const cost = parseToNumber(val);
     const margin = parseToNumber(marginValue);
@@ -161,7 +159,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     updateCashPrice(newSale, parseToNumber(discountValue));
   };
 
-  // Lógica de recálculo ao mudar a Margem
   const handleMarginChange = (val: string) => {
     const margin = parseToNumber(val);
     const cost = parseToNumber(costValue);
@@ -171,7 +168,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     updateCashPrice(newSale, parseToNumber(discountValue));
   };
 
-  // Lógica de recálculo ao mudar a Venda
   const handleSaleChange = (val: string) => {
     const sale = parseToNumber(val);
     const cost = parseToNumber(costValue);
@@ -181,7 +177,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     updateCashPrice(sale, parseToNumber(discountValue));
   };
 
-  // Lógica de recálculo do Preço à Vista
   const updateCashPrice = (sale: number, discount: number) => {
     if (sale > 0 && discount > 0) {
       const final = sale * (1 - discount / 100);
