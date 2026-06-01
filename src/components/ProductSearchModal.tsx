@@ -38,6 +38,8 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
   const loadProducts = React.useCallback(async () => {
     setIsLoading(true);
     try {
+      // Força a limpeza do cache para garantir que novos produtos apareçam
+      localStorage.removeItem('dyaderp_products_cache');
       const data = await db.produtos.getAll();
       setProducts(data || []);
     } catch (e) {
@@ -57,11 +59,12 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
   const filtered = React.useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return products.slice(0, 50);
-
-    const matches = products.filter(p => {
+    
+    let matches = products.filter(p => {
       if (!p) return false;
       if (filterIntegratedOnly && !p.integrar_calculadora) return false;
+      
+      if (!term) return true;
 
       const paddedTerm = term.padStart(5, '0');
       return (
@@ -72,6 +75,8 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
         (p.cod_barras || "").includes(term)
       );
     });
+
+    if (!term) return matches.slice(0, 50);
 
     return matches.sort((a, b) => {
       const nameA = (a.nome || "").toLowerCase();

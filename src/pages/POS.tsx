@@ -523,10 +523,10 @@ const POS = () => {
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
-          // Lógica de baixa de estoque considerando fator de conversão se for fracionado
+          // Lógica de baixa de estoque: se for fracionado, multiplica a qtde pelo fator de conversão
           let baixaEstoque = item.quantity;
           if (item.isFractional && item.conversionFactor > 0) {
-            baixaEstoque = item.quantity / item.conversionFactor;
+            baixaEstoque = item.quantity * item.conversionFactor;
           }
           db.produtos.update(prod.cd_produto, { estoque: prod.estoque - baixaEstoque }).catch(() => {});
         }

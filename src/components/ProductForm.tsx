@@ -61,7 +61,7 @@ const productSchema = z.object({
   ncm: z.string().optional().nullable(),
   fracionado: z.boolean().default(false),
   un_fracionada: z.string().optional().nullable(),
-  fator_conversao: z.string().default("0,00"),
+  fator_conversao: z.string().default("1,0000"),
   is_kit: z.boolean().default(false),
   is_locacao: z.boolean().default(false),
   valor_diaria: z.string().default("0,00"),
@@ -133,7 +133,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       margem_lucro: "40,00",
       estoque: "0",
       minimo: "0",
-      fator_conversao: "0",
+      fator_conversao: "1,0000",
       fracionado: false,
       venda_fracionada: "0,00"
     }
@@ -148,25 +148,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const estoqueValue = watch("estoque");
   const fatorConversao = watch("fator_conversao");
   const isFracionado = watch("fracionado");
-
-  const numCaixas = React.useMemo(() => {
-    const est = parseToNumber(estoqueValue);
-    const fat = parseToNumber(fatorConversao);
-    if (fat > 0) return (est / fat).toFixed(2);
-    return "0";
-  }, [estoqueValue, fatorConversao]);
-
-  // Lógica de cálculo do preço fracionado
-  React.useEffect(() => {
-    if (isFracionado) {
-      const vendaPrincipal = parseToNumber(saleValue);
-      const tamanhoEmbalagem = parseToNumber(fatorConversao);
-      if (vendaPrincipal > 0 && tamanhoEmbalagem > 0) {
-        const precoSugerido = vendaPrincipal / tamanhoEmbalagem;
-        setValue("venda_fracionada", formatMoney((precoSugerido * 100).toFixed(0)));
-      }
-    }
-  }, [saleValue, fatorConversao, isFracionado, setValue]);
 
   const handleCostChange = (val: string) => {
     const formatted = formatMoney(val);
@@ -353,7 +334,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
 
           <TabsContent value="estoque" className="space-y-6 m-0">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Estoque Atual *</Label>
                 <Input {...register("estoque")} className="font-bold" placeholder="0,00" />
@@ -362,30 +343,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Label>Estoque Mínimo</Label>
                 <Input {...register("minimo")} placeholder="0,00" />
               </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-indigo-600 font-bold"><Box size={14} /> Tamanho da Embalagem</Label>
-                <Input {...register("fator_conversao")} placeholder="Ex: 50,00" />
-                <p className="text-[9px] text-slate-500 font-medium">Quantidade de unidades menores por embalagem.</p>
-              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-lg border shadow-sm text-indigo-600"><Layers size={20} /></div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Equivalente em Embalagens</p>
-                    <p className="text-xl font-black text-slate-900">{numCaixas} <span className="text-xs font-bold text-slate-500">CAIXAS / UN</span></p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center space-x-3">
-                <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
-                <div className="cursor-pointer" onClick={() => setValue("fracionado", !isFracionado)}>
-                  <Label htmlFor="is_fracionado" className="font-black text-sm text-indigo-900 cursor-pointer">Permitir Venda Fracionada</Label>
-                  <p className="text-[9px] text-indigo-600 font-bold uppercase">Habilita a venda por unidade menor (ex: KG, M²).</p>
-                </div>
+            <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center space-x-3">
+              <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
+              <div className="cursor-pointer" onClick={() => setValue("fracionado", !isFracionado)}>
+                <Label htmlFor="is_fracionado" className="font-black text-sm text-indigo-900 cursor-pointer">Permitir Venda Fracionada</Label>
+                <p className="text-[9px] text-indigo-600 font-bold uppercase">Habilita a venda por unidade menor (ex: KG, M²).</p>
               </div>
             </div>
 
@@ -400,16 +364,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                     <Input {...register("un_fracionada")} placeholder="Ex: KG" className="bg-white border-emerald-200 uppercase" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-emerald-700 font-bold">Fator de Baixa (1 / Tam.)</Label>
-                    <div className="h-10 bg-white border border-emerald-200 rounded-md flex items-center px-3 font-mono text-sm font-bold text-emerald-600">
-                      {(1 / (parseToNumber(fatorConversao) || 1)).toFixed(4)}
-                    </div>
-                    <p className="text-[8px] text-emerald-600 font-bold uppercase">Impacto no estoque por unidade vendida.</p>
+                    <Label className="text-emerald-700 font-bold">Fator de Baixa (Multiplicador)</Label>
+                    <Input {...register("fator_conversao")} placeholder="Ex: 0,0200" className="bg-white border-emerald-200 font-mono font-bold text-emerald-600" />
+                    <p className="text-[8px] text-emerald-600 font-bold uppercase">Quanto 1 unidade da fração retira do estoque principal.</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-emerald-700 font-bold">Preço da Fração (R$)</Label>
                     <Input {...register("venda_fracionada")} onChange={(e) => setValue("venda_fracionada", formatMoney(e.target.value))} className="bg-white border-emerald-200 font-black text-emerald-700" />
-                    <p className="text-[8px] text-emerald-600 font-bold uppercase">Sugerido: R$ {(parseToNumber(saleValue) / (parseToNumber(fatorConversao) || 1)).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
