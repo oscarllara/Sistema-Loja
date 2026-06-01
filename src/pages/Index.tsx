@@ -86,7 +86,7 @@ const Index = () => {
             value={`R$ ${stats.vendasHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
             icon={DollarSign} 
             trendValue="+12.5%" 
-            color="bg-indigo-500 shadow-indigo-200"
+            color="bg-indigo-50 shadow-indigo-200"
             onClick={() => navigate('/daily-cash')}
           />
           <StatCard 
