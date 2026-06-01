@@ -51,14 +51,32 @@ export const db = {
   produtos: {
     getAll: async (): Promise<Produto[]> => {
       try {
-        const { data, error } = await supabase
-          .from('produtos')
-          .select('*')
-          .order('nome');
+        let allData: Produto[] = [];
+        let from = 0;
+        const step = 1000;
+        let hasMore = true;
+
+        // Loop para buscar todos os produtos, superando o limite de 1000 do Supabase
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('produtos')
+            .select('*')
+            .order('nome')
+            .range(from, from + step - 1);
+          
+          if (error) throw error;
+          
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            from += step;
+            if (data.length < step) hasMore = false;
+          } else {
+            hasMore = false;
+          }
+        }
         
-        if (error) throw error;
-        if (data) localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(data));
-        return data || [];
+        if (allData.length > 0) localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(allData));
+        return allData;
       } catch (err) {
         const cache = localStorage.getItem(PRODUCTS_CACHE_KEY);
         return cache ? JSON.parse(cache) : [];

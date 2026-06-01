@@ -113,11 +113,11 @@ const Inventory = () => {
   }, [products, searchTerm, filterSiteOnly]);
 
   const viewStats = React.useMemo(() => {
-    const totalItens = filteredProducts.length;
-    const valorEstoque = filteredProducts.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0);
-    const noSite = filteredProducts.filter(p => p.disponivel_site).length;
+    const totalItens = products.length; // Total real de produtos cadastrados
+    const valorEstoque = products.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0);
+    const noSite = products.filter(p => p.disponivel_site).length;
     return { totalItens, valorEstoque, noSite };
-  }, [filteredProducts]);
+  }, [products]);
 
   const handleQuickUpdate = (id: number, field: keyof Produto, value: string) => {
     const numValue = parseFloat(value.replace(',', '.'));
@@ -149,8 +149,8 @@ const Inventory = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <SummaryCard title="Peso Custos Fixos" value={`${(stats.cfWeight * 100).toFixed(2)}%`} subtitle="Impacto nas vendas" icon={Calculator} color="bg-indigo-500" />
-          <SummaryCard title="Valor em Estoque" value={`R$ ${viewStats.valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} subtitle="Dos itens filtrados" icon={DollarSign} color="bg-amber-500" />
-          <SummaryCard title="Total de Itens" value={viewStats.totalItens} subtitle="Listados na tela" icon={Package} color="bg-emerald-500" />
+          <SummaryCard title="Valor em Estoque" value={`R$ ${viewStats.valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} subtitle="Total de todos os itens" icon={DollarSign} color="bg-amber-500" />
+          <SummaryCard title="Total de Itens" value={viewStats.totalItens} subtitle="Produtos cadastrados" icon={Package} color="bg-emerald-500" />
           <SummaryCard title="No Site" value={viewStats.noSite} subtitle="Visíveis online" icon={Globe} color="bg-blue-500" isActive={filterSiteOnly} onClick={() => setFilterSiteOnly(!filterSiteOnly)} />
         </div>
 
