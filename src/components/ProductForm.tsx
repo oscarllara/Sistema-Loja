@@ -145,9 +145,20 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const discountValue = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
-  const estoqueValue = watch("estoque");
   const fatorConversao = watch("fator_conversao");
   const isFracionado = watch("fracionado");
+
+  // Lógica de cálculo automático do preço fracionado (Preço Saco * Fator)
+  React.useEffect(() => {
+    if (isFracionado) {
+      const precoSaco = parseToNumber(saleValue);
+      const fator = parseToNumber(fatorConversao);
+      if (precoSaco > 0 && fator > 0) {
+        const precoSugerido = precoSaco * fator;
+        setValue("venda_fracionada", formatMoney((precoSugerido * 100).toFixed(0)));
+      }
+    }
+  }, [saleValue, fatorConversao, isFracionado, setValue]);
 
   const handleCostChange = (val: string) => {
     const formatted = formatMoney(val);
@@ -371,6 +382,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <div className="space-y-2">
                     <Label className="text-emerald-700 font-bold">Preço da Fração (R$)</Label>
                     <Input {...register("venda_fracionada")} onChange={(e) => setValue("venda_fracionada", formatMoney(e.target.value))} className="bg-white border-emerald-200 font-black text-emerald-700" />
+                    <p className="text-[8px] text-emerald-600 font-bold uppercase">Sugerido: R$ {(parseToNumber(saleValue) * parseToNumber(fatorConversao)).toFixed(2)}</p>
                   </div>
                 </div>
               </div>

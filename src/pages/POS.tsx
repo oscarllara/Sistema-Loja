@@ -232,7 +232,12 @@ const POS = () => {
 
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
-    if (product.fracionado && unit === product.un_fracionada) return product.venda_fracionada || (product.venda / (product.fator_conversao || 1));
+    
+    // Se for unidade fracionada, usa o preço fracionado cadastrado ou calcula (Preço * Fator)
+    if (product.fracionado && unit === product.un_fracionada) {
+      return product.venda_fracionada || (product.venda * (product.fator_conversao || 1));
+    }
+    
     const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
     return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
   };
