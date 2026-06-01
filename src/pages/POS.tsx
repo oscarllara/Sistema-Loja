@@ -38,7 +38,8 @@ import {
   WifiOff,
   ShieldAlert,
   RefreshCw,
-  Percent
+  Percent,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -186,7 +187,6 @@ const POS = () => {
   const [blockReason, setBlockBlockReason] = React.useState("");
 
   const formatQtyMask = (value: string) => {
-    // Permite apenas números e uma única vírgula
     let val = value.replace(/[^\d,]/g, "");
     const parts = val.split(",");
     if (parts.length > 2) val = parts[0] + "," + parts.slice(1).join("");
@@ -220,13 +220,19 @@ const POS = () => {
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
-    setInputQty("1"); // Sugere 1 ao selecionar, mas permite editar
+    setInputQty("1");
     setTimeout(() => qtyRef.current?.focus(), 50);
+  };
+
+  const toggleUnit = () => {
+    if (!pendingProduct || !pendingProduct.fracionado) return;
+    const newUnit = inputUnit === pendingProduct.un ? pendingProduct.un_fracionada : pendingProduct.un;
+    setInputUnit(newUnit);
   };
 
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
-    if (product.fracionado && unit === product.un_fracionada) return product.venda_fracionada || product.venda;
+    if (product.fracionado && unit === product.un_fracionada) return product.venda_fracionada || (product.venda / (product.fator_conversao || 1));
     const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
     return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
   };
@@ -248,8 +254,8 @@ const POS = () => {
     if (!pendingProduct) return;
     let qty = parseBRNumber(inputQty);
     
-    // Lógica de Arredondamento por Embalagem
-    if (pendingProduct.fator_conversao > 0) {
+    // Lógica de Arredondamento por Embalagem (apenas se não for fracionado)
+    if (inputUnit === pendingProduct.un && pendingProduct.fator_conversao > 0 && !pendingProduct.fracionado) {
       const originalQty = qty;
       qty = Math.ceil(qty / pendingProduct.fator_conversao) * pendingProduct.fator_conversao;
       if (qty !== originalQty) {
@@ -517,7 +523,12 @@ const POS = () => {
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
-          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity }).catch(() => {});
+          // Lógica de baixa de estoque considerando fator de conversão se for fracionado
+          let baixaEstoque = item.quantity;
+          if (item.isFractional && item.conversionFactor > 0) {
+            baixaEstoque = item.quantity / item.conversionFactor;
+          }
+          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - baixaEstoque }).catch(() => {});
         }
       }
       setLastActionData({ ...payload, type: 'Venda' });
@@ -765,7 +776,18 @@ const POS = () => {
 
             <div className="w-28 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Unidade</label>
-              <div className="w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase bg-slate-800 text-indigo-300 border border-slate-700 shadow-inner">{inputUnit || "UN"}</div>
+              <Button 
+                type="button"
+                onClick={toggleUnit}
+                disabled={!pendingProduct?.fracionado}
+                className={cn(
+                  "w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase border shadow-inner transition-all",
+                  pendingProduct?.fracionado ? "bg-indigo-600 text-white border-indigo-400 hover:bg-indigo-700" : "bg-slate-800 text-indigo-300 border-slate-700"
+                )}
+              >
+                {inputUnit || "UN"}
+                {pendingProduct?.fracionado && <ArrowRightLeft size={12} className="ml-2 opacity-50" />}
+              </Button>
             </div>
 
             <div className="w-44 space-y-1.5">
