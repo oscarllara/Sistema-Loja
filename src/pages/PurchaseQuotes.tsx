@@ -13,35 +13,38 @@ import {
   Loader2, 
   ArrowRight,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  FileSearch
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { Produto, Cliente } from '@/types/database';
 import { useNavigate } from 'react-router-dom';
+import PurchaseForm from '@/components/PurchaseForm';
 
 const PurchaseQuotes = () => {
   const navigate = useNavigate();
   const [quotes, setQuotes] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isGenerating, setIsGenerating] = React.useState(false);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      // Usaremos a tabela de compras com status 'Cotacao'
       const data = await db.compras.getAll();
+      // Mostra apenas o que for Cotação ou Rascunho
       setQuotes(data.filter(c => c.status === 'Cotacao' || c.status === 'Rascunho'));
     } finally {
       setIsLoading(false);
@@ -55,12 +58,7 @@ const PurchaseQuotes = () => {
   const generateAutoQuote = async () => {
     setIsGenerating(true);
     try {
-      const [products, sales] = await Promise.all([
-        db.produtos.getAll(),
-        db.vendas.getAll()
-      ]);
-
-      // Filtra produtos abaixo do estoque mínimo
+      const products = await db.produtos.getAll();
       const lowStock = products.filter(p => (p.estoque || 0) < (p.minimo || 0));
       
       if (lowStock.length === 0) {
@@ -68,7 +66,6 @@ const PurchaseQuotes = () => {
         return;
       }
 
-      // Agrupa por fornecedor preferencial
       const quotesBySupplier: Record<number, any[]> = {};
       lowStock.forEach(p => {
         const supplierId = p.cd_fornecedores || 0;
@@ -87,10 +84,10 @@ const PurchaseQuotes = () => {
         });
       });
 
-      // Salva as cotações geradas
       for (const [supplierId, items] of Object.entries(quotesBySupplier)) {
         const sId = parseInt(supplierId);
-        const supplier = (await db.clientes.getAll()).find(c => c.cd_clientes === sId);
+        const allClients = await db.clientes.getAll();
+        const supplier = allClients.find(c => c.cd_clientes === sId);
         
         await db.compras.save({
           cd_compra: Date.now() + Math.random(),
@@ -114,7 +111,6 @@ const PurchaseQuotes = () => {
   };
 
   const handleConvertToPurchase = (quote: any) => {
-    // Redireciona para a tela de compras com os dados da cotação
     sessionStorage.setItem('dyaderp_pending_purchase', JSON.stringify(quote));
     navigate('/purchases');
   };
@@ -143,12 +139,23 @@ const PurchaseQuotes = () => {
               {isGenerating ? <Loader2 className="animate-spin" /> : <Zap size={20} />}
               Gerar Automática (Estoque Mínimo)
             </Button>
-            <Button 
-              onClick={() => navigate('/purchases')} 
-              className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 shadow-lg shadow-indigo-100"
-            >
-              <Plus size={20} /> Nova Cotação Manual
-            </Button>
+            
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 shadow-lg shadow-indigo-100">
+                  <Plus size={20} /> Nova Cotação Manual
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <FileSearch className="text-indigo-600" />
+                    Montar Cotação de Compra
+                  </DialogTitle>
+                </DialogHeader>
+                <PurchaseForm onSuccess={() => { setIsModalOpen(false); loadData(); }} />
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
