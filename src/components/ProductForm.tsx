@@ -271,7 +271,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         descricao_site: data.descricao_site || null,
         integrar_calculadora: !!data.integrar_calculadora,
         cd_fornecedores: data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null,
-        data_atual_atualizacao: new Date().toISOString()
+        data_atualizacao: new Date().toISOString()
       };
 
       if (product) {
@@ -363,7 +363,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <Box size={16} className="text-blue-600" /> Embalagem / Arredondamento
                 </h4>
                 <div className="space-y-2">
-                  <Label className="text-blue-700 font-bold">Qtd por Embalagem (Caixa)</Label>
+                  <Label className="text-blue-700 font-bold">Tamanho da Caixa (m², UN, etc)</Label>
                   <Input {...register("fator_conversao")} placeholder="Ex: 2,4000" className="bg-white border-blue-200 font-mono font-bold text-blue-600" />
                   <p className="text-[9px] text-blue-600 font-bold uppercase flex items-center gap-1">
                     <Info size={10} /> O PDV arredondará para múltiplos deste valor.
@@ -386,12 +386,16 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                         <Input {...register("un_fracionada")} placeholder="Ex: KG" className="h-8 bg-white border-emerald-200 uppercase text-xs" />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-emerald-700 font-bold uppercase">Preço Fração (R$)</Label>
-                        <Input {...register("venda_fracionada")} onChange={(e) => setValue("venda_fracionada", formatMoney(e.target.value))} className="h-8 bg-white border-emerald-200 font-black text-emerald-700 text-xs" />
+                        <Label className="text-[10px] text-emerald-700 font-bold uppercase">Fator de Baixa (Estoque)</Label>
+                        <Input {...register("fator_conversao")} placeholder="Ex: 0,0200" className="h-8 bg-white border-emerald-200 font-mono font-bold text-emerald-600 text-xs" />
                       </div>
                     </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-emerald-700 font-bold uppercase">Preço Fração (R$)</Label>
+                      <Input {...register("venda_fracionada")} onChange={(e) => setValue("venda_fracionada", formatMoney(e.target.value))} className="h-8 bg-white border-emerald-200 font-black text-emerald-700 text-xs" />
+                    </div>
                     <p className="text-[8px] text-emerald-600 font-bold uppercase">
-                      Nota: O "Fator de Baixa" da embalagem ao lado será usado para calcular o estoque e preço sugerido.
+                      Nota: O "Fator de Baixa" define quanto 1 unidade da fração retira do estoque principal (ex: 1kg = 0,02 saco).
                     </p>
                   </div>
                 )}

@@ -39,7 +39,8 @@ import {
   ShieldAlert,
   RefreshCw,
   Percent,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Box
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -733,7 +734,16 @@ const POS = () => {
                   cart.map((item, idx) => (
                     <TableRow key={idx} className="h-12 border-b border-slate-200 hover:bg-indigo-50/50 transition-colors group">
                       <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
-                      <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">{item?.nome}</TableCell>
+                      <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">
+                        <div>
+                          {item?.nome}
+                          {item?.fator_conversao > 1 && !item?.isFractional && (
+                            <span className="ml-2 text-[9px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                              {Math.ceil(item.quantity / item.fator_conversao)} CX
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
                       <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
                         <input className="w-full bg-transparent text-center text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={item.quantity.toString().replace('.', ',')} onChange={(e) => updateCartItem(idx, 'quantity', e.target.value)} />
