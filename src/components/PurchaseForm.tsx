@@ -103,17 +103,10 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
   };
 
+  // Agora o addItem apenas sinaliza que queremos um novo item e abre a busca
   const addItem = () => {
-    setItems([...items, {
-      cd_produto: 0,
-      nome_fornecedor: "",
-      un: "UN",
-      qtde: 1,
-      valor_unit: 0,
-      subtotal: 0,
-      margem: 40,
-      valor_venda: 0
-    }]);
+    setActiveItemIndex(items.length); // Indica que é um novo item (fim da lista)
+    setIsSearchOpen(true);
   };
 
   const removeItem = (index: number) => {
@@ -146,20 +139,31 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const handleProductSelect = (product: any) => {
     if (activeItemIndex !== null) {
       const newItems = [...items];
-      const originalItem = newItems[activeItemIndex];
+      const isNew = activeItemIndex === items.length;
       
-      newItems[activeItemIndex] = {
-        ...originalItem,
+      const margin = product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 40;
+      
+      const itemData = {
         cd_produto: product.cd_produto,
+        nome_fornecedor: product.nome,
         un: product.un,
-        valor_unit: originalItem.valor_unit || product.compra || 0,
-        valor_venda: originalItem.valor_venda || product.venda || 0,
-        margem: originalItem.margem || (product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 0),
-        subtotal: (originalItem.qtde || 1) * (originalItem.valor_unit || product.compra || 0)
+        qtde: 1,
+        valor_unit: product.compra || 0,
+        valor_venda: product.venda || 0,
+        margem: margin,
+        subtotal: product.compra || 0
       };
 
-      if (originalItem.codigo_fornecedor && supplierId) {
-        db.mappings.save(supplierId, originalItem.codigo_fornecedor, product.cd_produto);
+      if (isNew) {
+        newItems.push(itemData);
+      } else {
+        // Se estava vinculando um item de XML, preserva o código original do fornecedor se houver
+        const original = newItems[activeItemIndex];
+        newItems[activeItemIndex] = { ...original, ...itemData };
+        
+        if (original.codigo_fornecedor && supplierId) {
+          db.mappings.save(supplierId, original.codigo_fornecedor, product.cd_produto);
+        }
       }
 
       setItems(newItems);
@@ -302,9 +306,9 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         <Button 
           onClick={addItem} 
           variant="outline" 
-          className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold h-9"
+          className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black h-10 px-6 rounded-xl shadow-sm"
         >
-          <PlusCircle size={18} /> Adicionar Produto
+          <Search size={18} /> Pesquisar e Adicionar Produto
         </Button>
       </div>
 
@@ -335,7 +339,9 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                         <div>
                           <p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p>
                           <p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p>
-                          {item.nome_fornecedor && <p className="text-[8px] text-indigo-500 font-bold">XML: {item.nome_fornecedor}</p>}
+                          {item.nome_fornecedor && item.nome_fornecedor !== product?.nome && (
+                            <p className="text-[8px] text-indigo-500 font-bold">XML: {item.nome_fornecedor}</p>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -410,7 +416,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
             {items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">
-                  Nenhum produto adicionado. Clique em "Adicionar Produto" para começar.
+                  Nenhum produto adicionado. Clique em "Pesquisar e Adicionar" para começar.
                 </TableCell>
               </TableRow>
             )}
