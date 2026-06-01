@@ -19,7 +19,8 @@ import {
   Loader2,
   ExternalLink,
   TrendingUp,
-  Box
+  Box,
+  Layers
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,7 +131,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       margem_lucro: "40,00",
       estoque: "0",
       minimo: "0",
-      fator_conversao: "0"
+      fator_conversao: "0",
+      fracionado: false
     }
   });
 
@@ -140,6 +142,16 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const discountValue = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
+  const estoqueValue = watch("estoque");
+  const fatorConversao = watch("fator_conversao");
+  const isFracionado = watch("fracionado");
+
+  const numCaixas = React.useMemo(() => {
+    const est = parseToNumber(estoqueValue);
+    const fat = parseToNumber(fatorConversao);
+    if (fat > 0) return (est / fat).toFixed(2);
+    return "0";
+  }, [estoqueValue, fatorConversao]);
 
   const handleCostChange = (val: string) => {
     const formatted = formatMoney(val);
@@ -338,7 +350,27 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-indigo-600 font-bold"><Box size={14} /> Tamanho da Embalagem</Label>
                 <Input {...register("fator_conversao")} placeholder="Ex: 2,40" />
-                <p className="text-[9px] text-slate-500 font-medium">M² por caixa ou unidades por fardo. Usado para arredondamento no PDV.</p>
+                <p className="text-[9px] text-slate-500 font-medium">M² por caixa ou unidades por fardo.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg border shadow-sm text-indigo-600"><Layers size={20} /></div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Equivalente em Embalagens</p>
+                    <p className="text-xl font-black text-slate-900">{numCaixas} <span className="text-xs font-bold text-slate-500">CAIXAS / UN</span></p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center space-x-3">
+                <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
+                <div className="cursor-pointer" onClick={() => setValue("fracionado", !isFracionado)}>
+                  <Label htmlFor="is_fracionado" className="font-black text-sm text-indigo-900 cursor-pointer">Permitir Venda Fracionada</Label>
+                  <p className="text-[9px] text-indigo-600 font-bold uppercase">Se desmarcado, o PDV sempre arredondará para caixa fechada.</p>
+                </div>
               </div>
             </div>
 
@@ -400,7 +432,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-emerald-700">Preço Final À Vista (R$)</Label>
-                  <Input value={watch("venda_vista")} onChange={(e) => handleCashPriceChange(e.target.value)} className="h-12 text-xl font-black text-emerald-700 border-2 border-emerald-200 focus:border-emerald-600 bg-white" placeholder="0,00" />
+                  <Input value={watch("venda_vista")} onChange={(e) => handleCashPriceChange(e.target.value)} className="h-12 text-xl font-black text-emerald-700 border-2 border-emerald-100 focus:border-emerald-600 bg-white" placeholder="0,00" />
                 </div>
               </div>
             </div>
