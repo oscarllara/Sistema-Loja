@@ -69,7 +69,7 @@ import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
 import SyncStatus from '@/components/SyncStatus';
-import { Produto, Cliente, Configuracoes } from '@/types/database';
+import { Produto, Cliente, Configuracoes, ContaBancaria } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
 
@@ -87,6 +87,7 @@ const POS = () => {
   const [products, setProducts] = React.useState<Produto[]>([]);
   const [clients, setClients] = React.useState<Cliente[]>([]);
   const [sellers, setSellers] = React.useState<Cliente[]>([]);
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
@@ -113,15 +114,17 @@ const POS = () => {
   const loadAllData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const [p, c, cfg] = await Promise.all([
+      const [p, c, cfg, acc] = await Promise.all([
         db.produtos.getAll(),
         db.clientes.getAll(),
-        db.config.get()
+        db.config.get(),
+        db.contas.getAll()
       ]);
       setProducts(p);
       setClients(c.filter(item => item.tipo_entidade === 'C' || item.tipo_entidade === 'A'));
       setSellers(c.filter(item => item.is_funcionario || item.usuario === 'admin'));
       setConfig(cfg);
+      setContas(acc);
     } catch (err) {
       showError("Erro ao carregar dados do sistema.");
     } finally {
@@ -466,6 +469,33 @@ const POS = () => {
       };
 
       await db.vendas.add(payload);
+
+      // REGISTRO FINANCEIRO AUTOMÁTICO PARA VENDAS À VISTA
+      if (payload.tipo_venda === 'Vista') {
+        const caixaLoja = contas.find(c => c.tipo === 'Caixa') || contas[0];
+        if (caixaLoja) {
+          for (const p of payments) {
+            if (p.method !== 'Crediário') {
+              const lanc = {
+                tipo: 'R',
+                descricao: `VENDA PDV #${Date.now().toString().slice(-6)} - ${payload.nome_cliente}`,
+                valor: p.amount,
+                data_vencimento: new Date().toISOString().split('T')[0],
+                data_pagamento: new Date().toISOString(),
+                status: 'Pago',
+                cd_entidade: payload.cd_clientes,
+                nome_entidade: payload.nome_cliente,
+                categoria: 'Venda',
+                meio_pagamento: p.method,
+                cd_conta: caixaLoja.cd_conta
+              };
+              await db.financeiro.add(lanc);
+              // Atualiza saldo da conta
+              await db.contas.update(caixaLoja.cd_conta, { saldo: Number(caixaLoja.saldo) + Number(p.amount) });
+            }
+          }
+        }
+      }
       
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);

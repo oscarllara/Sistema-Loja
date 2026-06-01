@@ -14,7 +14,8 @@ import {
   FilterX,
   Edit,
   Trash2,
-  Infinity
+  Infinity,
+  Wallet
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ import { LancamentoFinanceiro, ContaBancaria } from '@/types/database';
 const DailyCash = () => {
   const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
   const [showAllTime, setShowAllTime] = React.useState(false);
+  const [selectedAccountId, setSelectedAccountId] = React.useState<string>("all");
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
   const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
@@ -93,16 +95,25 @@ const DailyCash = () => {
     setIsEditOpen(true);
   };
 
-  // Filtra as movimentações baseadas na data ou mostra tudo
+  // Filtra as movimentações baseadas na data e na conta selecionada
   const movDia = lancamentos.filter(l => {
     if (l.status !== 'Pago') return false;
+    
+    // Filtro de Conta
+    if (selectedAccountId !== "all" && l.cd_conta !== Number(selectedAccountId)) return false;
+
     if (showAllTime) return true;
     return l.data_pagamento?.startsWith(selectedDate) || l.data_vencimento.startsWith(selectedDate);
   }).sort((a, b) => new Date(a.data_pagamento || a.data_vencimento).getTime() - new Date(b.data_pagamento || b.data_vencimento).getTime());
 
-  // Saldo anterior: se mostrar tudo, o saldo anterior é zero (ou o saldo inicial das contas)
+  // Saldo anterior: respeita o filtro de conta
   const saldoAnterior = showAllTime ? 0 : lancamentos
-    .filter(l => l.status === 'Pago' && (l.data_pagamento || l.data_vencimento).split('T')[0] < selectedDate)
+    .filter(l => {
+      const isPaid = l.status === 'Pago';
+      const isBefore = (l.data_pagamento || l.data_vencimento).split('T')[0] < selectedDate;
+      const matchesAccount = selectedAccountId === "all" || l.cd_conta === Number(selectedAccountId);
+      return isPaid && isBefore && matchesAccount;
+    })
     .reduce((acc, l) => l.tipo === 'R' ? acc + l.valor : acc - l.valor, 0);
 
   const totalEntradas = movDia.filter(l => l.tipo === 'R').reduce((acc, l) => acc + l.valor, 0);
@@ -122,7 +133,8 @@ const DailyCash = () => {
     totalEntradas,
     totalSaidas,
     saldoFinal,
-    resumoMeios
+    resumoMeios,
+    contaNome: selectedAccountId === "all" ? "TODAS AS CONTAS" : contas.find(c => c.cd_conta === Number(selectedAccountId))?.nome
   };
 
   let runningBalance = saldoAnterior;
@@ -146,7 +158,7 @@ const DailyCash = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900">Caixa Diário / Fluxo</h1>
-              <div className="flex items-center gap-3 mt-1">
+              <div className="flex flex-wrap items-center gap-3 mt-1">
                 <div className={cn("flex items-center gap-2 text-sm font-medium px-2 py-1 rounded-lg transition-colors", showAllTime ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-700")}>
                   <Calendar size={14} />
                   <input 
@@ -157,6 +169,21 @@ const DailyCash = () => {
                     className="border-none p-0 focus:ring-0 font-bold cursor-pointer bg-transparent disabled:cursor-not-allowed"
                   />
                 </div>
+
+                <div className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                  <Wallet size={14} className="text-slate-400" />
+                  <select 
+                    className="bg-transparent border-none p-0 focus:ring-0 text-xs font-bold text-slate-600 cursor-pointer"
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                  >
+                    <option value="all">TODAS AS CONTAS</option>
+                    {contas.map(c => (
+                      <option key={c.cd_conta} value={c.cd_conta}>{c.nome.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <Button 
                   variant={showAllTime ? "default" : "outline"} 
                   size="sm" 
@@ -247,7 +274,8 @@ const DailyCash = () => {
             <Card className="border-none shadow-sm overflow-hidden bg-white">
               <div className="p-3 bg-slate-50 border-b flex items-center justify-between">
                 <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                  {showAllTime ? 'Histórico Completo de Movimentações' : (filterType === 'All' ? 'Extrato do Dia' : filterType === 'R' ? 'Apenas Entradas' : 'Apenas Saídas')}
+                  {showAllTime ? 'Histórico Completo' : (filterType === 'All' ? 'Extrato do Dia' : filterType === 'R' ? 'Apenas Entradas' : 'Apenas Saídas')}
+                  {selectedAccountId !== "all" && ` - CONTA: ${contas.find(c => c.cd_conta === Number(selectedAccountId))?.nome.toUpperCase()}`}
                 </h3>
                 {filterType !== 'All' && (
                   <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-indigo-600 font-bold" onClick={() => setFilterType('All')}>
