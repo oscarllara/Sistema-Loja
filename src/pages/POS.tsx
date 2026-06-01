@@ -234,7 +234,6 @@ const POS = () => {
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
     
-    // Se for unidade fracionada, usa o preço fracionado cadastrado ou calcula (Preço * Fator)
     if (product.fracionado && unit === product.un_fracionada) {
       return product.venda_fracionada || (product.venda * (product.fator_conversao || 1));
     }
@@ -260,12 +259,13 @@ const POS = () => {
     if (!pendingProduct) return;
     let qty = parseBRNumber(inputQty);
     
-    // Lógica de Arredondamento por Embalagem (apenas se não for fracionado)
-    if (inputUnit === pendingProduct.un && pendingProduct.fator_conversao > 0 && !pendingProduct.fracionado) {
+    // Lógica de Arredondamento por Embalagem (Tamanho da Caixa)
+    const boxSize = (pendingProduct as any).tamanho_caixa || 0;
+    if (inputUnit === pendingProduct.un && boxSize > 0 && !pendingProduct.fracionado) {
       const originalQty = qty;
-      qty = Math.ceil(qty / pendingProduct.fator_conversao) * pendingProduct.fator_conversao;
+      qty = Math.ceil(qty / boxSize) * boxSize;
       if (qty !== originalQty) {
-        showSuccess(`Quantidade arredondada para embalagem de ${pendingProduct.fator_conversao} ${pendingProduct.un}`);
+        showSuccess(`Quantidade arredondada para múltiplos de ${boxSize} ${pendingProduct.un}`);
       }
     }
 
@@ -281,7 +281,8 @@ const POS = () => {
       salePrice: pendingProduct.venda || 0,
       margin: margin,
       isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
-      conversionFactor: pendingProduct.fator_conversao || 1
+      conversionFactor: pendingProduct.fator_conversao || 1,
+      boxSize: boxSize
     }]);
     setPendingProduct(null);
     setInputCode("");
@@ -394,36 +395,6 @@ const POS = () => {
     }
   };
 
-  const generateAutoQuote = async () => {
-    const loadingId = showLoading("Analisando estoque...");
-    try {
-      const lowStock = products.filter(p => (p.estoque || 0) < (p.minimo || 0));
-      if (lowStock.length === 0) {
-        showError("Nenhum produto abaixo do estoque mínimo.");
-        return;
-      }
-      
-      const newItems = lowStock.map(p => {
-        const qtyToBuy = (p.minimo || 0) - (p.estoque || 0);
-        const margin = p.compra > 0 ? ((p.venda / p.compra) - 1) * 100 : 40;
-        return {
-          ...p,
-          quantity: Math.ceil(qtyToBuy),
-          selectedUnit: p.un,
-          finalPrice: p.compra || 0,
-          salePrice: p.venda || 0,
-          margin: margin,
-          costPrice: p.compra || 0
-        };
-      });
-      
-      setCart(prev => [...prev, ...newItems]);
-      showSuccess(`${newItems.length} itens adicionados por estoque mínimo!`);
-    } finally {
-      dismissToast(loadingId);
-    }
-  };
-
   const total = React.useMemo(() => cart.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0), [cart]);
 
   const confirmCheckout = async (payments: any[]) => {
@@ -529,7 +500,6 @@ const POS = () => {
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
-          // Lógica de baixa de estoque: se for fracionado, multiplica a qtde pelo fator de conversão
           let baixaEstoque = item.quantity;
           if (item.isFractional && item.conversionFactor > 0) {
             baixaEstoque = item.quantity * item.conversionFactor;
@@ -625,11 +595,6 @@ const POS = () => {
                 <CheckCircle size={24} /> {mode === 'COMPRA' ? 'CONCLUIR' : 'FINALIZAR'}
                 <span className="text-[10px] opacity-50 ml-auto">F10</span>
               </Button>
-              {mode === 'COMPRA' && (
-                <Button variant="outline" className="w-full h-11 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-black text-xs uppercase" onClick={generateAutoQuote}>
-                  <RefreshCw size={16} /> Gerar por Estoque Mínimo
-                </Button>
-              )}
               <Button variant="outline" className="w-full h-11 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-black text-xs uppercase" onClick={handleSaveQuote}>
                 <Save size={16} /> {mode === 'COMPRA' ? 'Salvar Cotação' : 'Salvar Orçamento'}
                 <span className="text-[10px] opacity-50 ml-auto">F9</span>
@@ -737,9 +702,10 @@ const POS = () => {
                       <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">
                         <div>
                           {item?.nome}
-                          {item?.fator_conversao > 1 && !item?.isFractional && (
-                            <span className="ml-2 text-[9px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                              {Math.ceil(item.quantity / item.fator_conversao)} CX
+                          {/* Exibição de Caixas (Baseado no Tamanho da Caixa) */}
+                          {item?.boxSize > 0 && !item?.isFractional && (
+                            <span className="ml-2 text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 shadow-sm">
+                              {Number((item.quantity / item.boxSize).toFixed(2))} CX
                             </span>
                           )}
                         </div>

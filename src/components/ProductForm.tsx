@@ -63,7 +63,8 @@ const productSchema = z.object({
   ncm: z.string().optional().nullable(),
   fracionado: z.boolean().default(false),
   un_fracionada: z.string().optional().nullable(),
-  fator_conversao: z.string().default("1,0000"),
+  fator_conversao: z.string().default("1,0000"), // Usado para Baixa de Estoque (Fração)
+  tamanho_caixa: z.string().default("0,0000"), // Usado para Arredondamento (Embalagem)
   is_kit: z.boolean().default(false),
   is_locacao: z.boolean().default(false),
   valor_diaria: z.string().default("0,00"),
@@ -130,6 +131,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       estoque: product.estoque?.toString().replace('.', ','),
       minimo: product.minimo?.toString().replace('.', ','),
       fator_conversao: product.fator_conversao?.toString().replace('.', ','),
+      tamanho_caixa: (product as any).tamanho_caixa?.toString().replace('.', ',') || "0,0000",
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
       cd_fornecedores: product.cd_fornecedores?.toString() || "",
     } : {
@@ -140,6 +142,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       estoque: "0",
       minimo: "0",
       fator_conversao: "1,0000",
+      tamanho_caixa: "0,0000",
       fracionado: false,
       venda_fracionada: "0,00",
       valor_diaria: "0,00",
@@ -154,19 +157,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const saleValue = watch("venda");
   const discountValue = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
-  const fatorConversao = watch("fator_conversao");
   const isFracionado = watch("fracionado");
-
-  React.useEffect(() => {
-    if (isFracionado) {
-      const precoSaco = parseToNumber(saleValue);
-      const fator = parseToNumber(fatorConversao);
-      if (precoSaco > 0 && fator > 0) {
-        const precoSugerido = precoSaco * fator;
-        setValue("venda_fracionada", formatMoney((precoSugerido * 100).toFixed(0)));
-      }
-    }
-  }, [saleValue, fatorConversao, isFracionado, setValue]);
 
   const handleCostChange = (val: string) => {
     const formatted = formatMoney(val);
@@ -266,6 +257,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         fracionado: !!data.fracionado,
         un_fracionada: data.un_fracionada?.toUpperCase() || null,
         fator_conversao: parseToNumber(data.fator_conversao),
+        tamanho_caixa: parseToNumber(data.tamanho_caixa),
         is_kit: !!data.is_kit,
         is_locacao: !!data.is_locacao,
         valor_diaria: parseToNumber(data.valor_diaria),
@@ -369,19 +361,21 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* SEÇÃO DE EMBALAGEM / ARREDONDAMENTO (Ex: Piso) */}
               <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                 <h4 className="text-xs font-black text-blue-900 flex items-center gap-2 uppercase tracking-wider">
                   <Box size={16} className="text-blue-600" /> Embalagem / Arredondamento
                 </h4>
                 <div className="space-y-2">
                   <Label className="text-blue-700 font-bold">Tamanho da Caixa (m², UN, etc)</Label>
-                  <Input {...register("fator_conversao")} placeholder="Ex: 2,4000" className="bg-white border-blue-200 font-mono font-bold text-blue-600" />
+                  <Input {...register("tamanho_caixa")} placeholder="Ex: 2,5000" className="bg-white border-blue-200 font-mono font-bold text-blue-600" />
                   <p className="text-[9px] text-blue-600 font-bold uppercase flex items-center gap-1">
-                    <Info size={10} /> O PDV arredondará para múltiplos deste valor.
+                    <Info size={10} /> O PDV arredondará para múltiplos deste valor e mostrará o total de caixas.
                   </p>
                 </div>
               </div>
 
+              {/* SEÇÃO DE VENDA FRACIONADA (Ex: Cimento) */}
               <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-4">
                 <div className="flex items-center space-x-2 mb-2">
                   <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
