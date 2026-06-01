@@ -1,3 +1,4 @@
+Margem -> Venda com cálculos automáticos.">
 "use client";
 
 import React from 'react';
@@ -18,7 +19,7 @@ import {
   History,
   Loader2,
   ExternalLink,
-  AlertCircle
+  TrendingUp
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ const productSchema = z.object({
   un: z.string().min(1, "A unidade é obrigatória").default("UN"),
   cod_barras: z.string().optional().nullable().or(z.literal("")),
   compra: z.string().default("0,00"),
+  margem_lucro: z.string().default("0"),
   venda: z.string().min(1, "Preço de venda é obrigatório").default("0,00"),
   venda_vista: z.string().default("0,00"),
   venda_fracionada: z.string().default("0,00"),
@@ -87,64 +89,114 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [isFullHistoryOpen, setIsFullHistoryOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
-  // Formata qualquer entrada para 0,00 (ignora pontos e vírgulas digitados)
-  const formatAsCurrency = (value: string) => {
-    const digits = value.replace(/\D/g, "");
-    if (!digits) return "0,00";
-    const amount = parseInt(digits) / 100;
-    return amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatAsCurrency = (value: string | number) => {
+    if (value === undefined || value === null) return "0,00";
+    const num = typeof value === 'number' ? value : parseFloat(value.toString().replace(/\./g, "").replace(",", "."));
+    if (isNaN(num)) return "0,00";
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Converte a string 0,00 para número real para o banco
   const parseToNumber = (value: string): number => {
     if (!value) return 0;
-    const cleanValue = value.replace(/\./g, "").replace(",", ".");
+    const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
     return parseFloat(cleanValue) || 0;
   };
+
+  const calculateMargin = (cost: number, sale: number) => {
+    if (cost <= 0) return 0;
+    return ((sale / cost) - 1) * 100;
+  };
+
+  const calculateSale = (cost: number, margin: number) => {
+    return cost * (1 + margin / 100);
+  };
+
+  const initialMargin = product ? calculateMargin(product.compra || 0, product.venda || 0) : 0;
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
-      compra: formatAsCurrency((product.compra || 0).toFixed(2).replace('.', '')),
-      venda: formatAsCurrency((product.venda || 0).toFixed(2).replace('.', '')),
-      venda_vista: formatAsCurrency((product.venda_vista || 0).toFixed(2).replace('.', '')),
-      venda_fracionada: formatAsCurrency((product.venda_fracionada || 0).toFixed(2).replace('.', '')),
-      valor_diaria: formatAsCurrency((product.valor_diaria || 0).toFixed(2).replace('.', '')),
-      valor_semana: formatAsCurrency((product.valor_semana || 0).toFixed(2).replace('.', '')),
-      valor_quinzena: formatAsCurrency((product.valor_quinzena || 0).toFixed(2).replace('.', '')),
-      valor_mes: formatAsCurrency((product.valor_mes || 0).toFixed(2).replace('.', '')),
-      preco_site: formatAsCurrency((product.preco_site || 0).toFixed(2).replace('.', '')),
-      estoque: formatAsCurrency((product.estoque || 0).toFixed(2).replace('.', '')),
-      minimo: formatAsCurrency((product.minimo || 0).toFixed(2).replace('.', '')),
-      fator_conversao: formatAsCurrency((product.fator_conversao || 0).toFixed(2).replace('.', '')),
+      compra: formatAsCurrency(product.compra || 0),
+      margem_lucro: initialMargin.toFixed(2).replace('.', ','),
+      venda: formatAsCurrency(product.venda || 0),
+      venda_vista: formatAsCurrency(product.venda_vista || 0),
+      venda_fracionada: formatAsCurrency(product.venda_fracionada || 0),
+      valor_diaria: formatAsCurrency(product.valor_diaria || 0),
+      valor_semana: formatAsCurrency(product.valor_semana || 0),
+      valor_quinzena: formatAsCurrency(product.valor_quinzena || 0),
+      valor_mes: formatAsCurrency(product.valor_mes || 0),
+      preco_site: formatAsCurrency(product.preco_site || 0),
+      estoque: product.estoque?.toString().replace('.', ','),
+      minimo: product.minimo?.toString().replace('.', ','),
+      fator_conversao: product.fator_conversao?.toString().replace('.', ','),
       desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
       cd_fornecedores: product.cd_fornecedores?.toString() || "",
     } : {
       un: "UN",
       venda: "0,00",
       compra: "0,00",
-      estoque: "0,00",
-      minimo: "0,00",
-      fator_conversao: "0,00"
+      margem_lucro: "40,00",
+      estoque: "0",
+      minimo: "0",
+      fator_conversao: "0"
     }
   });
 
-  const vendaValue = watch("venda");
-  const descontoValue = watch("desconto_vista_valor");
+  const costValue = watch("compra");
+  const marginValue = watch("margem_lucro");
+  const saleValue = watch("venda");
+  const discountValue = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
   const isFracionado = watch("fracionado");
 
-  // Cálculo automático de Preço à Vista
-  React.useEffect(() => {
-    const v = parseToNumber(vendaValue);
-    const d = parseFloat(descontoValue) || 0;
-    if (v > 0 && d > 0) {
-      const final = v * (1 - d / 100);
-      setValue("venda_vista", formatAsCurrency(final.toFixed(2).replace('.', '')), { shouldValidate: true });
+  // Lógica de recálculo ao mudar o Custo
+  const handleCostChange = (val: string) => {
+    const cost = parseToNumber(val);
+    const margin = parseToNumber(marginValue);
+    const newSale = calculateSale(cost, margin);
+    setValue("compra", val);
+    setValue("venda", formatAsCurrency(newSale));
+    updateCashPrice(newSale, parseToNumber(discountValue));
+  };
+
+  // Lógica de recálculo ao mudar a Margem
+  const handleMarginChange = (val: string) => {
+    const margin = parseToNumber(val);
+    const cost = parseToNumber(costValue);
+    const newSale = calculateSale(cost, margin);
+    setValue("margem_lucro", val);
+    setValue("venda", formatAsCurrency(newSale));
+    updateCashPrice(newSale, parseToNumber(discountValue));
+  };
+
+  // Lógica de recálculo ao mudar a Venda
+  const handleSaleChange = (val: string) => {
+    const sale = parseToNumber(val);
+    const cost = parseToNumber(costValue);
+    const newMargin = calculateMargin(cost, sale);
+    setValue("venda", val);
+    setValue("margem_lucro", newMargin.toFixed(2).replace('.', ','));
+    updateCashPrice(sale, parseToNumber(discountValue));
+  };
+
+  // Lógica de recálculo do Preço à Vista
+  const updateCashPrice = (sale: number, discount: number) => {
+    if (sale > 0 && discount > 0) {
+      const final = sale * (1 - discount / 100);
+      setValue("venda_vista", formatAsCurrency(final));
+    } else {
+      setValue("venda_vista", formatAsCurrency(sale));
     }
-  }, [vendaValue, descontoValue, setValue]);
+  };
+
+  const handleDiscountChange = (val: string) => {
+    const discount = parseFloat(val) || 0;
+    const sale = parseToNumber(saleValue);
+    setValue("desconto_vista_valor", val);
+    updateCashPrice(sale, discount);
+  };
 
   React.useEffect(() => {
     db.clientes.getAll().then(data => {
@@ -171,10 +223,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     } finally {
       setIsLoadingHistory(false);
     }
-  };
-
-  const handleValueInput = (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof ProductFormValues) => {
-    setValue(fieldName, formatAsCurrency(e.target.value), { shouldValidate: true });
   };
 
   const onSubmit = async (data: ProductFormValues) => {
@@ -294,7 +342,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Label>Estoque Atual <span className="text-rose-500 font-bold">*</span></Label>
                 <Input 
                   {...register("estoque")} 
-                  onChange={(e) => handleValueInput(e, "estoque")}
                   className="font-bold" 
                   placeholder="0,00" 
                 />
@@ -303,7 +350,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Label>Estoque Mínimo</Label>
                 <Input 
                   {...register("minimo")} 
-                  onChange={(e) => handleValueInput(e, "minimo")}
                   placeholder="0,00" 
                 />
               </div>
@@ -359,45 +405,69 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
           <TabsContent value="precos" className="space-y-6 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <h4 className="font-bold text-slate-900 flex items-center gap-2"><DollarSign size={16} /> Preço Padrão</h4>
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-6">
+                <h4 className="font-black text-slate-900 flex items-center gap-2 uppercase text-xs tracking-widest"><DollarSign size={16} className="text-indigo-600" /> Formação de Preço</h4>
+                
                 <div className="space-y-2">
-                  <Label>Valor de Venda (A Prazo) <span className="text-rose-500 font-bold">*</span></Label>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">1. Preço de Custo (R$)</Label>
                   <Input 
-                    {...register("venda")} 
-                    onChange={(e) => handleValueInput(e, "venda")}
-                    className="text-lg font-black" 
+                    value={costValue}
+                    onChange={(e) => handleCostChange(e.target.value)}
+                    className="h-12 text-lg font-bold border-2 focus:border-indigo-500" 
                     placeholder="0,00"
                   />
-                  {errors.venda && <p className="text-[10px] text-rose-500 font-bold">{errors.venda.message}</p>}
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Preço de Custo</Label>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-2">
+                    2. Margem de Lucro (%) <TrendingUp size={12} className="text-emerald-500" />
+                  </Label>
                   <Input 
-                    {...register("compra")} 
-                    onChange={(e) => handleValueInput(e, "compra")}
+                    value={marginValue}
+                    onChange={(e) => handleMarginChange(e.target.value)}
+                    className="h-12 text-lg font-black text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500" 
                     placeholder="0,00"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">3. Valor de Venda (A Prazo)</Label>
+                  <Input 
+                    value={saleValue}
+                    onChange={(e) => handleSaleChange(e.target.value)}
+                    className="h-12 text-xl font-black text-indigo-700 border-2 border-indigo-200 focus:border-indigo-600" 
+                    placeholder="0,00"
+                  />
+                  <p className="text-[9px] text-slate-400 font-bold italic">* Você pode editar qualquer campo e os outros se ajustarão.</p>
                 </div>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-4">
-                <h4 className="font-bold text-emerald-900 flex items-center gap-2"><Percent size={16} /> Configuração À Vista</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Desconto (%)</Label>
-                    <Input {...register("desconto_vista_valor")} placeholder="0" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Preço Final À Vista</Label>
-                    <Input 
-                      {...register("venda_vista")} 
-                      onChange={(e) => handleValueInput(e, "venda_vista")}
-                      className="bg-white font-black text-emerald-700" 
-                      placeholder="0,00"
-                    />
+
+              <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-6">
+                <h4 className="font-black text-emerald-900 flex items-center gap-2 uppercase text-xs tracking-widest"><Percent size={16} /> Configuração À Vista</h4>
+                
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-emerald-700">Desconto para Pagto À Vista (%)</Label>
+                  <Input 
+                    value={discountValue}
+                    onChange={(e) => handleDiscountChange(e.target.value)}
+                    className="h-12 text-lg font-bold bg-white border-emerald-200" 
+                    placeholder="0" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-emerald-700">Preço Final À Vista (R$)</Label>
+                  <div className="h-12 bg-white rounded-lg border-2 border-emerald-200 flex items-center px-4 text-xl font-black text-emerald-700 shadow-inner">
+                    R$ {watch("venda_vista")}
                   </div>
                 </div>
-                <p className="text-[10px] text-emerald-600 font-bold italic">* O preço à vista é calculado automaticamente ao informar o desconto.</p>
+                
+                <div className="p-4 bg-white/50 rounded-xl border border-emerald-100">
+                  <p className="text-[10px] text-emerald-800 font-bold leading-relaxed">
+                    O preço à vista é o valor utilizado no PDV quando não há parcelamento. 
+                    Ele é calculado subtraindo o desconto do valor de venda padrão.
+                  </p>
+                </div>
               </div>
             </div>
           </TabsContent>
@@ -411,12 +481,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               {isFracionado && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
                   <div className="space-y-2"><Label>Unidade Fracionada</Label><Input {...register("un_fracionada")} className="uppercase" placeholder="Ex: KG, MT" /></div>
-                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} onChange={(e) => handleValueInput(e, "fator_conversao")} placeholder="Ex: 0,02" /></div>
+                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} placeholder="Ex: 0,02" /></div>
                   <div className="space-y-2">
                     <Label>Preço da Fração (R$)</Label>
                     <Input 
                       {...register("venda_fracionada")} 
-                      onChange={(e) => handleValueInput(e, "venda_fracionada")}
                       className="font-black text-indigo-600" 
                       placeholder="0,00"
                     />
@@ -431,10 +500,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-4">
                 <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs"><CalendarClock size={16} /> Tabela de Preços de Locação</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} onChange={(e) => handleValueInput(e, "valor_diaria")} placeholder="0,00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} onChange={(e) => handleValueInput(e, "valor_semana")} placeholder="0,00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} onChange={(e) => handleValueInput(e, "valor_quinzena")} placeholder="0,00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} onChange={(e) => handleValueInput(e, "valor_mes")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} placeholder="0,00" /></div>
+                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} placeholder="0,00" /></div>
                 </div>
               </div>
             </TabsContent>
@@ -449,7 +518,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               {disponivelSite && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} onChange={(e) => handleValueInput(e, "preco_site")} placeholder="0,00" /></div>
+                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} placeholder="0,00" /></div>
                     <div className="space-y-2"><Label>URL da Imagem</Label><Input {...register("imagem_url")} /></div>
                   </div>
                   <div className="space-y-2"><Label>Descrição para o Site</Label><Textarea {...register("descricao_site")} className="min-h-[100px]" /></div>

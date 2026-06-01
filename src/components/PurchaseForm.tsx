@@ -88,24 +88,19 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
 
   const total = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
 
-  const formatCurrency = (value: number | string) => {
-    const val = typeof value === 'number' ? value.toFixed(2) : value;
-    const digits = val.replace(/\D/g, "");
-    const number = parseInt(digits) / 100;
-    if (isNaN(number)) return "0,00";
-    return new Intl.NumberFormat("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(number);
+  const parseCurrency = (value: string | number): number => {
+    if (typeof value === 'number') return value;
+    if (!value) return 0;
+    const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
+    return parseFloat(cleanValue) || 0;
   };
 
-  const parseCurrency = (value: string) => {
-    return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
+  const formatCurrency = (value: number): string => {
+    return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Agora o addItem apenas sinaliza que queremos um novo item e abre a busca
   const addItem = () => {
-    setActiveItemIndex(items.length); // Indica que é um novo item (fim da lista)
+    setActiveItemIndex(items.length);
     setIsSearchOpen(true);
   };
 
@@ -118,15 +113,17 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     const item = { ...newItems[index] };
 
     if (field === 'valor_unit' || field === 'valor_venda') {
-      const numValue = typeof value === 'string' ? parseCurrency(value) : value;
+      const numValue = parseCurrency(value);
       (item as any)[field] = numValue;
       if (item.valor_unit > 0) {
         item.margem = ((item.valor_venda / item.valor_unit) - 1) * 100;
       }
     } else if (field === 'margem') {
-      const numValue = parseFloat(value) || 0;
+      const numValue = parseCurrency(value);
       item.margem = numValue;
       item.valor_venda = item.valor_unit * (1 + item.margem / 100);
+    } else if (field === 'qtde') {
+      item.qtde = parseCurrency(value);
     } else {
       (item as any)[field] = value;
     }
@@ -157,10 +154,8 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       if (isNew) {
         newItems.push(itemData);
       } else {
-        // Se estava vinculando um item de XML, preserva o código original do fornecedor se houver
         const original = newItems[activeItemIndex];
         newItems[activeItemIndex] = { ...original, ...itemData };
-        
         if (original.codigo_fornecedor && supplierId) {
           db.mappings.save(supplierId, original.codigo_fornecedor, product.cd_produto);
         }
@@ -373,37 +368,37 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                   <TableCell>
                     <Input 
                       type="text" 
-                      value={item.qtde} 
-                      onChange={(e) => updateItem(index, 'qtde', Number(e.target.value))}
+                      defaultValue={item.qtde.toString().replace('.', ',')} 
+                      onBlur={(e) => updateItem(index, 'qtde', e.target.value)}
                       className="h-8 text-center text-xs font-bold"
                     />
                   </TableCell>
                   <TableCell>
                     <Input 
                       type="text" 
-                      value={formatCurrency(item.valor_unit)} 
-                      onChange={(e) => updateItem(index, 'valor_unit', e.target.value)}
+                      defaultValue={formatCurrency(item.valor_unit)} 
+                      onBlur={(e) => updateItem(index, 'valor_unit', e.target.value)}
                       className="h-8 text-right text-xs font-bold"
                     />
                   </TableCell>
                   <TableCell>
                     <Input 
                       type="text" 
-                      value={item.margem.toFixed(1)} 
-                      onChange={(e) => updateItem(index, 'margem', e.target.value)}
+                      defaultValue={item.margem.toFixed(1).replace('.', ',')} 
+                      onBlur={(e) => updateItem(index, 'margem', e.target.value)}
                       className="h-8 text-center text-xs font-bold text-indigo-600"
                     />
                   </TableCell>
                   <TableCell>
                     <Input 
                       type="text" 
-                      value={formatCurrency(item.valor_venda)} 
-                      onChange={(e) => updateItem(index, 'valor_venda', e.target.value)}
+                      defaultValue={formatCurrency(item.valor_venda)} 
+                      onBlur={(e) => updateItem(index, 'valor_venda', e.target.value)}
                       className="h-8 text-right text-xs font-bold text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500"
                     />
                   </TableCell>
                   <TableCell className="text-right font-bold text-slate-900">
-                    R$ {item.subtotal.toFixed(2)}
+                    R$ {formatCurrency(item.subtotal)}
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeItem(index)}>
@@ -436,7 +431,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
               nome_fornecedor: suppliers.find(s => s.cd_clientes === supplierId)?.nome,
               total: total,
               status: 'Rascunho',
-              itens: items
+              items: items
             });
             showSuccess("Rascunho salvo!");
             onSuccess();
