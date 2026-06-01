@@ -7,9 +7,10 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRightLeft } from 'lucide-react';
+import { ArrowRightLeft, Loader2 } from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
+import { ContaBancaria } from '@/types/database';
 
 const transferSchema = z.object({
   cd_conta_origem: z.string().min(1, "Selecione a origem"),
@@ -21,7 +22,15 @@ const transferSchema = z.object({
 type TransferFormValues = z.infer<typeof transferSchema>;
 
 const TransferForm = ({ onSuccess }: { onSuccess: () => void }) => {
-  const contas = db.contas.getAll() || [];
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    db.contas.getAll().then(data => {
+      setContas(data);
+      setIsLoading(false);
+    });
+  }, []);
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
@@ -40,7 +49,7 @@ const TransferForm = ({ onSuccess }: { onSuccess: () => void }) => {
     }).format(number);
   };
 
-  const onSubmit = (data: TransferFormValues) => {
+  const onSubmit = async (data: TransferFormValues) => {
     try {
       const valorNum = parseFloat(data.valor.replace(/\./g, "").replace(",", "."));
       if (valorNum <= 0) throw new Error("Valor deve ser maior que zero");
@@ -51,7 +60,7 @@ const TransferForm = ({ onSuccess }: { onSuccess: () => void }) => {
         if (!confirm("Saldo insuficiente na conta de origem. Deseja continuar mesmo assim?")) return;
       }
 
-      db.financeiro.transferir({
+      await db.financeiro.transferir({
         data: new Date().toISOString(),
         valor: valorNum,
         cd_conta_origem: Number(data.cd_conta_origem),
@@ -65,6 +74,10 @@ const TransferForm = ({ onSuccess }: { onSuccess: () => void }) => {
       showError(err.message);
     }
   };
+
+  if (isLoading) {
+    return <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-slate-300" /></div>;
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-4">

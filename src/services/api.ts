@@ -56,7 +56,6 @@ export const db = {
         const step = 1000;
         let hasMore = true;
 
-        // Loop para buscar todos os produtos, superando o limite de 1000 do Supabase
         while (hasMore) {
           const { data, error } = await supabase
             .from('produtos')
@@ -244,11 +243,20 @@ export const db = {
       
       if (cOrigem) await supabase.from('contas').update({ saldo: Number(cOrigem.saldo) - Number(t.valor) }).eq('cd_conta', t.cd_conta_origem);
       if (cDestino) await supabase.from('contas').update({ saldo: Number(cDestino.saldo) + Number(t.valor) }).eq('cd_conta', t.cd_conta_destino);
+    },
+    changeAccount: async (lancamentoId: number, newAccountId: number) => {
+      const { error } = await supabase.from('financeiro').update({ cd_conta: newAccountId }).eq('cd_lancamento', lancamentoId);
+      if (error) throw error;
     }
   },
   vendas: {
     getAll: async (): Promise<Venda[]> => {
       const { data, error } = await supabase.from('vendas').select('*').order('data', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    getByCliente: async (id: number): Promise<Venda[]> => {
+      const { data, error } = await supabase.from('vendas').select('*').eq('cd_clientes', id).order('data', { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -335,6 +343,18 @@ export const db = {
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('patrimonio').delete().eq('cd_patrimonio', id);
+      if (error) throw error;
+    }
+  },
+  mappings: {
+    save: async (cd_fornecedor: number, codigo_externo: string, cd_produto_interno: number) => {
+      const { error } = await supabase
+        .from('fornecedor_produto_map')
+        .upsert({ 
+          cd_fornecedor, 
+          codigo_externo, 
+          cd_produto_interno 
+        }, { onConflict: 'cd_fornecedor,codigo_externo' });
       if (error) throw error;
     }
   }

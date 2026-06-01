@@ -16,7 +16,8 @@ import {
   CreditCard,
   Banknote,
   FileText,
-  Wallet
+  Wallet,
+  Loader2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,7 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { cn } from '@/lib/utils';
-import { Compra, CompraItem, MeioPagamento } from '@/types/database';
+import { Compra, CompraItem, MeioPagamento, Cliente, Produto } from '@/types/database';
 import { ScrollArea } from './ui/scroll-area';
 
 interface PurchaseFormProps {
@@ -58,15 +59,32 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const [isNewProductOpen, setIsNewProductOpen] = React.useState(false);
   const [activeItemIndex, setActiveItemIndex] = React.useState<number | null>(null);
   
-  // Estado para carregar dados do XML no formulário de novo produto
-  const [preFillData, setPreFillData] = React.useState<any>(null);
+  const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
+  const [products, setProducts] = React.useState<Produto[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
   
+  const [preFillData, setPreFillData] = React.useState<any>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState<MeioPagamento>('Boleto');
   const [numInstallments, setNumInstallments] = React.useState(1);
   const [installments, setInstallments] = React.useState<any[]>([]);
 
-  const suppliers = db.clientes.getAll().filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A');
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [sData, pData] = await Promise.all([
+          db.clientes.getAll(),
+          db.produtos.getAll()
+        ]);
+        setSuppliers(sData.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A'));
+        setProducts(pData);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
   const total = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
 
   const formatCurrency = (value: number | string) => {
@@ -136,8 +154,9 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     setIsSearchOpen(false);
   };
 
-  const handleNewProductSuccess = () => {
-    const allProducts = db.produtos.getAll();
+  const handleNewProductSuccess = async () => {
+    const allProducts = await db.produtos.getAll();
+    setProducts(allProducts);
     const lastProduct = allProducts[allProducts.length - 1];
     if (lastProduct) {
       handleProductSelect(lastProduct);
@@ -149,7 +168,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const handleOpenNewProduct = (index: number) => {
     const item = items[index];
     setActiveItemIndex(index);
-    // Prepara os dados do XML para o formulário
     setPreFillData({
       nome: item.nome_fornecedor?.toUpperCase(),
       un: item.un?.toUpperCase(),
@@ -184,7 +202,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     if (isCheckoutOpen) generateInstallments();
   }, [isCheckoutOpen, numInstallments, total]);
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     if (!supplierId) { showError("Selecione um fornecedor."); return; }
     if (items.length === 0) { showError("Adicione pelo menos um item."); return; }
     if (items.some(i => !i.cd_produto)) { showError("Existem itens não vinculados ao estoque."); return; }
@@ -201,12 +219,12 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       itens: items
     };
 
-    db.compras.save(compra);
+    await db.compras.save(compra);
 
-    installments.forEach((inst, idx) => {
-      db.financeiro.add({
+    for (const inst of installments) {
+      await db.financeiro.add({
         tipo: 'P',
-        descricao: `Compra NF ${nf || 'S/N'} (${idx + 1}/${installments.length})`,
+        descricao: `Compra NF ${nf || 'S/N'}`,
         valor: inst.valor,
         data_vencimento: inst.vencimento,
         status: 'Pendente',
@@ -217,11 +235,20 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         num_documento: inst.documento,
         cd_compra: compra.cd_compra
       });
-    });
+    }
 
     showSuccess("Compra confirmada e estoque atualizado!");
     onSuccess();
   };
+
+  if (isLoading) {
+    return (
+      <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
+        <Loader2 className="animate-spin" size={40} />
+        <p className="font-bold">Carregando dados do formulário...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -272,7 +299,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
           </TableHeader>
           <TableBody>
             {items.map((item, index) => {
-              const product = db.produtos.getAll().find(p => p.cd_produto === item.cd_produto);
+              const product = products.find(p => p.cd_produto === item.cd_produto);
               return (
                 <TableRow key={index} className={cn(!item.cd_produto && "bg-rose-50/50")}>
                   <TableCell className="text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
@@ -362,8 +389,8 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button 
           variant="outline" 
-          onClick={() => {
-            db.compras.save({
+          onClick={async () => {
+            await db.compras.save({
               cd_compra: initialData?.cd_compra || Date.now(),
               data: new Date().toISOString(),
               nota_fiscal: nf,
