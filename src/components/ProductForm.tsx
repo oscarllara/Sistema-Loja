@@ -22,7 +22,8 @@ import {
   Box,
   Layers,
   ArrowDownRight,
-  Info
+  Info,
+  Calendar
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,6 +122,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       venda: formatMoney(product.venda ? (product.venda * 100).toFixed(0) : "0"),
       venda_vista: formatMoney(product.venda_vista ? (product.venda_vista * 100).toFixed(0) : "0"),
       venda_fracionada: formatMoney(product.venda_fracionada ? (product.venda_fracionada * 100).toFixed(0) : "0"),
+      valor_diaria: formatMoney(product.valor_diaria ? (product.valor_diaria * 100).toFixed(0) : "0"),
+      valor_semana: formatMoney(product.valor_semana ? (product.valor_semana * 100).toFixed(0) : "0"),
+      valor_quinzena: formatMoney(product.valor_quinzena ? (product.valor_quinzena * 100).toFixed(0) : "0"),
+      valor_mes: formatMoney(product.valor_mes ? (product.valor_mes * 100).toFixed(0) : "0"),
       margem_lucro: calculateMargin(product.compra || 0, product.venda || 0).toFixed(2).replace('.', ','),
       estoque: product.estoque?.toString().replace('.', ','),
       minimo: product.minimo?.toString().replace('.', ','),
@@ -136,7 +141,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       minimo: "0",
       fator_conversao: "1,0000",
       fracionado: false,
-      venda_fracionada: "0,00"
+      venda_fracionada: "0,00",
+      valor_diaria: "0,00",
+      valor_semana: "0,00",
+      valor_quinzena: "0,00",
+      valor_mes: "0,00"
     }
   });
 
@@ -148,7 +157,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const fatorConversao = watch("fator_conversao");
   const isFracionado = watch("fracionado");
 
-  // Lógica de cálculo automático do preço fracionado (Preço Saco * Fator)
   React.useEffect(() => {
     if (isFracionado) {
       const precoSaco = parseToNumber(saleValue);
@@ -295,8 +303,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className="flex w-full bg-slate-100 p-1 rounded-xl h-auto overflow-x-auto">
           <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
-          {!isLocacao && <TabsTrigger value="estoque" className="flex-1">Estoque</TabsTrigger>}
-          {!isLocacao && <TabsTrigger value="precos" className="flex-1">Preços</TabsTrigger>}
+          <TabsTrigger value="estoque" className="flex-1">Estoque</TabsTrigger>
+          {isLocacao ? (
+            <TabsTrigger value="locacao" className="flex-1 gap-2"><Calendar size={14} /> Valores Locação</TabsTrigger>
+          ) : (
+            <TabsTrigger value="precos" className="flex-1">Preços</TabsTrigger>
+          )}
           <TabsTrigger value="site" className="flex-1 gap-1"><Globe size={14} /> Site</TabsTrigger>
         </TabsList>
 
@@ -357,7 +369,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* SEÇÃO DE EMBALAGEM / ARREDONDAMENTO */}
               <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                 <h4 className="text-xs font-black text-blue-900 flex items-center gap-2 uppercase tracking-wider">
                   <Box size={16} className="text-blue-600" /> Embalagem / Arredondamento
@@ -371,7 +382,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 </div>
               </div>
 
-              {/* SEÇÃO DE VENDA FRACIONADA */}
               <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-4">
                 <div className="flex items-center space-x-2 mb-2">
                   <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
@@ -461,6 +471,30 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-emerald-700">Preço Final À Vista (R$)</Label>
                   <Input value={watch("venda_vista")} onChange={(e) => handleCashPriceChange(e.target.value)} className="h-12 text-xl font-black text-emerald-700 border-2 border-emerald-100 focus:border-emerald-600 bg-white" placeholder="0,00" />
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="locacao" className="space-y-6 m-0">
+            <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-6">
+              <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs tracking-widest"><CalendarClock size={16} /> Tabela de Preços de Locação</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-indigo-700">Valor Diária (R$)</Label>
+                  <Input {...register("valor_diaria")} onChange={(e) => setValue("valor_diaria", formatMoney(e.target.value))} className="h-12 text-lg font-black bg-white border-indigo-200" placeholder="0,00" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-indigo-700">Valor Semanal (R$)</Label>
+                  <Input {...register("valor_semana")} onChange={(e) => setValue("valor_semana", formatMoney(e.target.value))} className="h-12 text-lg font-black bg-white border-indigo-200" placeholder="0,00" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-indigo-700">Valor Quinzenal (R$)</Label>
+                  <Input {...register("valor_quinzena")} onChange={(e) => setValue("valor_quinzena", formatMoney(e.target.value))} className="h-12 text-lg font-black bg-white border-indigo-200" placeholder="0,00" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-indigo-700">Valor Mensal (R$)</Label>
+                  <Input {...register("valor_mes")} onChange={(e) => setValue("valor_mes", formatMoney(e.target.value))} className="h-12 text-lg font-black bg-white border-indigo-200" placeholder="0,00" />
                 </div>
               </div>
             </div>
