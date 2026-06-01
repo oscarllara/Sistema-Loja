@@ -17,7 +17,8 @@ import {
   Banknote,
   FileText,
   Wallet,
-  Loader2
+  Loader2,
+  PlusCircle
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,6 +101,19 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
 
   const parseCurrency = (value: string) => {
     return parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
+  };
+
+  const addItem = () => {
+    setItems([...items, {
+      cd_produto: 0,
+      nome_fornecedor: "",
+      un: "UN",
+      qtde: 1,
+      valor_unit: 0,
+      subtotal: 0,
+      margem: 40,
+      valor_venda: 0
+    }]);
   };
 
   const removeItem = (index: number) => {
@@ -283,6 +297,17 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
         </div>
       </div>
 
+      <div className="flex justify-between items-center">
+        <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Itens da Operação</h3>
+        <Button 
+          onClick={addItem} 
+          variant="outline" 
+          className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold h-9"
+        >
+          <PlusCircle size={18} /> Adicionar Produto
+        </Button>
+      </div>
+
       <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader className="bg-slate-50">
@@ -382,6 +407,13 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
                 </TableRow>
               );
             })}
+            {items.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">
+                  Nenhum produto adicionado. Clique em "Adicionar Produto" para começar.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
