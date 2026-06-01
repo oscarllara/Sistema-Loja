@@ -178,7 +178,6 @@ const POS = () => {
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [adminPassword, setAdminPassword] = React.useState("");
 
-  // Estados para Liberação de Supervisor
   const [isSupervisorModalOpen, setIsSupervisorModalOpen] = React.useState(false);
   const [supervisorPassword, setSupervisorPassword] = React.useState("");
   const [pendingCheckoutData, setPendingCheckoutData] = React.useState<any>(null);
@@ -237,9 +236,18 @@ const POS = () => {
     }
 
     if (!pendingProduct) return;
-    const qty = parseBRNumber(inputQty);
-    const price = getProductPrice(pendingProduct, inputUnit, priceMode);
+    let qty = parseBRNumber(inputQty);
     
+    // Lógica de Arredondamento por Embalagem
+    if (pendingProduct.fator_conversao > 0) {
+      const originalQty = qty;
+      qty = Math.ceil(qty / pendingProduct.fator_conversao) * pendingProduct.fator_conversao;
+      if (qty !== originalQty) {
+        showSuccess(`Quantidade arredondada para embalagem de ${pendingProduct.fator_conversao} ${pendingProduct.un}`);
+      }
+    }
+
+    const price = getProductPrice(pendingProduct, inputUnit, priceMode);
     const margin = pendingProduct.compra > 0 ? ((pendingProduct.venda / pendingProduct.compra) - 1) * 100 : 40;
 
     setCart(prev => [...prev, { 
@@ -273,7 +281,6 @@ const POS = () => {
     if (pendingProduct) { commitToCart(); return; }
     
     const paddedVal = inputCode.padStart(5, '0');
-    
     const product = products.find(p => 
       p.id_manual === inputCode || 
       p.id_manual === paddedVal || 
@@ -305,6 +312,8 @@ const POS = () => {
       if (item.finalPrice > 0) {
         item.margin = ((item.salePrice / item.finalPrice) - 1) * 100;
       }
+    } else if (field === 'quantity') {
+      item.quantity = numValue;
     }
     
     newCart[idx] = item;
@@ -470,7 +479,6 @@ const POS = () => {
 
       await db.vendas.add(payload);
 
-      // REGISTRO FINANCEIRO AUTOMÁTICO PARA VENDAS À VISTA
       if (payload.tipo_venda === 'Vista') {
         const caixaLoja = contas.find(c => c.tipo === 'Caixa') || contas[0];
         if (caixaLoja) {
@@ -490,7 +498,6 @@ const POS = () => {
                 cd_conta: caixaLoja.cd_conta
               };
               await db.financeiro.add(lanc);
-              // Atualiza saldo da conta
               await db.contas.update(caixaLoja.cd_conta, { saldo: Number(caixaLoja.saldo) + Number(p.amount) });
             }
           }
@@ -500,11 +507,7 @@ const POS = () => {
       for (const item of cart) {
         const prod = products.find(p => p.cd_produto === item.cd_produto);
         if (prod) {
-          let qtyToDeduct = item.quantity;
-          if (item.isFractional && item.conversionFactor > 0) {
-            qtyToDeduct = item.quantity / item.conversionFactor;
-          }
-          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - qtyToDeduct }).catch(() => {});
+          db.produtos.update(prod.cd_produto, { estoque: prod.estoque - item.quantity }).catch(() => {});
         }
       }
       setLastActionData({ ...payload, type: 'Venda' });
@@ -554,7 +557,6 @@ const POS = () => {
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
-      {/* Sidebar Operacional */}
       <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0 shadow-2xl z-20">
         <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center bg-slate-50">
           {config?.logo_url ? (
@@ -592,26 +594,20 @@ const POS = () => {
           <div className="space-y-6">
             <div className="space-y-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Ações Principais</h3>
-              <Button 
-                className={cn("w-full h-16 text-white font-black text-lg gap-3 shadow-xl rounded-2xl transition-transform active:scale-95", theme.bg, theme.hover)} 
-                onClick={() => handleShortcut('F10')}
-              >
+              <Button className={cn("w-full h-16 text-white font-black text-lg gap-3 shadow-xl rounded-2xl transition-transform active:scale-95", theme.bg, theme.hover)} onClick={() => handleShortcut('F10')}>
                 <CheckCircle size={24} /> {mode === 'COMPRA' ? 'CONCLUIR' : 'FINALIZAR'}
                 <span className="text-[10px] opacity-50 ml-auto">F10</span>
               </Button>
-              
               {mode === 'COMPRA' && (
                 <Button variant="outline" className="w-full h-11 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-black text-xs uppercase" onClick={generateAutoQuote}>
                   <RefreshCw size={16} /> Gerar por Estoque Mínimo
                 </Button>
               )}
-
               <Button variant="outline" className="w-full h-11 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-black text-xs uppercase" onClick={handleSaveQuote}>
                 <Save size={16} /> {mode === 'COMPRA' ? 'Salvar Cotação' : 'Salvar Orçamento'}
                 <span className="text-[10px] opacity-50 ml-auto">F9</span>
               </Button>
             </div>
-
             <div className="space-y-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
               <div className="grid grid-cols-1 gap-2">
@@ -620,10 +616,7 @@ const POS = () => {
                 <ShortcutItem keyName="F8" label={mode === 'COMPRA' ? 'Cotações' : 'Orçamentos'} onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} color="amber" />
               </div>
             </div>
-
-            <div className="pt-4">
-              <SyncStatus />
-            </div>
+            <div className="pt-4"><SyncStatus /></div>
           </div>
         </ScrollArea>
 
@@ -634,7 +627,6 @@ const POS = () => {
         </div>
       </aside>
 
-      {/* Área Principal do PDV */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b shadow-lg z-10", theme.header, theme.border)}>
           <div className="flex items-center gap-8">
@@ -646,11 +638,7 @@ const POS = () => {
             <div className="space-y-1">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
               <div className="flex items-center gap-2">
-                <select 
-                  className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[200px] cursor-pointer hover:text-primary transition-colors" 
-                  value={selectedEntityId} 
-                  onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}
-                >
+                <select className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[200px] cursor-pointer hover:text-primary transition-colors" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
                   <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
                   {(mode === 'COMPRA' ? clients.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A') : clients).map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
                 </select>
@@ -667,7 +655,6 @@ const POS = () => {
           </div>
         </header>
 
-        {/* Lista de Itens (Estilo Papel/Terminal) */}
         <div className="flex-1 bg-[#FFFFF0] overflow-hidden flex flex-col shadow-inner">
           <div className="flex-1 overflow-auto">
             <Table className="border-collapse">
@@ -677,7 +664,6 @@ const POS = () => {
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 px-6">DESCRIÇÃO DO PRODUTO</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-20">UN</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">QTDE</TableHead>
-                  
                   {mode === 'COMPRA' ? (
                     <>
                       <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-32">CUSTO UNIT.</TableHead>
@@ -687,64 +673,33 @@ const POS = () => {
                   ) : (
                     <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">VALOR UNIT.</TableHead>
                   )}
-                  
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">SUB TOTAL</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 text-center w-16">#</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {cart.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="h-[400px] text-center">
-                      <div className="flex flex-col items-center justify-center text-slate-300 gap-4">
-                        <ShoppingBag size={80} className="opacity-10" />
-                        <p className="text-xl font-black uppercase tracking-widest opacity-20">Carrinho Vazio</p>
-                        <p className="text-xs font-bold opacity-30">Bipe um produto ou pressione F1 para pesquisar</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={10} className="h-[400px] text-center"><div className="flex flex-col items-center justify-center text-slate-300 gap-4"><ShoppingBag size={80} className="opacity-10" /><p className="text-xl font-black uppercase tracking-widest opacity-20">Carrinho Vazio</p><p className="text-xs font-bold opacity-30">Bipe um produto ou pressione F1 para pesquisar</p></div></TableCell></TableRow>
                 ) : (
                   cart.map((item, idx) => (
                     <TableRow key={idx} className="h-12 border-b border-slate-200 hover:bg-indigo-50/50 transition-colors group">
                       <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
                       <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">{item?.nome}</TableCell>
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
-                      <TableCell className="py-0 text-sm text-center border-r border-slate-100 font-black w-24 text-slate-900">{Number(item?.quantity || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</TableCell>
-                      
+                      <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
+                        <input className="w-full bg-transparent text-center text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={item.quantity.toString().replace('.', ',')} onChange={(e) => updateCartItem(idx, 'quantity', e.target.value)} />
+                      </TableCell>
                       {mode === 'COMPRA' ? (
                         <>
-                          <TableCell className="py-0 border-r border-slate-100 w-32 px-4">
-                            <input 
-                              className="w-full bg-transparent text-right text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
-                              value={item.finalPrice.toFixed(2).replace('.', ',')}
-                              onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
-                            />
-                          </TableCell>
-                          <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
-                            <input 
-                              className="w-full bg-transparent text-center text-sm font-black text-indigo-600 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
-                              value={item.margin.toFixed(1).replace('.', ',')}
-                              onChange={(e) => updateCartItem(idx, 'margin', e.target.value)}
-                            />
-                          </TableCell>
-                          <TableCell className="py-0 border-r border-slate-100 w-32 px-4">
-                            <input 
-                              className="w-full bg-transparent text-right text-sm font-black text-emerald-700 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
-                              value={item.salePrice.toFixed(2).replace('.', ',')}
-                              onChange={(e) => updateCartItem(idx, 'salePrice', e.target.value)}
-                            />
-                          </TableCell>
+                          <TableCell className="py-0 border-r border-slate-100 w-32 px-4"><input className="w-full bg-transparent text-right text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={item.finalPrice.toFixed(2).replace('.', ',')} onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)} /></TableCell>
+                          <TableCell className="py-0 border-r border-slate-100 w-24 px-4"><input className="w-full bg-transparent text-center text-sm font-black text-indigo-600 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={item.margin.toFixed(1).replace('.', ',')} onChange={(e) => updateCartItem(idx, 'margin', e.target.value)} /></TableCell>
+                          <TableCell className="py-0 border-r border-slate-100 w-32 px-4"><input className="w-full bg-transparent text-right text-sm font-black text-emerald-700 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={item.salePrice.toFixed(2).replace('.', ',')} onChange={(e) => updateCartItem(idx, 'salePrice', e.target.value)} /></TableCell>
                         </>
                       ) : (
                         <TableCell className="py-0 text-sm text-right border-r border-slate-100 w-36 px-6 font-bold text-slate-600">{formatCurrency(item?.finalPrice)}</TableCell>
                       )}
-                      
                       <TableCell className="py-0 text-base text-right font-black border-r border-slate-100 w-36 px-6 text-slate-900">{formatCurrency((item?.finalPrice || 0) * (item?.quantity || 0))}</TableCell>
-                      <TableCell className="py-0 text-center w-16">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full opacity-0 group-hover:opacity-100 transition-all" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}>
-                          <Trash2 size={16} />
-                        </Button>
-                      </TableCell>
+                      <TableCell className="py-0 text-center w-16"><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full opacity-0 group-hover:opacity-100 transition-all" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={16} /></Button></TableCell>
                     </TableRow>
                   ))
                 )}
@@ -753,119 +708,52 @@ const POS = () => {
           </div>
         </div>
 
-        {/* Barra de Entrada de Dados (Footer) */}
         <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10">
           <form onSubmit={handleCodeSubmit} className="flex items-end gap-4 h-full max-w-7xl mx-auto">
             <div className="flex-1 space-y-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Zap size={12} className="text-amber-500" /> Entrada de Produto (F1 - Pesquisar)
-              </label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} className="text-amber-500" /> Entrada de Produto (F1 - Pesquisar)</label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <Input 
-                  ref={codeRef} 
-                  value={inputCode} 
-                  onChange={(e) => handleCodeChange(e.target.value)} 
-                  className={cn(
-                    "h-12 border-none text-xl font-black pl-12 transition-all shadow-inner",
-                    pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20"
-                  )} 
-                  placeholder="Bipe o código ou digite o nome..." 
-                />
+                <Input ref={codeRef} value={inputCode} onChange={(e) => handleCodeChange(e.target.value)} className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")} placeholder="Bipe o código ou digite o nome..." />
               </div>
             </div>
             <div className="w-24 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Qtde</label>
-              <Input 
-                ref={qtyRef} 
-                value={inputQty} 
-                onChange={(e) => setInputQty(e.target.value)} 
-                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} 
-                className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" 
-              />
+              <Input ref={qtyRef} value={inputQty} onChange={(e) => setInputQty(e.target.value)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab') && pendingProduct) commitToCart(); }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
             </div>
             <div className="w-28 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Unidade</label>
-              <div className="w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase bg-slate-800 text-indigo-300 border border-slate-700 shadow-inner">
-                {inputUnit || "UN"}
-              </div>
+              <div className="w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase bg-slate-800 text-indigo-300 border border-slate-700 shadow-inner">{inputUnit || "UN"}</div>
             </div>
             <div className="w-40 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Valor Unitário</label>
-              <div className="h-12 bg-slate-800 rounded-xl flex items-center justify-end px-4 font-black text-white text-lg border border-slate-700 shadow-inner">
-                <span className="text-xs opacity-30 mr-2">R$</span>
-                {pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}
-              </div>
+              <div className="h-12 bg-slate-800 rounded-xl flex items-center justify-end px-4 font-black text-white text-lg border border-slate-700 shadow-inner"><span className="text-xs opacity-30 mr-2">R$</span>{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode)) : "0,00"}</div>
             </div>
             <div className="w-48 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Sub Total</label>
-              <div className="h-12 bg-primary rounded-xl flex items-center justify-end px-4 font-black text-white text-xl shadow-lg shadow-primary/20">
-                <span className="text-xs opacity-50 mr-2">R$</span>
-                {pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseBRNumber(inputQty) || 1)) : "0,00"}
-              </div>
+              <div className="h-12 bg-primary rounded-xl flex items-center justify-end px-4 font-black text-white text-xl shadow-lg shadow-primary/20"><span className="text-xs opacity-50 mr-2">R$</span>{pendingProduct ? formatCurrency(getProductPrice(pendingProduct, inputUnit, priceMode) * (parseBRNumber(inputQty) || 1)) : "0,00"}</div>
             </div>
           </form>
         </footer>
       </main>
 
-      {/* Modais */}
       <Dialog open={isSupervisorModalOpen} onOpenChange={setIsSupervisorModalOpen}>
         <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
           <DialogHeader className="flex flex-col items-center text-center space-y-3">
-            <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-2 shadow-inner">
-              <ShieldAlert size={40} />
-            </div>
+            <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><ShieldAlert size={40} /></div>
             <DialogTitle className="text-2xl font-black text-rose-600 uppercase tracking-tighter">Venda Bloqueada</DialogTitle>
             <p className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">{blockReason}</p>
           </DialogHeader>
-          
           <form onSubmit={handleSupervisorRelease} className="space-y-5 py-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Supervisor</Label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <Input 
-                  type="password" 
-                  autoFocus 
-                  value={supervisorPassword} 
-                  onChange={(e) => setSupervisorPassword(e.target.value)} 
-                  className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner"
-                  placeholder="••••••"
-                />
-              </div>
-            </div>
-            <DialogFooter className="gap-3">
-              <Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsSupervisorModalOpen(false)}>CANCELAR</Button>
-              <Button type="submit" className="flex-1 h-14 bg-primary hover:bg-primary/90 rounded-2xl font-black text-lg shadow-xl shadow-primary/20">LIBERAR AGORA</Button>
-            </DialogFooter>
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Supervisor</Label><div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><Input type="password" autoFocus value={supervisorPassword} onChange={(e) => setSupervisorPassword(e.target.value)} className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner" placeholder="••••••" /></div></div>
+            <DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsSupervisorModalOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-14 bg-primary hover:bg-primary/90 rounded-2xl font-black text-lg shadow-xl shadow-primary/20">LIBERAR AGORA</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} />
-      
-      <QuotesModal 
-        isOpen={isQuotesOpen} 
-        onClose={() => setIsQuotesOpen(false)} 
-        onLoadQuote={(q) => { 
-          if (mode === 'COMPRA') {
-            setCart(q.itens.map(i => ({ 
-              ...i, 
-              nome: i.nome_fornecedor, 
-              finalPrice: i.valor_unit, 
-              quantity: i.qtde, 
-              selectedUnit: i.un,
-              margin: i.margem || 40,
-              salePrice: i.valor_venda || (i.valor_unit * 1.4)
-            })));
-          } else {
-            setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); 
-          }
-          setIsQuotesOpen(false); 
-        }} 
-      />
-
+      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { if (mode === 'COMPRA') { setCart(q.itens.map(i => ({ ...i, nome: i.nome_fornecedor, finalPrice: i.valor_unit, quantity: i.qtde, selectedUnit: i.un, margin: i.margem || 40, salePrice: i.valor_venda || (i.valor_unit * 1.4) }))); } else { setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); } setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
@@ -876,30 +764,8 @@ const POS = () => {
 };
 
 const ShortcutItem = ({ keyName, label, onClick, icon, color = "indigo" }: { keyName: string, label: string, onClick: () => void, icon?: React.ReactNode, color?: string }) => (
-  <Button 
-    variant="outline" 
-    className={cn(
-      "w-full h-12 justify-between gap-3 border-slate-200 hover:bg-slate-50 rounded-2xl font-black text-[11px] group transition-all active:scale-95 shadow-sm",
-      color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50",
-      color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50",
-      color === 'indigo' && "border-indigo-100 text-indigo-700 hover:bg-indigo-50",
-      color === 'amber' && "border-amber-100 text-amber-700 hover:bg-amber-50"
-    )} 
-    onClick={onClick}
-  >
-    <div className="flex items-center gap-3">
-      <div className={cn(
-        "p-2 rounded-xl bg-slate-100 group-hover:bg-white transition-colors shadow-inner",
-        color === 'rose' && "bg-rose-50 text-rose-600",
-        color === 'emerald' && "bg-emerald-50 text-emerald-600",
-        color === 'indigo' && "bg-indigo-50 text-indigo-600",
-        color === 'amber' && "bg-amber-50 text-amber-600"
-      )}>
-        {icon}
-      </div>
-      <span className="uppercase tracking-wider">{label}</span>
-    </div>
-    <span className="bg-slate-100 px-2 py-1 rounded-lg text-[10px] font-black text-slate-500 border border-slate-200 shadow-sm">{keyName}</span>
+  <Button variant="outline" className={cn("w-full h-12 justify-between gap-3 border-slate-200 hover:bg-slate-50 rounded-2xl font-black text-[11px] group transition-all active:scale-95 shadow-sm", color === 'rose' && "border-rose-100 text-rose-700 hover:bg-rose-50", color === 'emerald' && "border-emerald-100 text-emerald-700 hover:bg-emerald-50", color === 'indigo' && "border-indigo-100 text-indigo-700 hover:bg-indigo-50", color === 'amber' && "border-amber-100 text-amber-700 hover:bg-amber-50")} onClick={onClick}>
+    <div className="flex items-center gap-3"><div className={cn("p-2 rounded-xl bg-slate-100 group-hover:bg-white transition-colors shadow-inner", color === 'rose' && "bg-rose-50 text-rose-600", color === 'emerald' && "bg-emerald-50 text-emerald-600", color === 'indigo' && "bg-indigo-50 text-indigo-600", color === 'amber' && "bg-amber-50 text-amber-600")}>{icon}</div><span className="uppercase tracking-wider">{label}</span></div><span className="bg-slate-100 px-2 py-1 rounded-lg text-[10px] font-black text-slate-500 border border-slate-200 shadow-sm">{keyName}</span>
   </Button>
 );
 

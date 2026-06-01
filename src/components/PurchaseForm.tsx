@@ -123,7 +123,12 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       item.margem = numValue;
       item.valor_venda = item.valor_unit * (1 + item.margem / 100);
     } else if (field === 'qtde') {
-      item.qtde = parseCurrency(value);
+      let qty = parseCurrency(value);
+      const product = products.find(p => p.cd_produto === item.cd_produto);
+      if (product?.fator_conversao > 0) {
+        qty = Math.ceil(qty / product.fator_conversao) * product.fator_conversao;
+      }
+      item.qtde = qty;
     } else {
       (item as any)[field] = value;
     }
@@ -137,7 +142,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     if (activeItemIndex !== null) {
       const newItems = [...items];
       const isNew = activeItemIndex === items.length;
-      
       const margin = product.compra > 0 ? ((product.venda / product.compra) - 1) * 100 : 40;
       
       const itemData = {
@@ -156,9 +160,6 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
       } else {
         const original = newItems[activeItemIndex];
         newItems[activeItemIndex] = { ...original, ...itemData };
-        if (original.codigo_fornecedor && supplierId) {
-          db.mappings.save(supplierId, original.codigo_fornecedor, product.cd_produto);
-        }
       }
 
       setItems(newItems);
@@ -171,9 +172,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     const allProducts = await db.produtos.getAll();
     setProducts(allProducts);
     const lastProduct = allProducts[allProducts.length - 1];
-    if (lastProduct) {
-      handleProductSelect(lastProduct);
-    }
+    if (lastProduct) handleProductSelect(lastProduct);
     setIsNewProductOpen(false);
     setPreFillData(null);
   };
@@ -181,13 +180,7 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
   const handleOpenNewProduct = (index: number) => {
     const item = items[index];
     setActiveItemIndex(index);
-    setPreFillData({
-      nome: item.nome_fornecedor?.toUpperCase(),
-      un: item.un?.toUpperCase(),
-      compra: item.valor_unit,
-      venda: item.valor_venda,
-      id_importado: item.codigo_fornecedor
-    });
+    setPreFillData({ nome: item.nome_fornecedor?.toUpperCase(), un: item.un?.toUpperCase(), compra: item.valor_unit, venda: item.valor_venda, id_importado: item.codigo_fornecedor });
     setIsNewProductOpen(true);
   };
 
@@ -197,23 +190,12 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     for (let i = 0; i < numInstallments; i++) {
       const date = new Date();
       date.setDate(date.getDate() + (i * 30));
-      newInst.push({
-        vencimento: date.toISOString().split('T')[0],
-        valor: Number(baseAmount.toFixed(2)),
-        documento: nf ? `${nf}/${i + 1}` : "",
-        banco_nome: "",
-        banco_num: "",
-        agencia: "",
-        conta_num: "",
-        cheque_num: ""
-      });
+      newInst.push({ vencimento: date.toISOString().split('T')[0], valor: Number(baseAmount.toFixed(2)), documento: nf ? `${nf}/${i + 1}` : "" });
     }
     setInstallments(newInst);
   };
 
-  React.useEffect(() => {
-    if (isCheckoutOpen) generateInstallments();
-  }, [isCheckoutOpen, numInstallments, total]);
+  React.useEffect(() => { if (isCheckoutOpen) generateInstallments(); }, [isCheckoutOpen, numInstallments, total]);
 
   const handleFinalize = async () => {
     if (!supplierId) { showError("Selecione um fornecedor."); return; }
@@ -221,321 +203,52 @@ const PurchaseForm = ({ initialData, onSuccess }: PurchaseFormProps) => {
     if (items.some(i => !i.cd_produto)) { showError("Existem itens não vinculados ao estoque."); return; }
     
     const supplier = suppliers.find(s => s.cd_clientes === supplierId);
-    const compra: Compra = {
-      cd_compra: initialData?.cd_compra || Date.now(),
-      data: new Date().toISOString(),
-      nota_fiscal: nf,
-      cd_fornecedores: supplierId,
-      nome_fornecedor: supplier?.nome,
-      total: total,
-      status: 'Confirmada',
-      itens: items
-    };
-
+    const compra: Compra = { cd_compra: initialData?.cd_compra || Date.now(), data: new Date().toISOString(), nota_fiscal: nf, cd_fornecedores: supplierId, nome_fornecedor: supplier?.nome, total: total, status: 'Confirmada', itens: items };
     await db.compras.save(compra);
 
     for (const inst of installments) {
-      await db.financeiro.add({
-        tipo: 'P',
-        descricao: `Compra NF ${nf || 'S/N'}`,
-        valor: inst.valor,
-        data_vencimento: inst.vencimento,
-        status: 'Pendente',
-        cd_entidade: supplierId,
-        nome_entidade: supplier?.nome,
-        categoria: 'Fornecedor',
-        meio_pagamento: paymentMethod,
-        num_documento: inst.documento,
-        cd_compra: compra.cd_compra
-      });
+      await db.financeiro.add({ tipo: 'P', descricao: `Compra NF ${nf || 'S/N'}`, valor: inst.valor, data_vencimento: inst.vencimento, status: 'Pendente', cd_entidade: supplierId, nome_entidade: supplier?.nome, categoria: 'Fornecedor', meio_pagamento: paymentMethod, num_documento: inst.documento, cd_compra: compra.cd_compra });
     }
-
     showSuccess("Compra confirmada e estoque atualizado!");
     onSuccess();
   };
 
-  if (isLoading) {
-    return (
-      <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
-        <Loader2 className="animate-spin" size={40} />
-        <p className="font-bold">Carregando dados do formulário...</p>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4"><Loader2 className="animate-spin" size={40} /><p className="font-bold">Carregando...</p></div>;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase text-slate-500">Fornecedor</Label>
-          <select 
-            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold"
-            value={supplierId}
-            onChange={(e) => setSupplierId(Number(e.target.value))}
-          >
-            <option value="0">SELECIONE O FORNECEDOR...</option>
-            {suppliers.map(s => (
-              <option key={s.cd_clientes} value={s.cd_clientes}>{s.nome}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase text-slate-500">Número da NF</Label>
-          <Input 
-            value={nf} 
-            onChange={(e) => setNf(e.target.value)} 
-            placeholder="Ex: 123456" 
-            className="h-10 font-bold"
-          />
-        </div>
-        <div className="flex items-end gap-2">
-          <div className="flex-1 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-indigo-600 uppercase">Total da Nota</span>
-            <span className="text-lg font-black text-indigo-700">R$ {total.toFixed(2)}</span>
-          </div>
-        </div>
+        <div className="space-y-2"><Label className="text-[10px] font-bold uppercase text-slate-500">Fornecedor</Label><select className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold" value={supplierId} onChange={(e) => setSupplierId(Number(e.target.value))}><option value="0">SELECIONE O FORNECEDOR...</option>{suppliers.map(s => (<option key={s.cd_clientes} value={s.cd_clientes}>{s.nome}</option>))}</select></div>
+        <div className="space-y-2"><Label className="text-[10px] font-bold uppercase text-slate-500">Número da NF</Label><Input value={nf} onChange={(e) => setNf(e.target.value)} placeholder="Ex: 123456" className="h-10 font-bold" /></div>
+        <div className="flex items-end gap-2"><div className="flex-1 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center justify-between"><span className="text-[10px] font-bold text-indigo-600 uppercase">Total da Nota</span><span className="text-lg font-black text-indigo-700">R$ {total.toFixed(2)}</span></div></div>
       </div>
-
-      <div className="flex justify-between items-center">
-        <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Itens da Operação</h3>
-        <Button 
-          onClick={addItem} 
-          variant="outline" 
-          className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black h-10 px-6 rounded-xl shadow-sm"
-        >
-          <Search size={18} /> Pesquisar e Adicionar Produto
-        </Button>
-      </div>
-
+      <div className="flex justify-between items-center"><h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Itens da Operação</h3><Button onClick={addItem} variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black h-10 px-6 rounded-xl shadow-sm"><Search size={18} /> Pesquisar e Adicionar Produto</Button></div>
       <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
         <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow>
-              <TableHead className="w-12">#</TableHead>
-              <TableHead>Produto (XML vs Estoque)</TableHead>
-              <TableHead className="w-24 text-center">Qtde</TableHead>
-              <TableHead className="w-32 text-right">Custo Unit.</TableHead>
-              <TableHead className="w-24 text-center">Margem %</TableHead>
-              <TableHead className="w-32 text-right">Venda Sug.</TableHead>
-              <TableHead className="w-32 text-right">Subtotal</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
+          <TableHeader className="bg-slate-50"><TableRow><TableHead className="w-12">#</TableHead><TableHead>Produto</TableHead><TableHead className="w-24 text-center">Qtde</TableHead><TableHead className="w-32 text-right">Custo Unit.</TableHead><TableHead className="w-24 text-center">Margem %</TableHead><TableHead className="w-32 text-right">Venda Sug.</TableHead><TableHead className="w-32 text-right">Subtotal</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
           <TableBody>
             {items.map((item, index) => {
               const product = products.find(p => p.cd_produto === item.cd_produto);
               return (
                 <TableRow key={index} className={cn(!item.cd_produto && "bg-rose-50/50")}>
                   <TableCell className="text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
-                  <TableCell>
-                    {item.cd_produto ? (
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 size={14} className="text-emerald-500" />
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p>
-                          <p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p>
-                          {item.nome_fornecedor && item.nome_fornecedor !== product?.nome && (
-                            <p className="text-[8px] text-indigo-500 font-bold">XML: {item.nome_fornecedor}</p>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle size={14} className="text-rose-500" />
-                          <p className="text-xs font-bold text-rose-600 uppercase">{item.nome_fornecedor || "PRODUTO NÃO VINCULADO"}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="link" 
-                            className="p-0 h-auto text-indigo-600 text-[10px] font-bold underline"
-                            onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}
-                          >
-                            VINCULAR EXISTENTE
-                          </Button>
-                          <span className="text-slate-300">|</span>
-                          <Button 
-                            variant="link" 
-                            className="p-0 h-auto text-emerald-600 text-[10px] font-bold underline"
-                            onClick={() => handleOpenNewProduct(index)}
-                          >
-                            CADASTRAR NOVO
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Input 
-                      type="text" 
-                      defaultValue={item.qtde.toString().replace('.', ',')} 
-                      onBlur={(e) => updateItem(index, 'qtde', e.target.value)}
-                      className="h-8 text-center text-xs font-bold"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input 
-                      type="text" 
-                      defaultValue={formatCurrency(item.valor_unit)} 
-                      onBlur={(e) => updateItem(index, 'valor_unit', e.target.value)}
-                      className="h-8 text-right text-xs font-bold"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input 
-                      type="text" 
-                      defaultValue={item.margem.toFixed(1).replace('.', ',')} 
-                      onBlur={(e) => updateItem(index, 'margem', e.target.value)}
-                      className="h-8 text-center text-xs font-bold text-indigo-600"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input 
-                      type="text" 
-                      defaultValue={formatCurrency(item.valor_venda)} 
-                      onBlur={(e) => updateItem(index, 'valor_venda', e.target.value)}
-                      className="h-8 text-right text-xs font-bold text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500"
-                    />
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-slate-900">
-                    R$ {formatCurrency(item.subtotal)}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeItem(index)}>
-                      <Trash2 size={16} />
-                    </Button>
-                  </TableCell>
+                  <TableCell>{item.cd_produto ? (<div className="flex items-center gap-2"><CheckCircle2 size={14} className="text-emerald-500" /><div><p className="text-xs font-bold text-slate-900 uppercase">{product?.nome}</p><p className="text-[9px] text-slate-500">Cód: {product?.id_manual} | UN: {item.un}</p></div></div>) : (<div className="flex flex-col gap-1"><div className="flex items-center gap-2"><AlertCircle size={14} className="text-rose-500" /><p className="text-xs font-bold text-rose-600 uppercase">{item.nome_fornecedor || "NÃO VINCULADO"}</p></div><div className="flex gap-2"><Button variant="link" className="p-0 h-auto text-indigo-600 text-[10px] font-bold underline" onClick={() => { setActiveItemIndex(index); setIsSearchOpen(true); }}>VINCULAR</Button><span className="text-slate-300">|</span><Button variant="link" className="p-0 h-auto text-emerald-600 text-[10px] font-bold underline" onClick={() => handleOpenNewProduct(index)}>CADASTRAR</Button></div></div>)}</TableCell>
+                  <TableCell><Input type="text" defaultValue={item.qtde.toString().replace('.', ',')} onBlur={(e) => updateItem(index, 'qtde', e.target.value)} className="h-8 text-center text-xs font-bold" /></TableCell>
+                  <TableCell><Input type="text" defaultValue={formatCurrency(item.valor_unit)} onBlur={(e) => updateItem(index, 'valor_unit', e.target.value)} className="h-8 text-right text-xs font-bold" /></TableCell>
+                  <TableCell><Input type="text" defaultValue={item.margem.toFixed(1).replace('.', ',')} onBlur={(e) => updateItem(index, 'margem', e.target.value)} className="h-8 text-center text-xs font-bold text-indigo-600" /></TableCell>
+                  <TableCell><Input type="text" defaultValue={formatCurrency(item.valor_venda)} onBlur={(e) => updateItem(index, 'valor_venda', e.target.value)} className="h-8 text-right text-xs font-bold text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500" /></TableCell>
+                  <TableCell className="text-right font-bold text-slate-900">R$ {formatCurrency(item.subtotal)}</TableCell>
+                  <TableCell><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" onClick={() => removeItem(index)}><Trash2 size={16} /></Button></TableCell>
                 </TableRow>
               );
             })}
-            {items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-10 text-slate-400 italic">
-                  Nenhum produto adicionado. Clique em "Pesquisar e Adicionar" para começar.
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </div>
-
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button 
-          variant="outline" 
-          onClick={async () => {
-            await db.compras.save({
-              cd_compra: initialData?.cd_compra || Date.now(),
-              data: new Date().toISOString(),
-              nota_fiscal: nf,
-              cd_fornecedores: supplierId,
-              nome_fornecedor: suppliers.find(s => s.cd_clientes === supplierId)?.nome,
-              total: total,
-              status: 'Rascunho',
-              items: items
-            });
-            showSuccess("Rascunho salvo!");
-            onSuccess();
-          }}
-          className="h-12 px-8 rounded-xl font-bold gap-2"
-        >
-          <Save size={20} /> Salvar Rascunho
-        </Button>
-        <Button 
-          onClick={() => setIsCheckoutOpen(true)}
-          className="h-12 px-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black gap-2 shadow-lg shadow-emerald-100"
-        >
-          <CheckCircle2 size={20} /> CONCLUIR COMPRA
-        </Button>
-      </div>
-
-      <ProductSearchModal 
-        isOpen={isSearchOpen} 
-        onClose={() => { setIsSearchOpen(false); setActiveItemIndex(null); }} 
-        onSelect={handleProductSelect} 
-      />
-
-      <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader>
-          <ProductForm product={preFillData} onSuccess={handleNewProductSuccess} />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-6 border-b bg-slate-50">
-            <DialogTitle className="text-xl font-black">Condição de Pagamento da Compra</DialogTitle>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-            <div className="w-full md:w-80 p-6 bg-slate-50 border-r space-y-6">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase text-slate-500">Meio de Pagamento</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant={paymentMethod === 'Boleto' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Boleto')}><FileText size={16} /> BOLETO</Button>
-                  <Button variant={paymentMethod === 'Cheque' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Cheque')}><Wallet size={16} /> CHEQUE</Button>
-                  <Button variant={paymentMethod === 'Dinheiro' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Dinheiro')}><Banknote size={16} /> DINHEIRO</Button>
-                  <Button variant={paymentMethod === 'PIX' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('PIX')}><CreditCard size={16} /> PIX</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase text-slate-500">Número de Parcelas</Label>
-                <div className="flex items-center gap-3">
-                  <Button variant="outline" size="icon" onClick={() => setNumInstallments(Math.max(1, numInstallments - 1))}><Plus size={16} className="rotate-45" /></Button>
-                  <span className="text-xl font-black w-10 text-center">{numInstallments}x</span>
-                  <Button variant="outline" size="icon" onClick={() => setNumInstallments(numInstallments + 1)}><Plus size={16} /></Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col overflow-hidden bg-white">
-              <ScrollArea className="flex-1 p-6">
-                <div className="space-y-4">
-                  <h3 className="font-bold text-slate-900 flex items-center gap-2"><Calendar size={18} /> Detalhamento das Parcelas</h3>
-                  {installments.map((inst, idx) => (
-                    <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-1">
-                          <Label className="text-[9px] font-bold uppercase">Vencimento</Label>
-                          <Input type="date" value={inst.vencimento} onChange={(e) => {
-                            const newInst = [...installments];
-                            newInst[idx].vencimento = e.target.value;
-                            setInstallments(newInst);
-                          }} className="h-9 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[9px] font-bold uppercase">Valor (R$)</Label>
-                          <Input type="number" value={inst.valor} onChange={(e) => {
-                            const newInst = [...installments];
-                            newInst[idx].valor = parseFloat(e.target.value) || 0;
-                            setInstallments(newInst);
-                          }} className="h-9 text-xs font-bold" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[9px] font-bold uppercase">Nº Documento</Label>
-                          <Input value={inst.documento} onChange={(e) => {
-                            const newInst = [...installments];
-                            newInst[idx].documento = e.target.value;
-                            setInstallments(newInst);
-                          }} className="h-9 text-xs" placeholder="Ex: Boleto 01" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-              
-              <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>Voltar</Button>
-                <Button onClick={handleFinalize} className="bg-emerald-600 hover:bg-emerald-700 px-10 font-black">
-                  CONFIRMAR E GERAR CONTAS
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <div className="flex justify-end gap-3 pt-4 border-t"><Button variant="outline" onClick={async () => { await db.compras.save({ cd_compra: initialData?.cd_compra || Date.now(), data: new Date().toISOString(), nota_fiscal: nf, cd_fornecedores: supplierId, nome_fornecedor: suppliers.find(s => s.cd_clientes === supplierId)?.nome, total: total, status: 'Rascunho', items: items }); showSuccess("Rascunho salvo!"); onSuccess(); }} className="h-12 px-8 rounded-xl font-bold gap-2"><Save size={20} /> Salvar Rascunho</Button><Button onClick={() => setIsCheckoutOpen(true)} className="h-12 px-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black gap-2 shadow-lg shadow-emerald-100"><CheckCircle2 size={20} /> CONCLUIR COMPRA</Button></div>
+      <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setActiveItemIndex(null); }} onSelect={handleProductSelect} />
+      <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}><DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>Cadastrar Novo Produto</DialogTitle></DialogHeader><ProductForm product={preFillData} onSuccess={handleNewProductSuccess} /></DialogContent></Dialog>
+      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}><DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden"><DialogHeader className="p-6 border-b bg-slate-50"><DialogTitle className="text-xl font-black">Condição de Pagamento</DialogTitle></DialogHeader><div className="flex-1 overflow-hidden flex flex-col md:flex-row"><div className="w-full md:w-80 p-6 bg-slate-50 border-r space-y-6"><div className="space-y-2"><Label className="text-[10px] font-bold uppercase text-slate-500">Meio de Pagamento</Label><div className="grid grid-cols-2 gap-2"><Button variant={paymentMethod === 'Boleto' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Boleto')}><FileText size={16} /> BOLETO</Button><Button variant={paymentMethod === 'Cheque' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Cheque')}><Wallet size={16} /> CHEQUE</Button><Button variant={paymentMethod === 'Dinheiro' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('Dinheiro')}><Banknote size={16} /> DINHEIRO</Button><Button variant={paymentMethod === 'PIX' ? 'default' : 'outline'} className="h-12 flex-col gap-1 text-[10px]" onClick={() => setPaymentMethod('PIX')}><CreditCard size={16} /> PIX</Button></div></div><div className="space-y-2"><Label className="text-[10px] font-bold uppercase text-slate-500">Parcelas</Label><div className="flex items-center gap-3"><Button variant="outline" size="icon" onClick={() => setNumInstallments(Math.max(1, numInstallments - 1))}><Plus size={16} className="rotate-45" /></Button><span className="text-xl font-black w-10 text-center">{numInstallments}x</span><Button variant="outline" size="icon" onClick={() => setNumInstallments(numInstallments + 1)}><Plus size={16} /></Button></div></div></div><div className="flex-1 flex flex-col overflow-hidden bg-white"><ScrollArea className="flex-1 p-6"><div className="space-y-4"><h3 className="font-bold text-slate-900 flex items-center gap-2"><Calendar size={18} /> Detalhamento</h3>{installments.map((inst, idx) => (<div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4"><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="space-y-1"><Label className="text-[9px] font-bold uppercase">Vencimento</Label><Input type="date" value={inst.vencimento} onChange={(e) => { const newInst = [...installments]; newInst[idx].vencimento = e.target.value; setInstallments(newInst); }} className="h-9 text-xs" /></div><div className="space-y-1"><Label className="text-[9px] font-bold uppercase">Valor (R$)</Label><Input type="number" value={inst.valor} onChange={(e) => { const newInst = [...installments]; newInst[idx].valor = parseFloat(e.target.value) || 0; setInstallments(newInst); }} className="h-9 text-xs font-bold" /></div><div className="space-y-1"><Label className="text-[9px] font-bold uppercase">Documento</Label><Input value={inst.documento} onChange={(e) => { const newInst = [...installments]; newInst[idx].documento = e.target.value; setInstallments(newInst); }} className="h-9 text-xs" /></div></div></div>))}</div></ScrollArea><div className="p-6 border-t bg-slate-50 flex justify-end gap-3"><Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>Voltar</Button><Button onClick={handleFinalize} className="bg-emerald-600 hover:bg-emerald-700 px-10 font-black">CONFIRMAR</Button></div></div></div></DialogContent></Dialog>
     </div>
   );
 };

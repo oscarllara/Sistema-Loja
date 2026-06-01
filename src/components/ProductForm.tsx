@@ -18,7 +18,8 @@ import {
   History,
   Loader2,
   ExternalLink,
-  TrendingUp
+  TrendingUp,
+  Box
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,11 +89,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [isFullHistoryOpen, setIsFullHistoryOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
-  const formatAsCurrency = (value: string | number) => {
-    if (value === undefined || value === null) return "0,00";
-    const num = typeof value === 'number' ? value : parseFloat(value.toString().replace(/\./g, "").replace(",", "."));
-    if (isNaN(num)) return "0,00";
-    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatMoney = (value: string | number) => {
+    const cleanValue = value.toString().replace(/\D/g, "");
+    const floatValue = parseInt(cleanValue || "0") / 100;
+    return floatValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const parseToNumber = (value: string): number => {
@@ -110,22 +110,14 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     return cost * (1 + margin / 100);
   };
 
-  const initialMargin = product ? calculateMargin(product.compra || 0, product.venda || 0) : 0;
-
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
-      compra: formatAsCurrency(product.compra || 0),
-      margem_lucro: initialMargin.toFixed(2).replace('.', ','),
-      venda: formatAsCurrency(product.venda || 0),
-      venda_vista: formatAsCurrency(product.venda_vista || 0),
-      venda_fracionada: formatAsCurrency(product.venda_fracionada || 0),
-      valor_diaria: formatAsCurrency(product.valor_diaria || 0),
-      valor_semana: formatAsCurrency(product.valor_semana || 0),
-      valor_quinzena: formatAsCurrency(product.valor_quinzena || 0),
-      valor_mes: formatAsCurrency(product.valor_mes || 0),
-      preco_site: formatAsCurrency(product.preco_site || 0),
+      compra: formatMoney(product.compra ? (product.compra * 100).toFixed(0) : "0"),
+      venda: formatMoney(product.venda ? (product.venda * 100).toFixed(0) : "0"),
+      venda_vista: formatMoney(product.venda_vista ? (product.venda_vista * 100).toFixed(0) : "0"),
+      margem_lucro: calculateMargin(product.compra || 0, product.venda || 0).toFixed(2).replace('.', ','),
       estoque: product.estoque?.toString().replace('.', ','),
       minimo: product.minimo?.toString().replace('.', ','),
       fator_conversao: product.fator_conversao?.toString().replace('.', ','),
@@ -148,14 +140,14 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const discountValue = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
   const disponivelSite = watch("disponivel_site");
-  const isFracionado = watch("fracionado");
 
   const handleCostChange = (val: string) => {
-    const cost = parseToNumber(val);
+    const formatted = formatMoney(val);
+    const cost = parseToNumber(formatted);
     const margin = parseToNumber(marginValue);
     const newSale = calculateSale(cost, margin);
-    setValue("compra", val);
-    setValue("venda", formatAsCurrency(newSale));
+    setValue("compra", formatted);
+    setValue("venda", formatMoney((newSale * 100).toFixed(0)));
     updateCashPrice(newSale, parseToNumber(discountValue));
   };
 
@@ -164,30 +156,38 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const cost = parseToNumber(costValue);
     const newSale = calculateSale(cost, margin);
     setValue("margem_lucro", val);
-    setValue("venda", formatAsCurrency(newSale));
+    setValue("venda", formatMoney((newSale * 100).toFixed(0)));
     updateCashPrice(newSale, parseToNumber(discountValue));
   };
 
   const handleSaleChange = (val: string) => {
-    const sale = parseToNumber(val);
+    const formatted = formatMoney(val);
+    const sale = parseToNumber(formatted);
     const cost = parseToNumber(costValue);
     const newMargin = calculateMargin(cost, sale);
-    setValue("venda", val);
+    setValue("venda", formatted);
     setValue("margem_lucro", newMargin.toFixed(2).replace('.', ','));
     updateCashPrice(sale, parseToNumber(discountValue));
   };
 
-  const updateCashPrice = (sale: number, discount: number) => {
-    if (sale > 0 && discount > 0) {
-      const final = sale * (1 - discount / 100);
-      setValue("venda_vista", formatAsCurrency(final));
-    } else {
-      setValue("venda_vista", formatAsCurrency(sale));
+  const handleCashPriceChange = (val: string) => {
+    const formatted = formatMoney(val);
+    const cash = parseToNumber(formatted);
+    const sale = parseToNumber(saleValue);
+    if (sale > 0) {
+      const disc = ((1 - (cash / sale)) * 100);
+      setValue("desconto_vista_valor", disc.toFixed(2).replace('.', ','));
     }
+    setValue("venda_vista", formatted);
+  };
+
+  const updateCashPrice = (sale: number, discount: number) => {
+    const final = sale * (1 - discount / 100);
+    setValue("venda_vista", formatMoney((final * 100).toFixed(0)));
   };
 
   const handleDiscountChange = (val: string) => {
-    const discount = parseFloat(val) || 0;
+    const discount = parseToNumber(val);
     const sale = parseToNumber(saleValue);
     setValue("desconto_vista_valor", val);
     updateCashPrice(sale, discount);
@@ -232,7 +232,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         venda: parseToNumber(data.venda),
         venda_vista: parseToNumber(data.venda_vista),
         venda_fracionada: parseToNumber(data.venda_fracionada),
-        desconto_vista_valor: parseFloat(data.desconto_vista_valor) || 0,
+        desconto_vista_valor: parseToNumber(data.desconto_vista_valor),
         estoque: parseToNumber(data.estoque),
         minimo: parseToNumber(data.minimo),
         ncm: data.ncm || null,
@@ -265,8 +265,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       }
       onSuccess();
     } catch (err: any) {
-      console.error("Erro ao salvar:", err);
-      showError(`Erro ao salvar: ${err.message || "Verifique os campos obrigatórios."}`);
+      showError("Erro ao salvar produto.");
     } finally {
       setIsSaving(false);
     }
@@ -279,8 +278,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
           {!isLocacao && <TabsTrigger value="estoque" className="flex-1">Estoque</TabsTrigger>}
           {!isLocacao && <TabsTrigger value="precos" className="flex-1">Preços</TabsTrigger>}
-          {!isLocacao && <TabsTrigger value="fracionamento" className="flex-1 gap-1"><Scale size={14} /> Fracionado</TabsTrigger>}
-          {isLocacao && <TabsTrigger value="locacao" className="flex-1 gap-1"><CalendarClock size={14} /> Locação</TabsTrigger>}
           <TabsTrigger value="site" className="flex-1 gap-1"><Globe size={14} /> Site</TabsTrigger>
         </TabsList>
 
@@ -293,21 +290,18 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </div>
               <div className="md:col-span-2 space-y-2">
                 <Label className={cn("flex items-center gap-2", errors.nome && "text-rose-600")}>
-                  <Package size={14} /> Nome do Produto <span className="text-rose-500 font-bold">*</span>
+                  <Package size={14} /> Nome do Produto *
                 </Label>
                 <Input {...register("nome")} className="uppercase" placeholder="EX: CIMENTO CAUE 50KG" />
-                {errors.nome && <p className="text-[10px] text-rose-500 font-bold">{errors.nome.message}</p>}
               </div>
               <div className="space-y-2">
-                <Label className="text-amber-600 font-bold">Código Antigo (Importado)</Label>
+                <Label className="text-amber-600 font-bold">Código Antigo</Label>
                 <Input {...register("id_importado")} placeholder="Ex: 1234" className="border-amber-200" />
               </div>
               <div className="space-y-2"><Label>Código de Barras</Label><Input {...register("cod_barras")} /></div>
-              <div className="space-y-2"><Label>NCM</Label><Input {...register("ncm")} /></div>
               <div className="space-y-2">
-                <Label className={cn(errors.un && "text-rose-600")}>Unidade Principal <span className="text-rose-500 font-bold">*</span></Label>
-                <Input {...register("un")} className="uppercase" placeholder="EX: UN, SC, KG" />
-                {errors.un && <p className="text-[10px] text-rose-500 font-bold">{errors.un.message}</p>}
+                <Label>Unidade Principal *</Label>
+                <Input {...register("un")} className="uppercase" placeholder="EX: UN, SC, KG, M²" />
               </div>
             </div>
             
@@ -332,38 +326,27 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
 
           <TabsContent value="estoque" className="space-y-6 m-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Estoque Atual <span className="text-rose-500 font-bold">*</span></Label>
-                <Input 
-                  {...register("estoque")} 
-                  className="font-bold" 
-                  placeholder="0,00" 
-                />
+                <Label>Estoque Atual *</Label>
+                <Input {...register("estoque")} className="font-bold" placeholder="0,00" />
               </div>
               <div className="space-y-2">
                 <Label>Estoque Mínimo</Label>
-                <Input 
-                  {...register("minimo")} 
-                  placeholder="0,00" 
-                />
+                <Input {...register("minimo")} placeholder="0,00" />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-indigo-600 font-bold"><Box size={14} /> Tamanho da Embalagem</Label>
+                <Input {...register("fator_conversao")} placeholder="Ex: 2,40" />
+                <p className="text-[9px] text-slate-500 font-medium">M² por caixa ou unidades por fardo. Usado para arredondamento no PDV.</p>
               </div>
             </div>
 
             {product && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b pb-2">
-                  <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2">
-                    <History size={14} /> Histórico de Movimentação (Últimas 10)
-                  </h4>
-                  <Button 
-                    type="button" 
-                    variant="link" 
-                    className="h-auto p-0 text-indigo-600 font-bold text-[10px] uppercase flex items-center gap-1"
-                    onClick={() => setIsFullHistoryOpen(true)}
-                  >
-                    <ExternalLink size={12} /> Ver Histórico Completo
-                  </Button>
+                  <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2"><History size={14} /> Histórico de Movimentação</h4>
+                  <Button type="button" variant="link" className="h-auto p-0 text-indigo-600 font-bold text-[10px] uppercase" onClick={() => setIsFullHistoryOpen(true)}>Ver Tudo</Button>
                 </div>
                 <div className="border rounded-lg overflow-hidden bg-white">
                   <Table>
@@ -376,17 +359,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {history.slice(0, 10).map((m, i) => (
-                        <TableRow key={i} className="h-8 hover:bg-slate-50">
+                      {history.slice(0, 5).map((m, i) => (
+                        <TableRow key={i} className="h-8">
                           <TableCell className="py-1 text-[10px]">{new Date(m.data).toLocaleDateString()}</TableCell>
-                          <TableCell className="py-1">
-                            <Badge className={cn(
-                              "text-[8px] font-bold h-4 px-1 border-none",
-                              m.tipo === 'ENTRADA' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                            )}>
-                              {m.tipo}
-                            </Badge>
-                          </TableCell>
+                          <TableCell className="py-1"><Badge className={cn("text-[8px] font-bold h-4 px-1", m.tipo === 'ENTRADA' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{m.tipo}</Badge></TableCell>
                           <TableCell className="py-1 text-[10px] font-medium truncate max-w-[120px]">{m.origem}</TableCell>
                           <TableCell className="py-1 text-[10px] text-right font-bold">{m.qtde}</TableCell>
                         </TableRow>
@@ -402,107 +378,33 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-6">
                 <h4 className="font-black text-slate-900 flex items-center gap-2 uppercase text-xs tracking-widest"><DollarSign size={16} className="text-indigo-600" /> Formação de Preço</h4>
-                
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-slate-500">1. Preço de Custo (R$)</Label>
-                  <Input 
-                    value={costValue}
-                    onChange={(e) => handleCostChange(e.target.value)}
-                    className="h-12 text-lg font-bold border-2 focus:border-indigo-500" 
-                    placeholder="0,00"
-                  />
+                  <Input value={costValue} onChange={(e) => handleCostChange(e.target.value)} className="h-12 text-lg font-bold border-2 focus:border-indigo-500" placeholder="0,00" />
                 </div>
-
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-2">
-                    2. Margem de Lucro (%) <TrendingUp size={12} className="text-emerald-500" />
-                  </Label>
-                  <Input 
-                    value={marginValue}
-                    onChange={(e) => handleMarginChange(e.target.value)}
-                    className="h-12 text-lg font-black text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500" 
-                    placeholder="0,00"
-                  />
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-2">2. Margem de Lucro (%) <TrendingUp size={12} className="text-emerald-500" /></Label>
+                  <Input value={marginValue} onChange={(e) => handleMarginChange(e.target.value)} className="h-12 text-lg font-black text-emerald-600 border-2 border-emerald-100 focus:border-emerald-500" placeholder="0,00" />
                 </div>
-
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-slate-500">3. Valor de Venda (A Prazo)</Label>
-                  <Input 
-                    value={saleValue}
-                    onChange={(e) => handleSaleChange(e.target.value)}
-                    className="h-12 text-xl font-black text-indigo-700 border-2 border-indigo-200 focus:border-indigo-600" 
-                    placeholder="0,00"
-                  />
-                  <p className="text-[9px] text-slate-400 font-bold italic">* Você pode editar qualquer campo e os outros se ajustarão.</p>
+                  <Input value={saleValue} onChange={(e) => handleSaleChange(e.target.value)} className="h-12 text-xl font-black text-indigo-700 border-2 border-indigo-200 focus:border-indigo-600" placeholder="0,00" />
                 </div>
               </div>
 
               <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-6">
                 <h4 className="font-black text-emerald-900 flex items-center gap-2 uppercase text-xs tracking-widest"><Percent size={16} /> Configuração À Vista</h4>
-                
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-emerald-700">Desconto para Pagto À Vista (%)</Label>
-                  <Input 
-                    value={discountValue}
-                    onChange={(e) => handleDiscountChange(e.target.value)}
-                    className="h-12 text-lg font-bold bg-white border-emerald-200" 
-                    placeholder="0" 
-                  />
+                  <Input value={discountValue} onChange={(e) => handleDiscountChange(e.target.value)} className="h-12 text-lg font-bold bg-white border-emerald-200" placeholder="0" />
                 </div>
-
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-emerald-700">Preço Final À Vista (R$)</Label>
-                  <div className="h-12 bg-white rounded-lg border-2 border-emerald-200 flex items-center px-4 text-xl font-black text-emerald-700 shadow-inner">
-                    R$ {watch("venda_vista")}
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-white/50 rounded-xl border border-emerald-100">
-                  <p className="text-[10px] text-emerald-800 font-bold leading-relaxed">
-                    O preço à vista é o valor utilizado no PDV quando não há parcelamento. 
-                    Ele é calculado subtraindo o desconto do valor de venda padrão.
-                  </p>
+                  <Input value={watch("venda_vista")} onChange={(e) => handleCashPriceChange(e.target.value)} className="h-12 text-xl font-black text-emerald-700 border-2 border-emerald-200 focus:border-emerald-600 bg-white" placeholder="0,00" />
                 </div>
               </div>
             </div>
           </TabsContent>
-
-          <TabsContent value="fracionamento" className="space-y-4 m-0">
-            <div className={cn("p-6 rounded-xl border transition-all", isFracionado ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200")}>
-              <div className="flex items-center space-x-2 mb-6">
-                <Checkbox id="fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
-                <Label htmlFor="fracionado" className="font-black text-lg cursor-pointer text-indigo-900">Habilitar Venda Fracionada</Label>
-              </div>
-              {isFracionado && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="space-y-2"><Label>Unidade Fracionada</Label><Input {...register("un_fracionada")} className="uppercase" placeholder="Ex: KG, MT" /></div>
-                  <div className="space-y-2"><Label>Fator de Conversão</Label><Input {...register("fator_conversao")} placeholder="Ex: 0,02" /></div>
-                  <div className="space-y-2">
-                    <Label>Preço da Fração (R$)</Label>
-                    <Input 
-                      {...register("venda_fracionada")} 
-                      className="font-black text-indigo-600" 
-                      placeholder="0,00"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          {isLocacao && (
-            <TabsContent value="locacao" className="space-y-4 m-0">
-              <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-4">
-                <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs"><CalendarClock size={16} /> Tabela de Preços de Locação</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Diária</Label><Input {...register("valor_diaria")} placeholder="0,00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Semana</Label><Input {...register("valor_semana")} placeholder="0,00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Quinzena</Label><Input {...register("valor_quinzena")} placeholder="0,00" /></div>
-                  <div className="space-y-2"><Label className="text-[10px] font-bold uppercase">Mês</Label><Input {...register("valor_mes")} placeholder="0,00" /></div>
-                </div>
-              </div>
-            </TabsContent>
-          )}
 
           <TabsContent value="site" className="space-y-4 m-0">
             <div className={cn("p-4 rounded-xl border transition-all", disponivelSite ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200")}>
@@ -524,20 +426,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         </div>
       </Tabs>
 
-      {product && isFullHistoryOpen && (
-        <ProductHistoryModal 
-          isOpen={isFullHistoryOpen} 
-          onClose={() => setIsFullHistoryOpen(false)} 
-          product={product} 
-        />
-      )}
+      {product && isFullHistoryOpen && <ProductHistoryModal isOpen={isFullHistoryOpen} onClose={() => setIsFullHistoryOpen(false)} product={product} />}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button 
-          type="submit" 
-          disabled={isSaving}
-          className="bg-indigo-600 hover:bg-indigo-700 px-10 h-12 rounded-xl font-black shadow-lg"
-        >
+        <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 px-10 h-12 rounded-xl font-black shadow-lg">
           {isSaving ? <Loader2 className="animate-spin mr-2" /> : "SALVAR PRODUTO"}
         </Button>
       </div>
