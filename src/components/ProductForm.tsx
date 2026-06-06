@@ -102,10 +102,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const parseToNumber = (value: string): number => {
     if (!value) return 0;
-    // Se já for um número puro (ex: vindo do banco), retorna ele
     if (typeof value === 'number') return value;
-    
-    // Remove pontos de milhar e troca vírgula por ponto decimal
+    // Converte vírgula para ponto e remove pontos de milhar
     const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
     const num = parseFloat(cleanValue);
     return isNaN(num) ? 0 : num;

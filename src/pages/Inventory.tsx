@@ -43,8 +43,7 @@ const Inventory = () => {
   // 1. Busca de dados com TanStack Query
   const { data: products = [], isLoading: isLoadingProducts, refetch } = useQuery({
     queryKey: ['produtos'],
-    queryFn: () => db.produtos.getAll(),
-    staleTime: 0, // Garante que os dados sejam considerados obsoletos imediatamente
+    queryFn: () => db.produtos.getAll(true), // Passa true para ignorar o cache local
   });
 
   const { data: sales = [] } = useQuery({
@@ -158,7 +157,7 @@ const Inventory = () => {
                   product={editingProduct} 
                   onSuccess={async () => { 
                     setIsModalOpen(false); 
-                    await handleRefresh(); // Força a atualização imediata após fechar o modal
+                    await handleRefresh(); 
                   }} 
                 />
               </DialogContent>

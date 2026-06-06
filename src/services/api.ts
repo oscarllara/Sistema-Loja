@@ -49,9 +49,13 @@ export const db = {
     }
   },
   produtos: {
-    getAll: async (): Promise<Produto[]> => {
+    getAll: async (forceFresh = false): Promise<Produto[]> => {
       try {
-        // Sempre tenta buscar do banco primeiro para garantir dados novos
+        if (!forceFresh) {
+          const cache = localStorage.getItem(PRODUCTS_CACHE_KEY);
+          if (cache) return JSON.parse(cache);
+        }
+
         const { data, error } = await supabase
           .from('produtos')
           .select('*')
@@ -89,7 +93,6 @@ export const db = {
       
       if (error) throw error;
       
-      // LIMPA O CACHE IMEDIATAMENTE
       localStorage.removeItem(PRODUCTS_CACHE_KEY);
       return data;
     },
