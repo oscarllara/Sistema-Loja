@@ -27,9 +27,10 @@ import { cn } from '@/lib/utils';
 interface PaymentsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  operatorId?: number | "";
 }
 
-const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
+const PaymentsModal = ({ isOpen, onClose, operatorId }: PaymentsModalProps) => {
   const [search, setSearch] = React.useState("");
   const [selectedClient, setSelectedClient] = React.useState<Cliente | null>(null);
   const [pendencias, setPendencias] = React.useState<LancamentoFinanceiro[]>([]);
@@ -89,7 +90,15 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
       return;
     }
 
-    await db.financeiro.baixar(payingEntry.cd_lancamento, contas[0].cd_conta, valorNum, receiveMethod);
+    // Passa o operatorId para o serviço de baixa
+    await db.financeiro.baixar(
+      payingEntry.cd_lancamento, 
+      contas[0].cd_conta, 
+      valorNum, 
+      receiveMethod,
+      operatorId ? Number(operatorId) : undefined
+    );
+    
     showSuccess(valorNum < payingEntry.valor ? "Recebimento parcial registrado!" : "Conta baixada com sucesso!");
     
     if (selectedClient) handleSelectClient(selectedClient);
@@ -155,7 +164,6 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
               </div>
 
               <div className="flex-1 flex overflow-hidden">
-                {/* Lista de Pendências */}
                 <div className={cn("flex-1 overflow-auto p-2", payingEntry && "hidden md:block border-r")}>
                   <Table>
                     <TableHeader className="bg-slate-50 sticky top-0 z-10">
@@ -195,7 +203,6 @@ const PaymentsModal = ({ isOpen, onClose }: PaymentsModalProps) => {
                   </Table>
                 </div>
 
-                {/* Formulário de Recebimento */}
                 {payingEntry && (
                   <div className="w-full md:w-72 bg-slate-50 p-4 animate-in slide-in-from-right-4 border-l flex flex-col overflow-y-auto">
                     <div className="flex items-center justify-between mb-4">

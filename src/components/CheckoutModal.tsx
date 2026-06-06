@@ -66,7 +66,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remaining = Math.max(0, total - totalPaid);
-  const change = Math.max(0, totalPaid - total);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -127,7 +126,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
     if (interestFree || jurosMensal === 0 || count === 1) {
       valorParcela = amount / count;
     } else {
-      // Fórmula de Financiamento (Price): PMT = PV * [i * (1+i)^n] / [(1+i)^n - 1]
       valorParcela = amount * (jurosMensal * Math.pow(1 + jurosMensal, count)) / (Math.pow(1 + jurosMensal, count) - 1);
     }
     
@@ -166,9 +164,9 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-2">
-          <div className="p-6 bg-slate-50 border-r border-slate-200">
+      <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-2xl max-h-[95vh]">
+        <div className="grid grid-cols-1 md:grid-cols-2 h-full overflow-hidden">
+          <div className="p-6 bg-slate-50 border-r border-slate-200 flex flex-col overflow-hidden">
             <div className={cn(
               "mb-6 space-y-2 p-2 rounded-xl transition-all duration-300",
               isBlinking ? "bg-rose-100 ring-4 ring-rose-500 animate-pulse" : ""
@@ -195,9 +193,9 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
               </div>
             </div>
 
-            <div className="mt-6 space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Pagamentos Realizados</p>
-              <ScrollArea className="h-48 pr-2">
+            <div className="mt-6 flex-1 overflow-hidden flex flex-col">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Pagamentos Realizados</p>
+              <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1">
                   {payments.map((p, i) => (
                     <div key={i} className="bg-white p-3 rounded-lg border border-slate-200">
@@ -215,7 +213,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
             </div>
           </div>
 
-          <div className="p-6 bg-white flex flex-col">
+          <div className="p-6 bg-white flex flex-col overflow-hidden">
             <DialogHeader className="mb-6">
               <DialogTitle className="text-xl font-black text-slate-900">
                 {isInstallmentMode ? "CONFIGURAR PARCELAS" : "CONCLUIR VENDA"}
@@ -224,7 +222,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
 
             {isInstallmentMode ? (
               <div className="space-y-6 flex-1 overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 shrink-0">
                   <div className="flex items-center gap-2">
                     <Checkbox id="interest-free" checked={isInterestFree} onCheckedChange={(checked) => { setIsInterestFree(!!checked); generateInstallments(remaining, numInstallments, !!checked); }} />
                     <Label htmlFor="interest-free" className="text-xs font-bold cursor-pointer">Parcelamento Sem Juros</Label>
@@ -237,7 +235,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                 </div>
 
                 {!isInterestFree && (
-                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 shrink-0">
                     <Zap size={14} />
                     <span className="text-[10px] font-bold">Juros de {config?.juros_parcelamento}% a.m. aplicado (Financiamento)</span>
                   </div>
@@ -260,7 +258,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   </div>
                 </ScrollArea>
 
-                <div className="pt-4 border-t space-y-3">
+                <div className="pt-4 border-t space-y-3 shrink-0">
                   <div className="flex justify-between text-sm font-bold">
                     <span>Total Parcelado:</span>
                     <span className="text-indigo-600">R$ {tempInstallments.reduce((acc, i) => acc + i.amount, 0).toFixed(2)}</span>
@@ -272,8 +270,8 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                 </div>
               </div>
             ) : (
-              <div className="space-y-6 flex-1 flex flex-col">
-                <div className="space-y-2">
+              <div className="space-y-6 flex-1 flex flex-col overflow-hidden">
+                <div className="space-y-2 shrink-0">
                   <Label className="text-xs font-bold text-slate-500 uppercase">Valor a Receber</Label>
                   <Input 
                     className="h-14 text-2xl font-black text-indigo-600 text-center border-2 border-indigo-100"
@@ -283,15 +281,17 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Dinheiro')}><Banknote size={18} /><span className="text-[10px] font-bold">DINHEIRO</span></Button>
-                  <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('PIX')}><QrCode size={18} /><span className="text-[10px] font-bold">PIX</span></Button>
-                  <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Crédito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. CRÉDITO</span></Button>
-                  <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Débito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. DÉBITO</span></Button>
-                  <Button variant="outline" className="h-14 flex-col gap-1 col-span-2 bg-amber-50 border-amber-200 text-amber-700" onClick={() => addPayment('Crediário')}><Wallet size={18} /><span className="text-[10px] font-bold">CREDIÁRIO (PRAZO)</span></Button>
-                </div>
+                <ScrollArea className="flex-1 pr-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Dinheiro')}><Banknote size={18} /><span className="text-[10px] font-bold">DINHEIRO</span></Button>
+                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('PIX')}><QrCode size={18} /><span className="text-[10px] font-bold">PIX</span></Button>
+                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Crédito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. CRÉDITO</span></Button>
+                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Débito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. DÉBITO</span></Button>
+                    <Button variant="outline" className="h-14 flex-col gap-1 col-span-2 bg-amber-50 border-amber-200 text-amber-700" onClick={() => addPayment('Crediário')}><Wallet size={18} /><span className="text-[10px] font-bold">CREDIÁRIO (PRAZO)</span></Button>
+                  </div>
+                </ScrollArea>
 
-                <div className="pt-6 mt-auto">
+                <div className="pt-6 mt-auto shrink-0">
                   <Button 
                     className={cn("w-full h-16 text-lg font-black gap-2 shadow-lg", totalPaid >= total ? "bg-emerald-600" : "bg-slate-200 text-slate-400")}
                     disabled={totalPaid < total}

@@ -181,13 +181,19 @@ export const db = {
       const { error } = await supabase.from('financeiro').delete().eq('cd_lancamento', id);
       if (error) throw error;
     },
-    baixar: async (id: number, cd_conta: number, valor?: number, meio?: string) => {
+    baixar: async (id: number, cd_conta: number, valor?: number, meio?: string, cd_func?: number) => {
       const { data: lanc, error: lError } = await supabase.from('financeiro').select('*').eq('cd_lancamento', id).single();
       if (lError) throw lError;
       
       if (lanc) {
-        const updateData: any = { status: 'Pago', data_pagamento: new Date().toISOString(), cd_conta };
+        const updateData: any = { 
+          status: 'Pago', 
+          data_pagamento: new Date().toISOString(), 
+          cd_conta 
+        };
         if (meio) updateData.meio_pagamento = meio;
+        if (cd_func) updateData.cd_func = cd_func; // Registra o operador que recebeu
+
         const { error: uError } = await supabase.from('financeiro').update(updateData).eq('cd_lancamento', id);
         if (uError) throw uError;
         

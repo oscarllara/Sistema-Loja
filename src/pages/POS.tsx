@@ -39,7 +39,8 @@ import {
   ShieldAlert,
   RefreshCw,
   Percent,
-  Box
+  Box,
+  DollarSign
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ const POS = () => {
   const codeRef = React.useRef<HTMLInputElement>(null);
   const qtyRef = React.useRef<HTMLInputElement>(null);
   const boxesRef = React.useRef<HTMLInputElement>(null);
+  const unitPriceRef = React.useRef<HTMLInputElement>(null);
   const sellerRef = React.useRef<HTMLSelectElement>(null);
 
   const [carts, setCarts] = React.useState<Record<POSMode, any[]>>({
@@ -140,6 +142,13 @@ const POS = () => {
     loadAllData();
   }, [loadAllData]);
 
+  // FOCO AUTOMÁTICO NO PRODUTO APÓS SELECIONAR OPERADOR
+  React.useEffect(() => {
+    if (selectedSellerId) {
+      codeRef.current?.focus();
+    }
+  }, [selectedSellerId]);
+
   const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
     setCarts(prev => ({
       ...prev,
@@ -158,6 +167,7 @@ const POS = () => {
   const [inputCode, setInputCode] = React.useState("");
   const [inputQty, setInputQty] = React.useState("0,000");
   const [inputBoxes, setInputBoxes] = React.useState("0");
+  const [inputUnitPrice, setInputUnitPrice] = React.useState("0,00");
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
   
@@ -221,6 +231,9 @@ const POS = () => {
     setInputUnit(product.un);
     setInputQty("1");
     
+    const price = getProductPrice(product, product.un, priceMode);
+    setInputUnitPrice(price.toFixed(2).replace('.', ','));
+    
     const boxSize = product.tamanho_caixa || 0;
     if (boxSize > 0) {
       setInputBoxes("1");
@@ -260,6 +273,9 @@ const POS = () => {
     if (!pendingProduct || !pendingProduct.fracionado) return;
     const newUnit = inputUnit === pendingProduct.un ? pendingProduct.un_fracionada : pendingProduct.un;
     setInputUnit(newUnit);
+    
+    const price = getProductPrice(pendingProduct, newUnit, priceMode);
+    setInputUnitPrice(price.toFixed(2).replace('.', ','));
   };
 
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
@@ -279,14 +295,13 @@ const POS = () => {
     let qty = parseBRNumber(inputQty);
     const boxSize = pendingProduct.tamanho_caixa || 0;
 
-    // Arredondamento automático se for unidade principal e tiver tamanho de caixa
     if (inputUnit === pendingProduct.un && boxSize > 0 && !pendingProduct.fracionado) {
       const boxes = Math.ceil(qty / boxSize);
       qty = boxes * boxSize;
     }
 
-    const price = getProductPrice(pendingProduct, inputUnit, priceMode);
-    const margin = pendingProduct.compra > 0 ? ((pendingProduct.venda / pendingProduct.compra) - 1) * 100 : 40;
+    const price = parseBRNumber(inputUnitPrice);
+    const margin = pendingProduct.compra > 0 ? ((price / pendingProduct.compra) - 1) * 100 : 40;
 
     setCart(prev => [...prev, { 
       ...pendingProduct, 
@@ -305,6 +320,7 @@ const POS = () => {
     setInputCode("");
     setInputQty("0,000");
     setInputBoxes("0");
+    setInputUnitPrice("0,00");
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
@@ -425,7 +441,8 @@ const POS = () => {
               nome_entidade: payload.nome_cliente,
               categoria: 'Venda',
               meio_pagamento: p.method,
-              cd_conta: caixaLoja.cd_conta
+              cd_conta: caixaLoja.cd_conta,
+              cd_func: Number(selectedSellerId) // Registra quem recebeu
             });
             await db.contas.update(caixaLoja.cd_conta, { saldo: Number(caixaLoja.saldo) + Number(p.amount) });
           }
@@ -467,7 +484,7 @@ const POS = () => {
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
-      <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0 shadow-2xl z-20">
+      <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0 shadow-2xl z-20 hidden lg:flex">
         <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center bg-slate-50">
           {config?.logo_url ? (
             <div className="w-full h-24 flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm mb-3">
@@ -533,28 +550,28 @@ const POS = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("h-20 text-white flex items-center justify-between px-8 shrink-0 border-b shadow-lg z-10", theme.header, theme.border)}>
-          <div className="flex items-center gap-8">
+        <header className={cn("h-20 text-white flex items-center justify-between px-4 lg:px-8 shrink-0 border-b shadow-lg z-10", theme.header, theme.border)}>
+          <div className="flex items-center gap-4 lg:gap-8">
             <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-sm items-center gap-2">
               <div className="flex">
-                <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('VENDA')}>VENDA</Button>
-                <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
-                <Button variant="ghost" size="sm" className={cn("h-9 px-5 text-[11px] font-black rounded-xl transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
+                <Button variant="ghost" size="sm" className={cn("h-9 px-3 lg:px-5 text-[10px] lg:text-[11px] font-black rounded-xl transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('VENDA')}>VENDA</Button>
+                <Button variant="ghost" size="sm" className={cn("h-9 px-3 lg:px-5 text-[10px] lg:text-[11px] font-black rounded-xl transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
+                <Button variant="ghost" size="sm" className={cn("h-9 px-3 lg:px-5 text-[10px] lg:text-[11px] font-black rounded-xl transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
               </div>
               {mode === 'VENDA' && (
                 <>
-                  <div className="w-px h-6 bg-white/20 mx-2" />
-                  <div className={cn("flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer transition-all border-2", priceMode === 'VISTA' ? "bg-emerald-500 border-emerald-400 shadow-lg scale-105" : "bg-white/5 border-white/10 hover:bg-white/10")} onClick={() => setPriceMode(priceMode === 'VISTA' ? 'PRAZO' : 'VISTA')}>
+                  <div className="w-px h-6 bg-white/20 mx-1 lg:mx-2" />
+                  <div className={cn("flex items-center gap-2 px-2 lg:px-4 py-1.5 rounded-xl cursor-pointer transition-all border-2", priceMode === 'VISTA' ? "bg-emerald-500 border-emerald-400 shadow-lg scale-105" : "bg-white/5 border-white/10 hover:bg-white/10")} onClick={() => setPriceMode(priceMode === 'VISTA' ? 'PRAZO' : 'VISTA')}>
                     <Checkbox id="price-mode-header" checked={priceMode === 'VISTA'} onCheckedChange={(checked) => setPriceMode(checked ? 'VISTA' : 'PRAZO')} className="h-4 w-4 border-white data-[state=checked]:bg-white data-[state=checked]:text-emerald-600" />
-                    <label htmlFor="price-mode-header" className="text-[11px] font-black text-white uppercase cursor-pointer select-none">Preço À Vista</label>
+                    <label htmlFor="price-mode-header" className="text-[10px] lg:text-[11px] font-black text-white uppercase cursor-pointer select-none hidden sm:block">Preço À Vista</label>
                   </div>
                 </>
               )}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 hidden sm:block">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
               <div className="flex items-center gap-2">
-                <select className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[200px] cursor-pointer hover:text-primary transition-colors" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
+                <select className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[150px] lg:min-w-[200px] cursor-pointer hover:text-primary transition-colors" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
                   <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
                   {clients.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
                 </select>
@@ -563,9 +580,9 @@ const POS = () => {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Total da Operação</p>
-            <p className="text-5xl font-black text-white tracking-tighter drop-shadow-md">
-              <span className="text-2xl opacity-50 mr-1">R$</span>
+            <p className="text-[9px] lg:text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Total da Operação</p>
+            <p className="text-3xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+              <span className="text-xl lg:text-2xl opacity-50 mr-1">R$</span>
               {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </div>
@@ -614,9 +631,9 @@ const POS = () => {
           </div>
         </div>
 
-        <footer className="h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10">
-          <form onSubmit={handleCodeSubmit} className="flex items-end gap-4 h-full max-w-7xl mx-auto">
-            <div className="flex-1 space-y-1.5">
+        <footer className="h-auto lg:h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10">
+          <form onSubmit={handleCodeSubmit} className="flex flex-wrap lg:flex-nowrap items-end gap-4 h-full max-w-7xl mx-auto">
+            <div className="flex-1 min-w-[200px] space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} className="text-amber-500" /> Entrada de Produto (F1)</label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -624,28 +641,43 @@ const POS = () => {
               </div>
             </div>
             
-            <div className="w-32 space-y-1.5">
+            <div className="w-24 lg:w-32 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Qtde ({inputUnit})</label>
               <Input ref={qtyRef} value={inputQty} onChange={(e) => handleQtyChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
             </div>
 
             {pendingProduct?.tamanho_caixa > 0 && (
-              <div className="w-32 space-y-1.5 animate-in slide-in-from-bottom-2">
+              <div className="w-24 lg:w-32 space-y-1.5 animate-in slide-in-from-bottom-2">
                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center block">Caixas (CX)</label>
                 <Input ref={boxesRef} value={inputBoxes} onChange={(e) => handleBoxesChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-indigo-900 border-none text-xl font-black text-white text-center shadow-inner ring-2 ring-indigo-500/50" />
               </div>
             )}
 
-            <div className="w-28 space-y-1.5">
+            {/* NOVO CAMPO: VALOR UNITÁRIO NO RODAPÉ */}
+            <div className="w-28 lg:w-36 space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Valor Unit. (R$)</label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" size={14} />
+                <Input 
+                  ref={unitPriceRef}
+                  value={inputUnitPrice} 
+                  onChange={(e) => setInputUnitPrice(formatQtyMask(e.target.value))} 
+                  onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
+                  className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-emerald-700 text-right pl-8 shadow-inner" 
+                />
+              </div>
+            </div>
+
+            <div className="w-24 lg:w-28 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Unidade</label>
               <Button type="button" onClick={toggleUnit} disabled={!pendingProduct?.fracionado} className={cn("w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase border shadow-inner transition-all", pendingProduct?.fracionado ? "bg-indigo-600 text-white border-indigo-400 hover:bg-indigo-700" : "bg-slate-800 text-indigo-300 border-slate-700")}>
                 {inputUnit || "UN"}
               </Button>
             </div>
 
-            <div className="w-48 space-y-1.5">
+            <div className="w-full lg:w-48 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-right block">Sub Total</label>
-              <div className="h-12 bg-primary rounded-xl flex items-center justify-end px-4 font-black text-white text-xl shadow-lg shadow-primary/20"><span className="text-xs opacity-50 mr-2">R$</span>{pendingProduct ? (getProductPrice(pendingProduct, inputUnit, priceMode) * parseBRNumber(inputQty)).toFixed(2) : "0,00"}</div>
+              <div className="h-12 bg-primary rounded-xl flex items-center justify-end px-4 font-black text-white text-xl shadow-lg shadow-primary/20"><span className="text-xs opacity-50 mr-2">R$</span>{pendingProduct ? (parseBRNumber(inputUnitPrice) * parseBRNumber(inputQty)).toFixed(2) : "0,00"}</div>
             </div>
           </form>
         </footer>
@@ -666,7 +698,7 @@ const POS = () => {
       </Dialog>
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
-      <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} />
+      <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
       <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
