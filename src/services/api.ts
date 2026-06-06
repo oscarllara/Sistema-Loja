@@ -74,25 +74,30 @@ export const db = {
       }
     },
     add: async (p: any) => {
-      // Busca o último ID manual para incrementar
-      const { data: lastProd } = await supabase
+      // LÓGICA ROBUSTA PARA PRÓXIMO ID:
+      // Buscamos todos os IDs manuais para encontrar o maior número real
+      const { data: allIds, error: fetchError } = await supabase
         .from('produtos')
-        .select('id_manual')
-        .order('id_manual', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .select('id_manual');
+      
+      if (fetchError) throw fetchError;
 
-      let nextId = '00001';
-      if (lastProd && lastProd.id_manual) {
-        const currentId = parseInt(lastProd.id_manual);
-        if (!isNaN(currentId)) {
-          nextId = (currentId + 1).toString().padStart(5, '0');
-        }
+      let maxId = 0;
+      if (allIds && allIds.length > 0) {
+        allIds.forEach(item => {
+          const num = parseInt(item.id_manual);
+          if (!isNaN(num) && num > maxId) maxId = num;
+        });
       }
+
+      const nextId = (maxId + 1).toString().padStart(5, '0');
+      
+      // Removemos qualquer id_manual que venha do formulário para garantir o novo
+      const { id_manual, ...productData } = p;
 
       const { data, error } = await supabase
         .from('produtos')
-        .insert([{ ...p, id_manual: nextId }])
+        .insert([{ ...productData, id_manual: nextId }])
         .select()
         .single();
       
@@ -107,12 +112,15 @@ export const db = {
       return { error };
     },
     update: async (id: number, data: any) => {
-      // Remove campos protegidos para evitar erro 400/409
-      const { cd_produto, id_manual, created_at, ...updateData } = data;
+      // Removemos campos que o banco não permite atualizar ou que podem causar conflito
+      const { cd_produto, id_manual, created_at, data_atualizacao, ...updateData } = data;
       
       const { error } = await supabase
         .from('produtos')
-        .update(updateData)
+        .update({
+          ...updateData,
+          data_atualizacao: new Date().toISOString()
+        })
         .eq('cd_produto', id);
         
       if (error) throw error;

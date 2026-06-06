@@ -103,7 +103,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const parseToNumber = (value: string): number => {
     if (!value) return 0;
     if (typeof value === 'number') return value;
-    // Converte vírgula para ponto e remove pontos de milhar
     const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
     const num = parseFloat(cleanValue);
     return isNaN(num) ? 0 : num;
@@ -244,6 +243,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const onSubmit = async (data: ProductFormValues) => {
     setIsSaving(true);
     try {
+      const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null;
+      
       const payload: any = {
         nome: data.nome.toUpperCase(),
         id_importado: data.id_importado || null,
@@ -273,12 +274,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         link_externo: data.link_externo || null,
         descricao_site: data.descricao_site || null,
         integrar_calculadora: !!data.integrar_calculadora,
-        cd_fornecedores: data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null,
+        cd_fornecedores: isNaN(supplierId as any) ? null : supplierId,
         data_atualizacao: new Date().toISOString()
       };
 
       if (product) {
-        // Na atualização, NÃO enviamos o id_manual para evitar conflitos de chave única
         await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado com sucesso!");
       } else {
