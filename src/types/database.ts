@@ -14,7 +14,7 @@ export interface Permissoes {
   settings: boolean;
   rentals: boolean;
   calculator: boolean;
-  is_supervisor: boolean; // Nova permissão para liberação de travas
+  is_supervisor: boolean;
 }
 
 export interface Cliente {
@@ -79,6 +79,7 @@ export interface Produto {
   un: string;
   un_fracionada?: string;
   fator_conversao?: number;
+  tamanho_caixa?: number; // Novo campo para arredondamento
   cod_barras?: string;
   compra?: number;
   venda: number;
@@ -123,7 +124,8 @@ export interface LancamentoFinanceiro {
   categoria: string; 
   meio_pagamento?: MeioPagamento;
   bandeira_cartao?: string;
-  cd_account?: number; 
+  cd_conta?: number; 
+  cd_func?: number; // Novo campo para rastrear o operador
   is_fixa?: boolean;
   cd_venda?: number;
   cd_compra?: number;
@@ -168,9 +170,9 @@ export interface Configuracoes {
   margem_rodape: number;
   
   juros_parcelamento: number;
-  juros_atraso: number; // Juros diário (ex: 0.04)
-  multa_atraso: number; // Multa fixa (ex: 2.00)
-  dias_carencia_juros: number; // Dias após vencimento para começar a cobrar
+  juros_atraso: number; 
+  multa_atraso: number; 
+  dias_carencia_juros: number; 
   whatsapp_suporte?: string;
 }
 
