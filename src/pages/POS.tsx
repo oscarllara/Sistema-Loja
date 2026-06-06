@@ -324,6 +324,18 @@ const POS = () => {
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
+  const handleCodeChange = (val: string) => {
+    setInputCode(val);
+    
+    // LÓGICA DE AUTO-ABERTURA DA PESQUISA
+    // Se o usuário digitar letras e tiver mais de 2 caracteres, abre a pesquisa
+    const hasLetters = /[a-zA-Z]/.test(val);
+    if (hasLetters && val.length >= 2 && !pendingProduct) {
+      setSearchInitialTerm(val);
+      setIsSearchOpen(true);
+    }
+  };
+
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputCode.trim()) return;
@@ -637,7 +649,13 @@ const POS = () => {
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} className="text-amber-500" /> Entrada de Produto (F1)</label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <Input ref={codeRef} value={inputCode} onChange={(e) => setInputCode(e.target.value)} className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")} placeholder="Bipe o código ou digite o nome..." />
+                <Input 
+                  ref={codeRef} 
+                  value={inputCode} 
+                  onChange={(e) => handleCodeChange(e.target.value)} 
+                  className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")} 
+                  placeholder="Bipe o código ou digite o nome..." 
+                />
               </div>
             </div>
             
@@ -700,7 +718,7 @@ const POS = () => {
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
       <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
-      <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={startInsertion} initialSearch={searchInitialTerm} />
+      <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl"><DialogHeader><DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cadastrar Novo Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>

@@ -38,6 +38,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
   const loadProducts = React.useCallback(async () => {
     setIsLoading(true);
     try {
+      // Força a limpeza do cache para garantir que novos produtos apareçam
       const data = await db.produtos.getAll();
       setProducts(data || []);
     } catch (e) {
@@ -76,14 +77,21 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
     if (!term) return matches.slice(0, 50);
 
-    // LÓGICA DE ORDENAÇÃO: Prioriza quem COMEÇA com o termo (Produto Raiz)
+    // LÓGICA DE ORDENAÇÃO "RAIZ":
+    // 1. Exato (Cimento)
+    // 2. Começa com (Cimento Caue)
+    // 3. Contém (Bloco de Cimento)
     return matches.sort((a, b) => {
       const nameA = (a.nome || "").toLowerCase();
       const nameB = (b.nome || "").toLowerCase();
 
+      const exactA = nameA === term;
+      const exactB = nameB === term;
+      if (exactA && !exactB) return -1;
+      if (!exactA && exactB) return 1;
+
       const startsA = nameA.startsWith(term);
       const startsB = nameB.startsWith(term);
-
       if (startsA && !startsB) return -1;
       if (!startsA && startsB) return 1;
 
