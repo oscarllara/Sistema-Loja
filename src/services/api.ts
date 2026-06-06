@@ -102,8 +102,19 @@ export const db = {
       return { error };
     },
     update: async (id: number, data: any) => {
-      const { error } = await supabase.from('produtos').update(data).eq('cd_produto', id);
-      if (error) throw error;
+      // Remove campos que não devem ser atualizados ou que podem causar erro
+      const { cd_produto, id_manual, ...updateData } = data;
+      
+      const { error } = await supabase
+        .from('produtos')
+        .update(updateData)
+        .eq('cd_produto', id);
+        
+      if (error) {
+        console.error("Erro Supabase Update:", error);
+        throw error;
+      }
+      
       localStorage.removeItem(PRODUCTS_CACHE_KEY);
     },
     delete: async (id: number) => {

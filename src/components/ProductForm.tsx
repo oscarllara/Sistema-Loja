@@ -278,7 +278,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       };
 
       if (product) {
-        payload.id_manual = data.id_manual;
+        // Na atualização, NÃO enviamos o id_manual para evitar conflitos
         await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado com sucesso!");
       } else {
@@ -287,7 +287,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       }
       onSuccess();
     } catch (err: any) {
-      showError("Erro ao salvar produto.");
+      console.error("Erro ao salvar:", err);
+      showError("Erro ao salvar produto. Verifique os dados.");
     } finally {
       setIsSaving(false);
     }
