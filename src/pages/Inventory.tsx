@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2, Globe, Package, RefreshCw } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2, Globe, Package, RefreshCw, Hash } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -33,7 +33,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const Inventory = () => {
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = React.useState("");
+  const [searchCode, setSearchCode] = React.useState("");
+  const [searchName, setSearchName] = React.useState("");
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingProduct, setEditingProduct] = React.useState<Produto | undefined>(undefined);
   const [filterSiteOnly, setFilterSiteOnly] = React.useState(false);
@@ -43,7 +44,7 @@ const Inventory = () => {
   // 1. Busca de dados com TanStack Query
   const { data: products = [], isLoading: isLoadingProducts, refetch } = useQuery({
     queryKey: ['produtos'],
-    queryFn: () => db.produtos.getAll(true), // Passa true para ignorar o cache local
+    queryFn: () => db.produtos.getAll(true),
   });
 
   const { data: sales = [] } = useQuery({
@@ -56,7 +57,6 @@ const Inventory = () => {
     queryFn: () => db.financeiro.getAll(),
   });
 
-  // Função para atualizar tudo
   const handleRefresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['produtos'] });
     await refetch();
@@ -106,17 +106,21 @@ const Inventory = () => {
 
   const filteredProducts = React.useMemo(() => {
     return products.filter(p => {
-      const term = searchTerm.toLowerCase();
-      const matchesSearch = (
-        p.nome.toLowerCase().includes(term) ||
-        p.id_manual?.includes(term) ||
-        p.id_importado?.includes(term) ||
-        p.cod_barras?.includes(term)
+      const codeTerm = searchCode.toLowerCase().trim();
+      const nameTerm = searchName.toLowerCase().trim();
+      
+      const matchesCode = !codeTerm || (
+        p.id_manual?.toLowerCase().includes(codeTerm) ||
+        p.id_importado?.toLowerCase().includes(codeTerm) ||
+        p.cod_barras?.toLowerCase().includes(codeTerm)
       );
+      
+      const matchesName = !nameTerm || p.nome.toLowerCase().includes(nameTerm);
       const matchesSite = filterSiteOnly ? p.disponivel_site : true;
-      return matchesSearch && matchesSite;
+      
+      return matchesCode && matchesName && matchesSite;
     });
-  }, [products, searchTerm, filterSiteOnly]);
+  }, [products, searchCode, searchName, filterSiteOnly]);
 
   const viewStats = React.useMemo(() => {
     const totalItens = products.length;
@@ -173,10 +177,24 @@ const Inventory = () => {
         </div>
 
         <Card className="border-none shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 bg-white">
-            <div className="relative max-w-md w-full">
+          <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <Input 
+                placeholder="Cód. Novo ou Antigo..." 
+                className="pl-10 border-slate-200 h-11 rounded-lg font-bold" 
+                value={searchCode} 
+                onChange={(e) => setSearchCode(e.target.value)} 
+              />
+            </div>
+            <div className="relative flex-[2]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <Input placeholder="Buscar por nome, código ou barras..." className="pl-10 border-slate-200 h-11 rounded-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <Input 
+                placeholder="Pesquisar por Nome do Produto..." 
+                className="pl-10 border-slate-200 h-11 rounded-lg" 
+                value={searchName} 
+                onChange={(e) => setSearchName(e.target.value)} 
+              />
             </div>
           </div>
 
