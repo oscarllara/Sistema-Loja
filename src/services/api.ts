@@ -74,6 +74,7 @@ export const db = {
       }
     },
     add: async (p: any) => {
+      // Busca o último ID manual para incrementar
       const { data: lastProd } = await supabase
         .from('produtos')
         .select('id_manual')
@@ -81,9 +82,13 @@ export const db = {
         .limit(1)
         .maybeSingle();
 
-      const nextId = lastProd 
-        ? (parseInt(lastProd.id_manual) + 1).toString().padStart(5, '0') 
-        : '00001';
+      let nextId = '00001';
+      if (lastProd && lastProd.id_manual) {
+        const currentId = parseInt(lastProd.id_manual);
+        if (!isNaN(currentId)) {
+          nextId = (currentId + 1).toString().padStart(5, '0');
+        }
+      }
 
       const { data, error } = await supabase
         .from('produtos')
@@ -102,18 +107,15 @@ export const db = {
       return { error };
     },
     update: async (id: number, data: any) => {
-      // Remove campos que não devem ser atualizados ou que podem causar erro
-      const { cd_produto, id_manual, ...updateData } = data;
+      // Remove campos protegidos para evitar erro 400/409
+      const { cd_produto, id_manual, created_at, ...updateData } = data;
       
       const { error } = await supabase
         .from('produtos')
         .update(updateData)
         .eq('cd_produto', id);
         
-      if (error) {
-        console.error("Erro Supabase Update:", error);
-        throw error;
-      }
+      if (error) throw error;
       
       localStorage.removeItem(PRODUCTS_CACHE_KEY);
     },

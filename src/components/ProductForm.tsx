@@ -278,7 +278,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       };
 
       if (product) {
-        // Na atualização, NÃO enviamos o id_manual para evitar conflitos
+        // Na atualização, NÃO enviamos o id_manual para evitar conflitos de chave única
         await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado com sucesso!");
       } else {
@@ -287,8 +287,9 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       }
       onSuccess();
     } catch (err: any) {
-      console.error("Erro ao salvar:", err);
-      showError("Erro ao salvar produto. Verifique os dados.");
+      console.error("Erro ao salvar produto:", err);
+      const msg = err.message || "Erro desconhecido no banco de dados.";
+      showError(`Erro ao salvar: ${msg}`);
     } finally {
       setIsSaving(false);
     }
