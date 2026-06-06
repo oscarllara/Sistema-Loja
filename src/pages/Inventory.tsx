@@ -40,10 +40,11 @@ const Inventory = () => {
   
   const [selectedProductForHistory, setSelectedProductForHistory] = React.useState<Produto | null>(null);
 
-  // 1. Busca de dados
+  // 1. Busca de dados com TanStack Query
   const { data: products = [], isLoading: isLoadingProducts, refetch } = useQuery({
     queryKey: ['produtos'],
     queryFn: () => db.produtos.getAll(),
+    staleTime: 0, // Garante que os dados sejam considerados obsoletos imediatamente
   });
 
   const { data: sales = [] } = useQuery({
@@ -56,11 +57,17 @@ const Inventory = () => {
     queryFn: () => db.financeiro.getAll(),
   });
 
+  // Função para atualizar tudo
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['produtos'] });
+    await refetch();
+  };
+
   // 2. Mutações
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number, data: any }) => db.produtos.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['produtos'] });
+      handleRefresh();
       showSuccess("Alteração salva!");
     }
   });
@@ -68,7 +75,7 @@ const Inventory = () => {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => db.produtos.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['produtos'] });
+      handleRefresh();
       showSuccess("Produto excluído!");
     }
   });
@@ -135,7 +142,7 @@ const Inventory = () => {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => refetch()} className="gap-2 rounded-xl h-11 border-slate-200">
+            <Button variant="outline" onClick={handleRefresh} className="gap-2 rounded-xl h-11 border-slate-200">
               <RefreshCw size={18} className={isLoadingProducts ? "animate-spin" : ""} />
               Atualizar
             </Button>
@@ -147,7 +154,13 @@ const Inventory = () => {
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
-                <ProductForm product={editingProduct} onSuccess={() => { setIsModalOpen(false); queryClient.invalidateQueries({ queryKey: ['produtos'] }); }} />
+                <ProductForm 
+                  product={editingProduct} 
+                  onSuccess={async () => { 
+                    setIsModalOpen(false); 
+                    await handleRefresh(); // Força a atualização imediata após fechar o modal
+                  }} 
+                />
               </DialogContent>
             </Dialog>
           </div>
