@@ -63,8 +63,8 @@ const productSchema = z.object({
   ncm: z.string().optional().nullable(),
   fracionado: z.boolean().default(false),
   un_fracionada: z.string().optional().nullable(),
-  fator_conversao: z.string().default("1,0000"), // Usado para Baixa de Estoque (Fração)
-  tamanho_caixa: z.string().default("0,0000"), // Usado para Arredondamento (Embalagem)
+  fator_conversao: z.string().default("1,0000"),
+  tamanho_caixa: z.string().default("0,0000"),
   is_kit: z.boolean().default(false),
   is_locacao: z.boolean().default(false),
   valor_diaria: z.string().default("0,00"),
@@ -102,8 +102,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const parseToNumber = (value: string): number => {
     if (!value) return 0;
+    // Se já for um número puro (ex: vindo do banco), retorna ele
+    if (typeof value === 'number') return value;
+    
+    // Remove pontos de milhar e troca vírgula por ponto decimal
     const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
-    return parseFloat(cleanValue) || 0;
+    const num = parseFloat(cleanValue);
+    return isNaN(num) ? 0 : num;
   };
 
   const calculateMargin = (cost: number, sale: number) => {
@@ -361,7 +366,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* SEÇÃO DE EMBALAGEM / ARREDONDAMENTO (Ex: Piso) */}
               <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                 <h4 className="text-xs font-black text-blue-900 flex items-center gap-2 uppercase tracking-wider">
                   <Box size={16} className="text-blue-600" /> Embalagem / Arredondamento
@@ -375,7 +379,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 </div>
               </div>
 
-              {/* SEÇÃO DE VENDA FRACIONADA (Ex: Cimento) */}
               <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-4">
                 <div className="flex items-center space-x-2 mb-2">
                   <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
@@ -398,44 +401,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                       <Label className="text-[10px] text-emerald-700 font-bold uppercase">Preço Fração (R$)</Label>
                       <Input {...register("venda_fracionada")} onChange={(e) => setValue("venda_fracionada", formatMoney(e.target.value))} className="h-8 bg-white border-emerald-200 font-black text-emerald-700 text-xs" />
                     </div>
-                    <p className="text-[8px] text-emerald-600 font-bold uppercase">
-                      Nota: O "Fator de Baixa" define quanto 1 unidade da fração retira do estoque principal (ex: 1kg = 0,02 saco).
-                    </p>
                   </div>
                 )}
               </div>
             </div>
-
-            {product && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-2"><History size={14} /> Histórico de Movimentação</h4>
-                  <Button type="button" variant="link" className="h-auto p-0 text-indigo-600 font-bold text-[10px] uppercase" onClick={() => setIsFullHistoryOpen(true)}>Ver Tudo</Button>
-                </div>
-                <div className="border rounded-lg overflow-hidden bg-white">
-                  <Table>
-                    <TableHeader className="bg-slate-50">
-                      <TableRow className="h-8">
-                        <TableHead className="text-[9px] font-bold uppercase">Data</TableHead>
-                        <TableHead className="text-[9px] font-bold uppercase">Tipo</TableHead>
-                        <TableHead className="text-[9px] font-bold uppercase">Origem</TableHead>
-                        <TableHead className="text-[9px] font-bold uppercase text-right">Qtde</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {history.slice(0, 5).map((m, i) => (
-                        <TableRow key={i} className="h-8">
-                          <TableCell className="py-1 text-[10px]">{new Date(m.data).toLocaleDateString()}</TableCell>
-                          <TableCell className="py-1"><Badge className={cn("text-[8px] font-bold h-4 px-1", m.tipo === 'ENTRADA' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{m.tipo}</Badge></TableCell>
-                          <TableCell className="py-1 text-[10px] font-medium truncate max-w-[120px]">{m.origem}</TableCell>
-                          <TableCell className="py-1 text-[10px] text-right font-bold">{m.qtde}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="precos" className="space-y-6 m-0">
@@ -513,8 +482,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
         </div>
       </Tabs>
-
-      {product && isFullHistoryOpen && <ProductHistoryModal isOpen={isFullHistoryOpen} onClose={() => setIsFullHistoryOpen(false)} product={product} />}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 px-10 h-12 rounded-xl font-black shadow-lg">

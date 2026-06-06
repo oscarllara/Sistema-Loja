@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2, Globe, Package } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2, Globe, Package, RefreshCw } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -41,7 +41,7 @@ const Inventory = () => {
   const [selectedProductForHistory, setSelectedProductForHistory] = React.useState<Produto | null>(null);
 
   // 1. Busca de dados
-  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
+  const { data: products = [], isLoading: isLoadingProducts, refetch } = useQuery({
     queryKey: ['produtos'],
     queryFn: () => db.produtos.getAll(),
   });
@@ -113,7 +113,7 @@ const Inventory = () => {
   }, [products, searchTerm, filterSiteOnly]);
 
   const viewStats = React.useMemo(() => {
-    const totalItens = products.length; // Total real de produtos cadastrados
+    const totalItens = products.length;
     const valorEstoque = products.reduce((acc, p) => acc + ((p.compra || 0) * (p.estoque || 0)), 0);
     const noSite = products.filter(p => p.disponivel_site).length;
     return { totalItens, valorEstoque, noSite };
@@ -131,20 +131,26 @@ const Inventory = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
-            <p className="text-slate-500 text-sm">Clique no nome do produto para ver o histórico de movimentação.</p>
+            <p className="text-slate-500 text-sm">Gerencie seus produtos e acompanhe a lucratividade real.</p>
           </div>
           
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setEditingProduct(undefined)} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg">
-                <Plus size={20} /> Novo Produto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
-              <ProductForm product={editingProduct} onSuccess={() => { setIsModalOpen(false); queryClient.invalidateQueries({ queryKey: ['produtos'] }); }} />
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => refetch()} className="gap-2 rounded-xl h-11 border-slate-200">
+              <RefreshCw size={18} className={isLoadingProducts ? "animate-spin" : ""} />
+              Atualizar
+            </Button>
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => setEditingProduct(undefined)} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg">
+                  <Plus size={20} /> Novo Produto
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
+                <ProductForm product={editingProduct} onSuccess={() => { setIsModalOpen(false); queryClient.invalidateQueries({ queryKey: ['produtos'] }); }} />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

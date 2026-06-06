@@ -51,6 +51,7 @@ export const db = {
   produtos: {
     getAll: async (): Promise<Produto[]> => {
       try {
+        // Sempre tenta buscar do banco primeiro para garantir dados novos
         const { data, error } = await supabase
           .from('produtos')
           .select('*')
@@ -87,6 +88,8 @@ export const db = {
         .single();
       
       if (error) throw error;
+      
+      // LIMPA O CACHE IMEDIATAMENTE
       localStorage.removeItem(PRODUCTS_CACHE_KEY);
       return data;
     },
@@ -192,7 +195,7 @@ export const db = {
           cd_conta 
         };
         if (meio) updateData.meio_pagamento = meio;
-        if (cd_func) updateData.cd_func = cd_func; // Registra o operador que recebeu
+        if (cd_func) updateData.cd_func = cd_func;
 
         const { error: uError } = await supabase.from('financeiro').update(updateData).eq('cd_lancamento', id);
         if (uError) throw uError;
