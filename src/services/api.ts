@@ -48,8 +48,7 @@ export const db = {
     }
   },
   produtos: {
-    getAll: async (): Promise<Produto[]> => {
-      // Removido cache para garantir dados em tempo real
+    getAll: async (forceFresh = false): Promise<Produto[]> => {
       const { data, error } = await supabase
         .from('produtos')
         .select('*')
@@ -59,20 +58,26 @@ export const db = {
       return data || [];
     },
     add: async (p: any) => {
-      // Busca todos os IDs para encontrar o próximo numericamente (mais seguro que order by string)
-      const { data: allIds, error: fetchError } = await supabase
+      // Busca o MAIOR id_manual existente ordenando de forma decrescente
+      // Como os IDs são preenchidos com zeros (00001, 00002), a ordenação de texto funciona perfeitamente
+      const { data: lastProduct, error: fetchError } = await supabase
         .from('produtos')
-        .select('id_manual');
+        .select('id_manual')
+        .order('id_manual', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       
       if (fetchError) throw fetchError;
 
-      let maxId = 0;
-      allIds?.forEach(item => {
-        const id = parseInt(item.id_manual || "0");
-        if (!isNaN(id) && id > maxId) maxId = id;
-      });
+      let nextIdNum = 1;
+      if (lastProduct?.id_manual) {
+        const currentMax = parseInt(lastProduct.id_manual);
+        if (!isNaN(currentMax)) {
+          nextIdNum = currentMax + 1;
+        }
+      }
 
-      const nextId = (maxId + 1).toString().padStart(5, '0');
+      const nextId = nextIdNum.toString().padStart(5, '0');
       
       // Remove campos que não existem na tabela ou são automáticos
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...productData } = p;
@@ -96,6 +101,7 @@ export const db = {
     },
     update: async (id: number, data: any) => {
       // Remove campos protegidos e campos calculados que não existem no banco
+      // IMPORTANTE: Nunca enviamos id_manual no update para evitar erros de constraint
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...updateData } = data;
       
       const { error } = await supabase
