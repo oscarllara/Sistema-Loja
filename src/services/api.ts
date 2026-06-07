@@ -5,7 +5,6 @@ import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configura
 
 const AUTH_KEY = 'dyaderp_auth';
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
-const PRODUCTS_CACHE_KEY = 'dyaderp_products_cache';
 
 export const db = {
   auth: {
@@ -49,53 +48,34 @@ export const db = {
     }
   },
   produtos: {
-    getAll: async (forceFresh = false): Promise<Produto[]> => {
-      try {
-        if (!forceFresh) {
-          const cache = localStorage.getItem(PRODUCTS_CACHE_KEY);
-          if (cache) return JSON.parse(cache);
-        }
-
-        const { data, error } = await supabase
-          .from('produtos')
-          .select('*')
-          .order('nome');
-        
-        if (error) throw error;
-        
-        if (data) {
-          localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(data));
-          return data;
-        }
-        return [];
-      } catch (err) {
-        const cache = localStorage.getItem(PRODUCTS_CACHE_KEY);
-        return cache ? JSON.parse(cache) : [];
-      }
+    getAll: async (): Promise<Produto[]> => {
+      // Removido cache para garantir dados em tempo real
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('*')
+        .order('nome');
+      
+      if (error) throw error;
+      return data || [];
     },
     add: async (p: any) => {
-      // Busca o maior ID manual para incrementar
-      const { data: lastProduct, error: fetchError } = await supabase
+      // Busca todos os IDs para encontrar o próximo numericamente (mais seguro que order by string)
+      const { data: allIds, error: fetchError } = await supabase
         .from('produtos')
-        .select('id_manual')
-        .order('id_manual', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .select('id_manual');
       
       if (fetchError) throw fetchError;
 
-      let nextIdNum = 1;
-      if (lastProduct?.id_manual) {
-        const currentMax = parseInt(lastProduct.id_manual);
-        if (!isNaN(currentMax)) {
-          nextIdNum = currentMax + 1;
-        }
-      }
+      let maxId = 0;
+      allIds?.forEach(item => {
+        const id = parseInt(item.id_manual || "0");
+        if (!isNaN(id) && id > maxId) maxId = id;
+      });
 
-      const nextId = nextIdNum.toString().padStart(5, '0');
+      const nextId = (maxId + 1).toString().padStart(5, '0');
       
-      // Remove campos que não devem ser enviados no insert manual
-      const { cd_produto, id_manual, created_at, data_atualizacao, ...productData } = p;
+      // Remove campos que não existem na tabela ou são automáticos
+      const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...productData } = p;
 
       const { data, error } = await supabase
         .from('produtos')
@@ -108,18 +88,15 @@ export const db = {
         .single();
       
       if (error) throw error;
-      
-      localStorage.removeItem(PRODUCTS_CACHE_KEY);
       return data;
     },
     bulkAdd: async (products: any[]) => {
       const { error } = await supabase.from('produtos').insert(products);
-      localStorage.removeItem(PRODUCTS_CACHE_KEY);
       return { error };
     },
     update: async (id: number, data: any) => {
-      // Remove campos protegidos do update
-      const { cd_produto, id_manual, created_at, data_atualizacao, ...updateData } = data;
+      // Remove campos protegidos e campos calculados que não existem no banco
+      const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...updateData } = data;
       
       const { error } = await supabase
         .from('produtos')
@@ -130,12 +107,10 @@ export const db = {
         .eq('cd_produto', id);
         
       if (error) throw error;
-      localStorage.removeItem(PRODUCTS_CACHE_KEY);
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);
       if (error) throw error;
-      localStorage.removeItem(PRODUCTS_CACHE_KEY);
     }
   },
   clientes: {
