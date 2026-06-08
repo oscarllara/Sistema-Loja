@@ -58,8 +58,7 @@ export const db = {
       return data || [];
     },
     add: async (p: any) => {
-      // Busca o MAIOR id_manual existente ordenando de forma decrescente
-      // Como os IDs são preenchidos com zeros (00001, 00002), a ordenação de texto funciona perfeitamente
+      // Busca o MAIOR id_manual existente para gerar o próximo
       const { data: lastProduct, error: fetchError } = await supabase
         .from('produtos')
         .select('id_manual')
@@ -67,7 +66,10 @@ export const db = {
         .limit(1)
         .maybeSingle();
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("[API] Erro ao buscar último ID:", fetchError);
+        throw fetchError;
+      }
 
       let nextIdNum = 1;
       if (lastProduct?.id_manual) {
@@ -79,7 +81,7 @@ export const db = {
 
       const nextId = nextIdNum.toString().padStart(5, '0');
       
-      // Remove campos que não existem na tabela ou são automáticos
+      // Limpeza de campos para o Insert
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...productData } = p;
 
       const { data, error } = await supabase
@@ -92,7 +94,10 @@ export const db = {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error("[API] Erro crítico no INSERT de produto:", error);
+        throw error;
+      }
       return data;
     },
     bulkAdd: async (products: any[]) => {
@@ -100,19 +105,25 @@ export const db = {
       return { error };
     },
     update: async (id: number, data: any) => {
-      // Remove campos protegidos e campos calculados que não existem no banco
-      // IMPORTANTE: Nunca enviamos id_manual no update para evitar erros de constraint
+      // Conforme solicitado, garantindo que campos calculados não sejam enviados
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...updateData } = data;
       
+      // O usuário solicitou usar id_importado como chave primária na query de update
+      const key = updateData.id_importado ? 'id_importado' : 'cd_produto';
+      const keyValue = updateData.id_importado || id;
+
       const { error } = await supabase
         .from('produtos')
         .update({
           ...updateData,
           data_atualizacao: new Date().toISOString()
         })
-        .eq('cd_produto', id);
+        .eq(key, keyValue);
         
-      if (error) throw error;
+      if (error) {
+        console.error(`[API] Erro no UPDATE de produto (Chave: ${key}=${keyValue}):`, error);
+        throw error;
+      }
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);

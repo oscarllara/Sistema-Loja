@@ -44,7 +44,6 @@ import { Produto, Cliente } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
-import ProductHistoryModal from './ProductHistoryModal';
 
 const productSchema = z.object({
   id_manual: z.string().optional().nullable(),
@@ -89,9 +88,6 @@ interface ProductFormProps {
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
-  const [history, setHistory] = React.useState<any[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
-  const [isFullHistoryOpen, setIsFullHistoryOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
   const formatMoney = (value: string | number) => {
@@ -102,7 +98,6 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const parseToNumber = (value: string): number => {
     if (!value) return 0;
-    if (typeof value === 'number') return value;
     const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
     const num = parseFloat(cleanValue);
     return isNaN(num) ? 0 : num;
@@ -217,39 +212,21 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     db.clientes.getAll().then(data => {
       setSuppliers(data.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A'));
     });
-    if (product) loadHistory();
-  }, [product]);
-
-  const loadHistory = async () => {
-    if (!product) return;
-    setIsLoadingHistory(true);
-    try {
-      const [vendas, compras] = await Promise.all([db.vendas.getAll(), db.compras.getAll()]);
-      const movements: any[] = [];
-      vendas.forEach(v => {
-        const item = v.itens?.find(i => i.cd_produto === product.cd_produto);
-        if (item) movements.push({ data: v.data, tipo: 'SAÍDA', origem: `Venda #${v.cd_venda}`, entidade: v.nome_cliente || 'Consumidor', qtde: item.qtde, total: item.subtotal });
-      });
-      compras.forEach(c => {
-        const item = c.itens?.find(i => i.cd_produto === product.cd_produto);
-        if (item) movements.push({ data: c.data, tipo: 'ENTRADA', origem: `Compra NF ${c.nota_fiscal || 'S/N'}`, entidade: c.nome_fornecedor || 'Fornecedor', qtde: item.qtde, total: item.subtotal });
-      });
-      setHistory(movements.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()));
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
+  }, []);
 
   const onSubmit = async (data: ProductFormValues) => {
     setIsSaving(true);
+    console.log("[FORM] Iniciando salvamento de produto:", data.nome);
+    
     try {
       const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null;
       
+      // GARANTINDO TIPAGEM NUMÉRICA PARA O SUPABASE (EVITA ERRO 400)
       const payload: any = {
-        nome: data.nome.toUpperCase(),
-        id_importado: data.id_importado || null,
-        un: data.un.toUpperCase(),
-        cod_barras: data.cod_barras || null,
+        nome: data.nome.toUpperCase().trim(),
+        id_importado: data.id_importado?.trim() || null,
+        un: data.un.toUpperCase().trim(),
+        cod_barras: data.cod_barras?.trim() || null,
         compra: parseToNumber(data.compra),
         venda: parseToNumber(data.venda),
         venda_vista: parseToNumber(data.venda_vista),
@@ -257,11 +234,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         desconto_vista_valor: parseToNumber(data.desconto_vista_valor),
         estoque: parseToNumber(data.estoque),
         minimo: parseToNumber(data.minimo),
-        ncm: data.ncm || null,
+        ncm: data.ncm?.trim() || null,
         fracionado: !!data.fracionado,
-        un_fracionada: data.un_fracionada?.toUpperCase() || null,
-        fator_conversao: parseToNumber(data.fator_conversao),
-        tamanho_caixa: parseToNumber(data.tamanho_caixa),
+        un_fracionada: data.un_fracionada?.toUpperCase().trim() || null,
+        fator_conversao: parseToNumber(data.fator_conversao) || 1,
+        tamanho_caixa: parseToNumber(data.tamanho_caixa) || 0,
         is_kit: !!data.is_kit,
         is_locacao: !!data.is_locacao,
         valor_diaria: parseToNumber(data.valor_diaria),
@@ -270,26 +247,37 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         valor_mes: parseToNumber(data.valor_mes),
         disponivel_site: !!data.disponivel_site,
         preco_site: parseToNumber(data.preco_site),
-        imagem_url: data.imagem_url || null,
-        link_externo: data.link_externo || null,
-        descricao_site: data.descricao_site || null,
+        imagem_url: data.imagem_url?.trim() || null,
+        link_externo: data.link_externo?.trim() || null,
+        descricao_site: data.descricao_site?.trim() || null,
         integrar_calculadora: !!data.integrar_calculadora,
         cd_fornecedores: isNaN(supplierId as any) ? null : supplierId,
         data_atualizacao: new Date().toISOString()
       };
 
+      console.log("[FORM] Payload processado (Tipagem OK):", payload);
+
       if (product) {
+        // EDIÇÃO: O serviço db.produtos.update agora usa id_importado se disponível
         await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado com sucesso!");
       } else {
+        // NOVO: O serviço db.produtos.add gera o id_manual sequencial
         await db.produtos.add(payload);
         showSuccess("Produto cadastrado com sucesso!");
       }
+      
       onSuccess();
     } catch (err: any) {
-      console.error("Erro ao salvar produto:", err);
-      const msg = err.message || "Erro desconhecido no banco de dados.";
-      showError(`Erro ao salvar: ${msg}`);
+      // LOG DETALHADO CONFORME SOLICITADO
+      console.error("--- ERRO CRÍTICO NO SALVAMENTO ---");
+      console.error("Mensagem:", err.message);
+      console.error("Detalhes do Erro:", err);
+      if (err.details) console.error("Dica do Banco:", err.details);
+      if (err.hint) console.error("Sugestão:", err.hint);
+      console.error("----------------------------------");
+      
+      showError(`Falha ao salvar: ${err.message || "Erro de comunicação com o banco."}`);
     } finally {
       setIsSaving(false);
     }
@@ -323,7 +311,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Input {...register("nome")} className="uppercase" placeholder="EX: CIMENTO CAUE 50KG" />
               </div>
               <div className="space-y-2">
-                <Label className="text-amber-600 font-bold">Código Antigo</Label>
+                <Label className="text-amber-600 font-bold">Código Antigo (ID Importado)</Label>
                 <Input {...register("id_importado")} placeholder="Ex: 1234" className="border-amber-200" />
               </div>
               <div className="space-y-2"><Label>Código de Barras</Label><Input {...register("cod_barras")} /></div>
