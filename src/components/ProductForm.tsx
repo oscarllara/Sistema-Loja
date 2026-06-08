@@ -31,15 +31,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Produto, Cliente } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
@@ -98,6 +89,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const parseToNumber = (value: string): number => {
     if (!value) return 0;
+    // Remove pontos de milhar e troca vírgula por ponto
     const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
     const num = parseFloat(cleanValue);
     return isNaN(num) ? 0 : num;
@@ -216,12 +208,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const onSubmit = async (data: ProductFormValues) => {
     setIsSaving(true);
-    console.log("[FORM] Iniciando salvamento de produto:", data.nome);
     
     try {
       const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null;
       
-      // GARANTINDO TIPAGEM NUMÉRICA PARA O SUPABASE (EVITA ERRO 400)
+      // PAYLOAD LIMPO E TIPADO
       const payload: any = {
         nome: data.nome.toUpperCase().trim(),
         id_importado: data.id_importado?.trim() || null,
@@ -255,29 +246,21 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         data_atualizacao: new Date().toISOString()
       };
 
-      console.log("[FORM] Payload processado (Tipagem OK):", payload);
+      console.table(payload); // Depuração visual no console
 
       if (product) {
-        // EDIÇÃO: O serviço db.produtos.update agora usa id_importado se disponível
         await db.produtos.update(product.cd_produto, payload);
-        showSuccess("Produto atualizado com sucesso!");
+        showSuccess("Produto atualizado!");
       } else {
-        // NOVO: O serviço db.produtos.add gera o id_manual sequencial
         await db.produtos.add(payload);
-        showSuccess("Produto cadastrado com sucesso!");
+        showSuccess("Produto cadastrado!");
       }
       
       onSuccess();
     } catch (err: any) {
-      // LOG DETALHADO CONFORME SOLICITADO
-      console.error("--- ERRO CRÍTICO NO SALVAMENTO ---");
-      console.error("Mensagem:", err.message);
-      console.error("Detalhes do Erro:", err);
-      if (err.details) console.error("Dica do Banco:", err.details);
-      if (err.hint) console.error("Sugestão:", err.hint);
-      console.error("----------------------------------");
-      
-      showError(`Falha ao salvar: ${err.message || "Erro de comunicação com o banco."}`);
+      console.error("ERRO AO SALVAR:", err);
+      alert(`ERRO NO BANCO: ${err.message || "Verifique o console (F12)"}`);
+      showError("Falha na gravação.");
     } finally {
       setIsSaving(false);
     }

@@ -58,28 +58,26 @@ export const db = {
       return data || [];
     },
     add: async (p: any) => {
-      // BUSCA O MAIOR ID DE FORMA EFICIENTE (Apenas 1 registro)
-      const { data: lastProduct, error: fetchError } = await supabase
+      console.log("[API] Iniciando INSERT de novo produto...");
+      
+      // Busca o maior ID manual de forma segura
+      const { data: lastProducts, error: fetchError } = await supabase
         .from('produtos')
         .select('id_manual')
         .order('id_manual', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(50); // Pegamos os últimos 50 para garantir que achamos o maior numérico
       
-      if (fetchError) {
-        console.error("[SUPABASE] Erro ao buscar último ID:", fetchError);
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
-      let nextIdNum = 1;
-      if (lastProduct?.id_manual) {
-        const currentMax = parseInt(lastProduct.id_manual);
-        if (!isNaN(currentMax)) nextIdNum = currentMax + 1;
-      }
+      let maxId = 0;
+      (lastProducts || []).forEach(item => {
+        const num = parseInt(item.id_manual || "0");
+        if (!isNaN(num) && num > maxId) maxId = num;
+      });
 
-      const nextId = nextIdNum.toString().padStart(5, '0');
+      const nextId = (maxId + 1).toString().padStart(5, '0');
       
-      // Limpeza de campos e preparação do payload
+      // Remove campos que não pertencem à tabela ou são gerados pelo banco
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...productData } = p;
 
       const { data, error } = await supabase
@@ -93,35 +91,38 @@ export const db = {
         .single();
       
       if (error) {
-        console.error("[SUPABASE INSERT ERROR]", error);
+        console.error("--- ERRO NO SUPABASE (INSERT) ---");
+        console.error("Código:", error.code);
+        console.error("Mensagem:", error.message);
+        console.error("Detalhes:", error.details);
         throw error;
       }
+      
+      console.log("[API] Produto cadastrado com sucesso! ID:", nextId);
       return data;
     },
-    bulkAdd: async (products: any[]) => {
-      const { error } = await supabase.from('produtos').insert(products);
-      return { error };
-    },
     update: async (id: number, data: any) => {
+      console.log(`[API] Iniciando UPDATE no produto cd_produto=${id}...`);
+      
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...updateData } = data;
       
-      // CONFORME SOLICITADO: Usando id_importado como identificador primário na query
-      // Se não houver id_importado (produto novo criado no sistema), usamos o cd_produto (PK real)
-      const filterColumn = updateData.id_importado ? 'id_importado' : 'cd_produto';
-      const filterValue = updateData.id_importado || id;
-
+      // IMPORTANTE: Usamos cd_produto (PK) para garantir que alteramos o registro correto.
+      // Se o usuário mudou o id_importado na tela, ele será atualizado como um campo comum.
       const { error } = await supabase
         .from('produtos')
         .update({
           ...updateData,
           data_atualizacao: new Date().toISOString()
         })
-        .eq(filterColumn, filterValue);
+        .eq('cd_produto', id);
         
       if (error) {
-        console.error(`[SUPABASE UPDATE ERROR] Coluna: ${filterColumn}, Valor: ${filterValue}`, error);
+        console.error("--- ERRO NO SUPABASE (UPDATE) ---");
+        console.error("Mensagem:", error.message);
         throw error;
       }
+      
+      console.log("[API] Produto atualizado com sucesso!");
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);
