@@ -58,7 +58,7 @@ export const db = {
       return data || [];
     },
     add: async (p: any) => {
-      // Busca o MAIOR id_manual existente para gerar o próximo
+      // BUSCA O MAIOR ID DE FORMA EFICIENTE (Apenas 1 registro)
       const { data: lastProduct, error: fetchError } = await supabase
         .from('produtos')
         .select('id_manual')
@@ -67,21 +67,19 @@ export const db = {
         .maybeSingle();
       
       if (fetchError) {
-        console.error("[API] Erro ao buscar último ID:", fetchError);
+        console.error("[SUPABASE] Erro ao buscar último ID:", fetchError);
         throw fetchError;
       }
 
       let nextIdNum = 1;
       if (lastProduct?.id_manual) {
         const currentMax = parseInt(lastProduct.id_manual);
-        if (!isNaN(currentMax)) {
-          nextIdNum = currentMax + 1;
-        }
+        if (!isNaN(currentMax)) nextIdNum = currentMax + 1;
       }
 
       const nextId = nextIdNum.toString().padStart(5, '0');
       
-      // Limpeza de campos para o Insert
+      // Limpeza de campos e preparação do payload
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...productData } = p;
 
       const { data, error } = await supabase
@@ -95,7 +93,7 @@ export const db = {
         .single();
       
       if (error) {
-        console.error("[API] Erro crítico no INSERT de produto:", error);
+        console.error("[SUPABASE INSERT ERROR]", error);
         throw error;
       }
       return data;
@@ -105,12 +103,12 @@ export const db = {
       return { error };
     },
     update: async (id: number, data: any) => {
-      // Conforme solicitado, garantindo que campos calculados não sejam enviados
       const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...updateData } = data;
       
-      // O usuário solicitou usar id_importado como chave primária na query de update
-      const key = updateData.id_importado ? 'id_importado' : 'cd_produto';
-      const keyValue = updateData.id_importado || id;
+      // CONFORME SOLICITADO: Usando id_importado como identificador primário na query
+      // Se não houver id_importado (produto novo criado no sistema), usamos o cd_produto (PK real)
+      const filterColumn = updateData.id_importado ? 'id_importado' : 'cd_produto';
+      const filterValue = updateData.id_importado || id;
 
       const { error } = await supabase
         .from('produtos')
@@ -118,10 +116,10 @@ export const db = {
           ...updateData,
           data_atualizacao: new Date().toISOString()
         })
-        .eq(key, keyValue);
+        .eq(filterColumn, filterValue);
         
       if (error) {
-        console.error(`[API] Erro no UPDATE de produto (Chave: ${key}=${keyValue}):`, error);
+        console.error(`[SUPABASE UPDATE ERROR] Coluna: ${filterColumn}, Valor: ${filterValue}`, error);
         throw error;
       }
     },
