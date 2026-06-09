@@ -4,42 +4,19 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
-  Plus, 
-  Minus, 
   Trash2, 
   ShoppingCart,
-  User,
   Wallet,
-  Printer,
   Save,
   History,
-  UserCircle,
-  Scale,
-  XCircle,
-  Package,
-  ArrowLeftRight,
   ShoppingBag,
   UserPlus,
-  Upload,
-  CheckCircle2,
   LogOut,
   Lock,
-  Edit3,
   Zap,
-  CreditCard,
   CheckCircle,
-  Eye,
-  EyeOff,
   FileText,
-  CalendarClock,
-  Calendar,
-  FileCode,
-  FileSearch,
-  WifiOff,
   ShieldAlert,
-  RefreshCw,
-  Percent,
-  Box,
   DollarSign
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
@@ -62,7 +39,7 @@ import {
   DialogTitle,
   DialogFooter
 } from "@/components/ui/dialog";
-import { showSuccess, showError, showLoading, dismissToast } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
 import ProductSearchModal from '@/components/ProductSearchModal';
@@ -142,7 +119,6 @@ const POS = () => {
     loadAllData();
   }, [loadAllData]);
 
-  // FOCO AUTOMÁTICO NO PRODUTO APÓS SELECIONAR OPERADOR
   React.useEffect(() => {
     if (selectedSellerId) {
       codeRef.current?.focus();
@@ -327,8 +303,6 @@ const POS = () => {
   const handleCodeChange = (val: string) => {
     setInputCode(val);
     
-    // LÓGICA DE AUTO-ABERTURA DA PESQUISA
-    // Se o usuário digitar letras e tiver mais de 2 caracteres, abre a pesquisa
     const hasLetters = /[a-zA-Z]/.test(val);
     if (hasLetters && val.length >= 2 && !pendingProduct) {
       setSearchInitialTerm(val);
@@ -370,6 +344,10 @@ const POS = () => {
     
     newCart[idx] = item;
     setCart(newCart);
+  };
+
+  const removeItem = (idx: number) => {
+    setCart(prev => prev.filter((_, index) => index !== idx));
   };
 
   const handleSaveQuote = async () => {
@@ -454,7 +432,7 @@ const POS = () => {
               categoria: 'Venda',
               meio_pagamento: p.method,
               cd_conta: caixaLoja.cd_conta,
-              cd_func: Number(selectedSellerId) // Registra quem recebeu
+              cd_func: Number(selectedSellerId)
             });
             await db.contas.update(caixaLoja.cd_conta, { saldo: Number(caixaLoja.saldo) + Number(p.amount) });
           }
@@ -464,17 +442,30 @@ const POS = () => {
     
     for (const item of cart) {
       const prod = products.find(p => p.cd_produto === item.cd_produto);
-      if (prod) {
+      if (!prod) continue;
+
+      if (prod.is_kit && Array.isArray(prod.itens_kit) && prod.itens_kit.length > 0) {
+        for (const component of prod.itens_kit) {
+          const componentProduct = products.find(p => p.cd_produto === component.cd_produto);
+          if (!componentProduct) continue;
+
+          const baixaComponente = Number(component.quantidade || 0) * Number(item.quantity || 0);
+          await db.produtos.update(componentProduct.cd_produto, {
+            estoque: Number(componentProduct.estoque || 0) - baixaComponente
+          });
+        }
+      } else {
         let baixaEstoque = item.quantity;
         if (item.isFractional && item.conversionFactor > 0) baixaEstoque = item.quantity * item.conversionFactor;
-        db.produtos.update(prod.cd_produto, { estoque: prod.estoque - baixaEstoque }).catch(() => {});
+        await db.produtos.update(prod.cd_produto, { estoque: prod.estoque - baixaEstoque });
       }
     }
+
     setLastActionData({ ...payload, type: 'Venda' });
     setIsPrintOpen(true);
     setCart([]);
     setIsCheckoutOpen(false);
-    loadAllData();
+    await loadAllData();
   };
 
   const handleSupervisorRelease = async (e: React.FormEvent) => {
@@ -671,7 +662,6 @@ const POS = () => {
               </div>
             )}
 
-            {/* NOVO CAMPO: VALOR UNITÁRIO NO RODAPÉ */}
             <div className="w-28 lg:w-36 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Valor Unit. (R$)</label>
               <div className="relative">
@@ -717,12 +707,12 @@ const POS = () => {
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
-      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map(i => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
+      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map((i: any) => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl"><DialogHeader><DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cadastrar Novo Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
-      <Dialog open={isAdminAuthOpen} onOpenChange={isAdminAuthOpen}><DialogContent className="max-w-md rounded-3xl"><DialogHeader><DialogTitle className="text-xl font-black uppercase tracking-tighter">Acesso Restrito ao ERP</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-5 py-4"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Administrador</Label><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner" placeholder="••••••" /></div><DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsAdminAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-black">ACESSAR ERP</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md rounded-3xl"><DialogHeader><DialogTitle className="text-xl font-black uppercase tracking-tighter">Acesso Restrito ao ERP</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-5 py-4"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Administrador</Label><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner" placeholder="••••••" /></div><DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsAdminAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-black">ACESSAR ERP</Button></DialogFooter></form></DialogContent></Dialog>
     </div>
   );
 };

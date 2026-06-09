@@ -6,6 +6,30 @@ import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configura
 const AUTH_KEY = 'dyaderp_auth';
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
 
+const sanitizeProductPayload = (product: Partial<Produto>) => {
+  const payload = { ...product };
+
+  if (payload.id_manual === undefined || payload.id_manual === "") delete payload.id_manual;
+  if (payload.id_importado === undefined) payload.id_importado = null;
+  if (payload.cod_barras === undefined) payload.cod_barras = null;
+  if (payload.ncm === undefined) payload.ncm = null;
+  if (payload.un_fracionada === undefined) payload.un_fracionada = null;
+  if (payload.imagem_url === undefined) payload.imagem_url = null;
+  if (payload.link_externo === undefined) payload.link_externo = null;
+  if (payload.descricao_site === undefined) payload.descricao_site = null;
+  if (payload.cd_fornecedores === undefined) payload.cd_fornecedores = null;
+  if (!payload.fracionado) {
+    payload.un_fracionada = null;
+    payload.fator_conversao = null;
+    payload.venda_fracionada = 0;
+  }
+  if (!payload.is_kit) {
+    payload.itens_kit = null;
+  }
+
+  return payload;
+};
+
 export const db = {
   auth: {
     login: async (usuario: string, senha: string) => {
@@ -62,7 +86,7 @@ export const db = {
         .from('produtos')
         .select('id_manual')
         .order('cd_produto', { ascending: false })
-        .limit(200);
+        .limit(500);
 
       if (fetchError) throw fetchError;
 
@@ -73,17 +97,18 @@ export const db = {
       });
 
       const nextId = (maxId + 1).toString().padStart(5, '0');
-
       const { cd_produto, ...productData } = p as Produto;
+
+      const payload = sanitizeProductPayload({
+        ...productData,
+        id_manual: nextId,
+        data_atualizacao: new Date().toISOString()
+      });
 
       const { data, error } = await supabase
         .from('produtos')
-        .insert([{
-          ...productData,
-          id_manual: nextId,
-          data_atualizacao: new Date().toISOString()
-        }])
-        .select()
+        .insert([payload])
+        .select('*')
         .single();
 
       if (error) throw error;
@@ -92,14 +117,16 @@ export const db = {
     update: async (id: number, data: Partial<Produto>) => {
       const { cd_produto, ...updateData } = data as Produto;
 
+      const payload = sanitizeProductPayload({
+        ...updateData,
+        data_atualizacao: new Date().toISOString()
+      });
+
       const { data: updated, error } = await supabase
         .from('produtos')
-        .update({
-          ...updateData,
-          data_atualizacao: new Date().toISOString()
-        })
+        .update(payload)
         .eq('cd_produto', id)
-        .select()
+        .select('*')
         .single();
 
       if (error) throw error;

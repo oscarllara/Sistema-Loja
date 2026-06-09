@@ -71,6 +71,13 @@ export interface Cliente {
   permissoes?: Permissoes;
 }
 
+export interface ItemKitProduto {
+  cd_produto: number;
+  nome_produto: string;
+  quantidade: number;
+  unidade?: string;
+}
+
 export interface Produto {
   cd_produto: number;
   id_manual: string;
@@ -79,7 +86,7 @@ export interface Produto {
   un: string;
   un_fracionada?: string;
   fator_conversao?: number;
-  tamanho_caixa?: number; // Novo campo para arredondamento
+  tamanho_caixa?: number;
   cod_barras?: string;
   compra?: number;
   venda: number;
@@ -93,7 +100,7 @@ export interface Produto {
   ncm?: string;
   fracionado?: boolean;
   is_kit?: boolean;
-  itens_kit?: any[];
+  itens_kit?: ItemKitProduto[];
   data_atualizacao: string;
   is_locacao?: boolean;
   valor_diaria?: number;
@@ -125,7 +132,7 @@ export interface LancamentoFinanceiro {
   meio_pagamento?: MeioPagamento;
   bandeira_cartao?: string;
   cd_conta?: number; 
-  cd_func?: number; // Novo campo para rastrear o operador
+  cd_func?: number;
   is_fixa?: boolean;
   cd_venda?: number;
   cd_compra?: number;

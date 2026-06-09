@@ -17,7 +17,10 @@ import {
   TrendingUp,
   Box,
   Info,
-  Calendar
+  Calendar,
+  Boxes,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Produto, Cliente } from '@/types/database';
+import { Produto, Cliente, ItemKitProduto } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
@@ -73,6 +76,10 @@ interface ProductFormProps {
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
+  const [allProducts, setAllProducts] = React.useState<Produto[]>([]);
+  const [kitItems, setKitItems] = React.useState<ItemKitProduto[]>(product?.itens_kit || []);
+  const [selectedKitProductId, setSelectedKitProductId] = React.useState<string>("");
+  const [selectedKitQty, setSelectedKitQty] = React.useState<string>("1");
   const [isSaving, setIsSaving] = React.useState(false);
 
   const formatMoney = (value: string | number) => {
@@ -157,6 +164,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const discountValue = watch("desconto_vista_valor");
   const isLocacao = watch("is_locacao");
   const isFracionado = watch("fracionado");
+  const isKit = watch("is_kit");
+
+  const availableKitProducts = React.useMemo(() => {
+    return allProducts.filter((item) => item.cd_produto !== product?.cd_produto);
+  }, [allProducts, product]);
 
   const handleCostChange = (val: string) => {
     const formatted = formatMoney(val);
@@ -210,9 +222,46 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     updateCashPrice(sale, discount);
   };
 
+  const addKitItem = () => {
+    const productId = Number(selectedKitProductId);
+    const quantity = parseToNumber(selectedKitQty);
+
+    if (!productId || quantity <= 0) {
+      showError("Selecione um item e informe uma quantidade válida.");
+      return;
+    }
+
+    const selectedProduct = availableKitProducts.find((item) => item.cd_produto === productId);
+    if (!selectedProduct) return;
+
+    const alreadyExists = kitItems.some((item) => item.cd_produto === productId);
+    if (alreadyExists) {
+      showError("Esse item já foi adicionado ao kit.");
+      return;
+    }
+
+    setKitItems((prev) => [
+      ...prev,
+      {
+        cd_produto: selectedProduct.cd_produto,
+        nome_produto: selectedProduct.nome,
+        quantidade: quantity,
+        unidade: selectedProduct.un
+      }
+    ]);
+
+    setSelectedKitProductId("");
+    setSelectedKitQty("1");
+  };
+
+  const removeKitItem = (productId: number) => {
+    setKitItems((prev) => prev.filter((item) => item.cd_produto !== productId));
+  };
+
   React.useEffect(() => {
-    db.clientes.getAll().then(data => {
-      setSuppliers(data.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A'));
+    Promise.all([db.clientes.getAll(), db.produtos.getAll()]).then(([clientsData, productsData]) => {
+      setSuppliers(clientsData.filter(c => c.tipo_entidade === 'F' || c.tipo_entidade === 'A'));
+      setAllProducts(productsData);
     });
   }, []);
 
@@ -223,11 +272,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores, 10) : null;
 
       const payload: Partial<Produto> = {
-        id_manual: data.id_manual?.trim() || undefined,
+        id_manual: product ? (data.id_manual?.trim() || undefined) : undefined,
         nome: data.nome.toUpperCase().trim(),
-        id_importado: data.id_importado?.trim() || null || undefined,
+        id_importado: data.id_importado?.trim() || null,
         un: data.un.toUpperCase().trim(),
-        cod_barras: data.cod_barras?.trim() || null || undefined,
+        cod_barras: data.cod_barras?.trim() || null,
         compra: parseToNumber(data.compra),
         venda: parseToNumber(data.venda),
         venda_vista: parseToNumber(data.venda_vista),
@@ -235,12 +284,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         desconto_vista_valor: parseToNumber(data.desconto_vista_valor),
         estoque: parseToNumber(data.estoque),
         minimo: parseToNumber(data.minimo),
-        ncm: data.ncm?.trim() || null || undefined,
+        ncm: data.ncm?.trim() || null,
         fracionado: !!data.fracionado,
-        un_fracionada: data.un_fracionada?.toUpperCase().trim() || null || undefined,
-        fator_conversao: parseToNumber(data.fator_conversao) || 1,
+        un_fracionada: data.fracionado ? (data.un_fracionada?.toUpperCase().trim() || null) : null,
+        fator_conversao: data.fracionado ? (parseToNumber(data.fator_conversao) || 1) : null as any,
         tamanho_caixa: parseToNumber(data.tamanho_caixa) || 0,
         is_kit: !!data.is_kit,
+        itens_kit: data.is_kit ? kitItems : null as any,
         is_locacao: !!data.is_locacao,
         valor_diaria: parseToNumber(data.valor_diaria),
         valor_semana: parseToNumber(data.valor_semana),
@@ -248,11 +298,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         valor_mes: parseToNumber(data.valor_mes),
         disponivel_site: !!data.disponivel_site,
         preco_site: parseToNumber(data.preco_site),
-        imagem_url: data.imagem_url?.trim() || null || undefined,
-        link_externo: data.link_externo?.trim() || null || undefined,
-        descricao_site: data.descricao_site?.trim() || null || undefined,
+        imagem_url: data.imagem_url?.trim() || null,
+        link_externo: data.link_externo?.trim() || null,
+        descricao_site: data.descricao_site?.trim() || null,
         integrar_calculadora: !!data.integrar_calculadora,
-        cd_fornecedores: supplierId && !isNaN(supplierId) ? supplierId : undefined,
+        cd_fornecedores: supplierId && !isNaN(supplierId) ? supplierId : null as any,
         data_atualizacao: new Date().toISOString()
       };
 
@@ -279,6 +329,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         <TabsList className="flex w-full bg-slate-100 p-1 rounded-xl h-auto overflow-x-auto">
           <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
           <TabsTrigger value="estoque" className="flex-1">Estoque</TabsTrigger>
+          <TabsTrigger value="kit" className="flex-1 gap-2"><Boxes size={14} /> Kit</TabsTrigger>
           {isLocacao ? (
             <TabsTrigger value="locacao" className="flex-1 gap-2"><Calendar size={14} /> Valores Locação</TabsTrigger>
           ) : (
@@ -319,7 +370,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               </select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div className="flex items-center space-x-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                 <Checkbox id="is_locacao_geral" checked={!!isLocacao} onCheckedChange={(checked) => setValue("is_locacao", !!checked)} />
                 <Label htmlFor="is_locacao_geral" className="font-black text-sm cursor-pointer text-indigo-900">Este item é para Locação</Label>
@@ -327,6 +378,10 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               <div className="flex items-center space-x-2 p-4 bg-amber-50 rounded-xl border border-amber-100">
                 <Checkbox id="integrar_calc" checked={!!watch("integrar_calculadora")} onCheckedChange={(checked) => setValue("integrar_calculadora", !!checked)} />
                 <Label htmlFor="integrar_calc" className="font-black text-sm cursor-pointer text-amber-900 flex items-center gap-2"><Calculator size={16} /> Integrar com Calculadora</Label>
+              </div>
+              <div className="flex items-center space-x-2 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <Checkbox id="is_kit_geral" checked={!!isKit} onCheckedChange={(checked) => setValue("is_kit", !!checked)} />
+                <Label htmlFor="is_kit_geral" className="font-black text-sm cursor-pointer text-emerald-900 flex items-center gap-2"><Boxes size={16} /> Este produto é um Kit</Label>
               </div>
             </div>
           </TabsContent>
@@ -382,6 +437,72 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   </div>
                 )}
               </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="kit" className="space-y-6 m-0">
+            <div className={cn("p-6 rounded-2xl border space-y-5", isKit ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200")}>
+              <div className="flex items-center space-x-2">
+                <Checkbox id="is_kit_tab" checked={!!isKit} onCheckedChange={(checked) => setValue("is_kit", !!checked)} />
+                <Label htmlFor="is_kit_tab" className="font-black text-sm cursor-pointer flex items-center gap-2">
+                  <Boxes size={16} /> Produto composto por outros itens
+                </Label>
+              </div>
+
+              {isKit ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_140px_120px] gap-3">
+                    <select
+                      value={selectedKitProductId}
+                      onChange={(e) => setSelectedKitProductId(e.target.value)}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecione um produto para o kit...</option>
+                      {availableKitProducts.map((item) => (
+                        <option key={item.cd_produto} value={item.cd_produto}>
+                          {item.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      value={selectedKitQty}
+                      onChange={(e) => setSelectedKitQty(e.target.value)}
+                      placeholder="Qtd."
+                    />
+                    <Button type="button" onClick={addKitItem} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                      <Plus size={16} /> Adicionar
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {kitItems.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-emerald-300 p-6 text-sm text-emerald-700">
+                        Nenhum item adicionado ao kit ainda.
+                      </div>
+                    ) : (
+                      kitItems.map((item) => (
+                        <div key={item.cd_produto} className="flex items-center justify-between rounded-xl border border-emerald-200 bg-white p-4">
+                          <div>
+                            <p className="font-black text-slate-900 uppercase text-sm">{item.nome_produto}</p>
+                            <p className="text-xs text-slate-500">Quantidade no kit: {item.quantidade} {item.unidade || ""}</p>
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" className="text-rose-500" onClick={() => removeKitItem(item.cd_produto)}>
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-emerald-700 font-bold">
+                    Quando este kit for vendido no PDV, o sistema baixará automaticamente o estoque dos itens que compõem o conjunto.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Ative a opção de kit para montar um produto composto, como conjunto de louça com bacia, lavatório e coluna.
+                </p>
+              )}
             </div>
           </TabsContent>
 
