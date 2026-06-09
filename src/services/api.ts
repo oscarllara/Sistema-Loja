@@ -15,7 +15,7 @@ export const db = {
         .eq('usuario', usuario)
         .eq('senha', senha)
         .maybeSingle();
-      
+
       if (error) throw error;
       if (data) {
         localStorage.setItem(AUTH_KEY, JSON.stringify(data));
@@ -48,81 +48,62 @@ export const db = {
     }
   },
   produtos: {
-    getAll: async (forceFresh = false): Promise<Produto[]> => {
+    getAll: async (): Promise<Produto[]> => {
       const { data, error } = await supabase
         .from('produtos')
         .select('*')
         .order('nome');
-      
+
       if (error) throw error;
       return data || [];
     },
-    add: async (p: any) => {
-      console.log("[API] Iniciando INSERT de novo produto...");
-      
-      // Busca o maior ID manual de forma segura
+    add: async (p: Partial<Produto>) => {
       const { data: lastProducts, error: fetchError } = await supabase
         .from('produtos')
         .select('id_manual')
-        .order('id_manual', { ascending: false })
-        .limit(50); // Pegamos os últimos 50 para garantir que achamos o maior numérico
-      
+        .order('cd_produto', { ascending: false })
+        .limit(200);
+
       if (fetchError) throw fetchError;
 
       let maxId = 0;
       (lastProducts || []).forEach(item => {
-        const num = parseInt(item.id_manual || "0");
+        const num = parseInt(item.id_manual || "0", 10);
         if (!isNaN(num) && num > maxId) maxId = num;
       });
 
       const nextId = (maxId + 1).toString().padStart(5, '0');
-      
-      // Remove campos que não pertencem à tabela ou são gerados pelo banco
-      const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...productData } = p;
+
+      const { cd_produto, ...productData } = p as Produto;
 
       const { data, error } = await supabase
         .from('produtos')
-        .insert([{ 
-          ...productData, 
+        .insert([{
+          ...productData,
           id_manual: nextId,
           data_atualizacao: new Date().toISOString()
         }])
         .select()
         .single();
-      
-      if (error) {
-        console.error("--- ERRO NO SUPABASE (INSERT) ---");
-        console.error("Código:", error.code);
-        console.error("Mensagem:", error.message);
-        console.error("Detalhes:", error.details);
-        throw error;
-      }
-      
-      console.log("[API] Produto cadastrado com sucesso! ID:", nextId);
+
+      if (error) throw error;
       return data;
     },
-    update: async (id: number, data: any) => {
-      console.log(`[API] Iniciando UPDATE no produto cd_produto=${id}...`);
-      
-      const { cd_produto, id_manual, created_at, data_atualizacao, margem_lucro, ...updateData } = data;
-      
-      // IMPORTANTE: Usamos cd_produto (PK) para garantir que alteramos o registro correto.
-      // Se o usuário mudou o id_importado na tela, ele será atualizado como um campo comum.
-      const { error } = await supabase
+    update: async (id: number, data: Partial<Produto>) => {
+      const { cd_produto, ...updateData } = data as Produto;
+
+      const { data: updated, error } = await supabase
         .from('produtos')
         .update({
           ...updateData,
           data_atualizacao: new Date().toISOString()
         })
-        .eq('cd_produto', id);
-        
-      if (error) {
-        console.error("--- ERRO NO SUPABASE (UPDATE) ---");
-        console.error("Mensagem:", error.message);
-        throw error;
-      }
-      
-      console.log("[API] Produto atualizado com sucesso!");
+        .eq('cd_produto', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return updated;
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);
@@ -142,11 +123,11 @@ export const db = {
         .eq('cd_entidade', id)
         .eq('status', 'Pendente')
         .eq('tipo', 'R');
-      
+
       const today = new Date().toISOString().split('T')[0];
       const atrasado = (financeiro || []).some(l => l.data_vencimento < today);
       const totalPendente = (financeiro || []).reduce((acc, l) => acc + l.valor, 0);
-      
+
       return { atrasado, totalPendente };
     },
     add: async (c: any) => {
@@ -207,22 +188,22 @@ export const db = {
     baixar: async (id: number, cd_conta: number, valor?: number, meio?: string, cd_func?: number) => {
       const { data: lanc, error: lError } = await supabase.from('financeiro').select('*').eq('cd_lancamento', id).single();
       if (lError) throw lError;
-      
+
       if (lanc) {
-        const updateData: any = { 
-          status: 'Pago', 
-          data_pagamento: new Date().toISOString(), 
-          cd_conta 
+        const updateData: any = {
+          status: 'Pago',
+          data_pagamento: new Date().toISOString(),
+          cd_conta
         };
         if (meio) updateData.meio_pagamento = meio;
         if (cd_func) updateData.cd_func = cd_func;
 
         const { error: uError } = await supabase.from('financeiro').update(updateData).eq('cd_lancamento', id);
         if (uError) throw uError;
-        
+
         const { data: conta, error: cError } = await supabase.from('contas').select('saldo').eq('cd_conta', cd_conta).single();
         if (cError) throw cError;
-        
+
         if (conta) {
           const valorBaixa = valor || lanc.valor;
           const novoSaldo = lanc.tipo === 'R' ? Number(conta.saldo) + Number(valorBaixa) : Number(conta.saldo) - Number(valorBaixa);
@@ -260,7 +241,7 @@ export const db = {
 
       const { data: cOrigem } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_origem).single();
       const { data: cDestino } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_destino).single();
-      
+
       if (cOrigem) await supabase.from('contas').update({ saldo: Number(cOrigem.saldo) - Number(t.valor) }).eq('cd_conta', t.cd_conta_origem);
       if (cDestino) await supabase.from('contas').update({ saldo: Number(cDestino.saldo) + Number(t.valor) }).eq('cd_conta', t.cd_conta_destino);
     },
@@ -370,10 +351,10 @@ export const db = {
     save: async (cd_fornecedor: number, codigo_externo: string, cd_produto_interno: number) => {
       const { error } = await supabase
         .from('fornecedor_produto_map')
-        .upsert({ 
-          cd_fornecedor, 
-          codigo_externo, 
-          cd_produto_interno 
+        .upsert({
+          cd_fornecedor,
+          codigo_externo,
+          cd_produto_interno
         }, { onConflict: 'cd_fornecedor,codigo_externo' });
       if (error) throw error;
     }

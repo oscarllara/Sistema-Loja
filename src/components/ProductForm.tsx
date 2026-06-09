@@ -11,17 +11,11 @@ import {
   Percent,
   Globe,
   CalendarClock,
-  Image as ImageIcon,
   Calculator,
-  Scale,
   Building2,
-  History,
   Loader2,
-  ExternalLink,
   TrendingUp,
   Box,
-  Layers,
-  ArrowDownRight,
   Info,
   Calendar
 } from 'lucide-react';
@@ -83,13 +77,12 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const formatMoney = (value: string | number) => {
     const cleanValue = value.toString().replace(/\D/g, "");
-    const floatValue = parseInt(cleanValue || "0") / 100;
+    const floatValue = parseInt(cleanValue || "0", 10) / 100;
     return floatValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const parseToNumber = (value: string): number => {
-    if (!value) return 0;
-    // Remove pontos de milhar e troca vírgula por ponto
+  const parseToNumber = (value: string | number | null | undefined): number => {
+    if (value === null || value === undefined || value === "") return 0;
     const cleanValue = value.toString().replace(/\./g, "").replace(",", ".");
     const num = parseFloat(cleanValue);
     return isNaN(num) ? 0 : num;
@@ -108,32 +101,49 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
       ...product,
+      id_manual: product.id_manual || "",
       compra: formatMoney(product.compra ? (product.compra * 100).toFixed(0) : "0"),
       venda: formatMoney(product.venda ? (product.venda * 100).toFixed(0) : "0"),
       venda_vista: formatMoney(product.venda_vista ? (product.venda_vista * 100).toFixed(0) : "0"),
       venda_fracionada: formatMoney(product.venda_fracionada ? (product.venda_fracionada * 100).toFixed(0) : "0"),
+      preco_site: formatMoney(product.preco_site ? (product.preco_site * 100).toFixed(0) : "0"),
       valor_diaria: formatMoney(product.valor_diaria ? (product.valor_diaria * 100).toFixed(0) : "0"),
       valor_semana: formatMoney(product.valor_semana ? (product.valor_semana * 100).toFixed(0) : "0"),
       valor_quinzena: formatMoney(product.valor_quinzena ? (product.valor_quinzena * 100).toFixed(0) : "0"),
       valor_mes: formatMoney(product.valor_mes ? (product.valor_mes * 100).toFixed(0) : "0"),
       margem_lucro: calculateMargin(product.compra || 0, product.venda || 0).toFixed(2).replace('.', ','),
-      estoque: product.estoque?.toString().replace('.', ','),
-      minimo: product.minimo?.toString().replace('.', ','),
-      fator_conversao: product.fator_conversao?.toString().replace('.', ','),
-      tamanho_caixa: (product as any).tamanho_caixa?.toString().replace('.', ',') || "0,0000",
-      desconto_vista_valor: product.desconto_vista_valor?.toString() || "0",
+      estoque: (product.estoque ?? 0).toString().replace('.', ','),
+      minimo: (product.minimo ?? 0).toString().replace('.', ','),
+      fator_conversao: (product.fator_conversao ?? 1).toString().replace('.', ','),
+      tamanho_caixa: (product.tamanho_caixa ?? 0).toString().replace('.', ','),
+      desconto_vista_valor: (product.desconto_vista_valor ?? 0).toString().replace('.', ','),
       cd_fornecedores: product.cd_fornecedores?.toString() || "",
+      imagem_url: product.imagem_url || "",
+      link_externo: product.link_externo || "",
+      descricao_site: product.descricao_site || "",
+      un_fracionada: product.un_fracionada || "",
+      ncm: product.ncm || "",
+      cod_barras: product.cod_barras || "",
+      id_importado: product.id_importado || "",
     } : {
+      id_manual: "",
       un: "UN",
       venda: "0,00",
+      venda_vista: "0,00",
       compra: "0,00",
       margem_lucro: "40,00",
       estoque: "0",
       minimo: "0",
       fator_conversao: "1,0000",
       tamanho_caixa: "0,0000",
+      desconto_vista_valor: "0",
       fracionado: false,
+      is_kit: false,
+      is_locacao: false,
+      disponivel_site: false,
+      integrar_calculadora: false,
       venda_fracionada: "0,00",
+      preco_site: "0,00",
       valor_diaria: "0,00",
       valor_semana: "0,00",
       valor_quinzena: "0,00",
@@ -182,7 +192,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     const cash = parseToNumber(formatted);
     const sale = parseToNumber(saleValue);
     if (sale > 0) {
-      const disc = ((1 - (cash / sale)) * 100);
+      const disc = (1 - cash / sale) * 100;
       setValue("desconto_vista_valor", disc.toFixed(2).replace('.', ','));
     }
     setValue("venda_vista", formatted);
@@ -208,16 +218,16 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
 
   const onSubmit = async (data: ProductFormValues) => {
     setIsSaving(true);
-    
+
     try {
-      const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores) : null;
-      
-      // PAYLOAD LIMPO E TIPADO
-      const payload: any = {
+      const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores, 10) : null;
+
+      const payload: Partial<Produto> = {
+        id_manual: data.id_manual?.trim() || undefined,
         nome: data.nome.toUpperCase().trim(),
-        id_importado: data.id_importado?.trim() || null,
+        id_importado: data.id_importado?.trim() || null || undefined,
         un: data.un.toUpperCase().trim(),
-        cod_barras: data.cod_barras?.trim() || null,
+        cod_barras: data.cod_barras?.trim() || null || undefined,
         compra: parseToNumber(data.compra),
         venda: parseToNumber(data.venda),
         venda_vista: parseToNumber(data.venda_vista),
@@ -225,9 +235,9 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         desconto_vista_valor: parseToNumber(data.desconto_vista_valor),
         estoque: parseToNumber(data.estoque),
         minimo: parseToNumber(data.minimo),
-        ncm: data.ncm?.trim() || null,
+        ncm: data.ncm?.trim() || null || undefined,
         fracionado: !!data.fracionado,
-        un_fracionada: data.un_fracionada?.toUpperCase().trim() || null,
+        un_fracionada: data.un_fracionada?.toUpperCase().trim() || null || undefined,
         fator_conversao: parseToNumber(data.fator_conversao) || 1,
         tamanho_caixa: parseToNumber(data.tamanho_caixa) || 0,
         is_kit: !!data.is_kit,
@@ -238,15 +248,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         valor_mes: parseToNumber(data.valor_mes),
         disponivel_site: !!data.disponivel_site,
         preco_site: parseToNumber(data.preco_site),
-        imagem_url: data.imagem_url?.trim() || null,
-        link_externo: data.link_externo?.trim() || null,
-        descricao_site: data.descricao_site?.trim() || null,
+        imagem_url: data.imagem_url?.trim() || null || undefined,
+        link_externo: data.link_externo?.trim() || null || undefined,
+        descricao_site: data.descricao_site?.trim() || null || undefined,
         integrar_calculadora: !!data.integrar_calculadora,
-        cd_fornecedores: isNaN(supplierId as any) ? null : supplierId,
+        cd_fornecedores: supplierId && !isNaN(supplierId) ? supplierId : undefined,
         data_atualizacao: new Date().toISOString()
       };
-
-      console.table(payload); // Depuração visual no console
 
       if (product) {
         await db.produtos.update(product.cd_produto, payload);
@@ -255,12 +263,11 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         await db.produtos.add(payload);
         showSuccess("Produto cadastrado!");
       }
-      
+
       onSuccess();
     } catch (err: any) {
       console.error("ERRO AO SALVAR:", err);
-      alert(`ERRO NO BANCO: ${err.message || "Verifique o console (F12)"}`);
-      showError("Falha na gravação.");
+      showError(err?.message || "Falha na gravação.");
     } finally {
       setIsSaving(false);
     }
@@ -303,7 +310,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Input {...register("un")} className="uppercase" placeholder="EX: UN, SC, KG, M²" />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label className="flex items-center gap-2"><Building2 size={14} /> Fornecedor Preferencial</Label>
               <select {...register("cd_fornecedores")} className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
@@ -355,7 +362,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                   <Checkbox id="is_fracionado" checked={!!isFracionado} onCheckedChange={(checked) => setValue("fracionado", !!checked)} />
                   <Label htmlFor="is_fracionado" className="font-black text-xs text-emerald-900 cursor-pointer uppercase">Permitir Venda Fracionada</Label>
                 </div>
-                
+
                 {isFracionado && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                     <div className="grid grid-cols-2 gap-3">
@@ -443,7 +450,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
               {watch("disponivel_site") && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} placeholder="0,00" /></div>
+                    <div className="space-y-2"><Label>Preço no Site</Label><Input {...register("preco_site")} onChange={(e) => setValue("preco_site", formatMoney(e.target.value))} placeholder="0,00" /></div>
                     <div className="space-y-2"><Label>URL da Imagem</Label><Input {...register("imagem_url")} /></div>
                   </div>
                   <div className="space-y-2"><Label>Descrição para o Site</Label><Textarea {...register("descricao_site")} className="min-h-[100px]" /></div>

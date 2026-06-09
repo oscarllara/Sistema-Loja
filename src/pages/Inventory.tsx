@@ -2,25 +2,25 @@
 
 import React from 'react';
 import Layout from '@/components/Layout';
-import { Plus, Search, Edit, Trash2, TrendingUp, DollarSign, Calculator, Loader2, Globe, Package, RefreshCw, Hash } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, DollarSign, Calculator, Loader2, Globe, Package, RefreshCw, Hash } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Produto } from '@/types/database';
@@ -38,13 +38,11 @@ const Inventory = () => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingProduct, setEditingProduct] = React.useState<Produto | undefined>(undefined);
   const [filterSiteOnly, setFilterSiteOnly] = React.useState(false);
-  
   const [selectedProductForHistory, setSelectedProductForHistory] = React.useState<Produto | null>(null);
 
-  // 1. Busca de dados com TanStack Query
   const { data: products = [], isLoading: isLoadingProducts, refetch } = useQuery({
     queryKey: ['produtos'],
-    queryFn: () => db.produtos.getAll(true),
+    queryFn: () => db.produtos.getAll(),
   });
 
   const { data: sales = [] } = useQuery({
@@ -62,20 +60,25 @@ const Inventory = () => {
     await refetch();
   };
 
-  // 2. Mutações
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number, data: any }) => db.produtos.update(id, data),
-    onSuccess: () => {
-      handleRefresh();
+    mutationFn: ({ id, data }: { id: number, data: Partial<Produto> }) => db.produtos.update(id, data),
+    onSuccess: async () => {
+      await handleRefresh();
       showSuccess("Alteração salva!");
+    },
+    onError: () => {
+      showError("Não foi possível salvar a alteração.");
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => db.produtos.delete(id),
-    onSuccess: () => {
-      handleRefresh();
+    onSuccess: async () => {
+      await handleRefresh();
       showSuccess("Produto excluído!");
+    },
+    onError: () => {
+      showError("Não foi possível excluir o produto.");
     }
   });
 
@@ -85,14 +88,13 @@ const Inventory = () => {
     }
   };
 
-  // 3. Filtro e Inteligência
   const stats = React.useMemo(() => {
     const totalVendas = sales.reduce((acc, v) => acc + v.total, 0);
     const totalDespesasFixas = financeiro
       .filter(l => l.tipo === 'P' && l.status === 'Pago' && !l.is_non_operational)
       .reduce((acc, l) => acc + l.valor, 0);
-    
-    const cfWeight = totalVendas > 0 ? (totalDespesasFixas / totalVendas) : 0;
+
+    const cfWeight = totalVendas > 0 ? totalDespesasFixas / totalVendas : 0;
 
     const salesMap: Record<number, number> = {};
     sales.forEach(v => {
@@ -108,16 +110,16 @@ const Inventory = () => {
     return products.filter(p => {
       const codeTerm = searchCode.toLowerCase().trim();
       const nameTerm = searchName.toLowerCase().trim();
-      
+
       const matchesCode = !codeTerm || (
         p.id_manual?.toLowerCase().includes(codeTerm) ||
         p.id_importado?.toLowerCase().includes(codeTerm) ||
         p.cod_barras?.toLowerCase().includes(codeTerm)
       );
-      
+
       const matchesName = !nameTerm || p.nome.toLowerCase().includes(nameTerm);
       const matchesSite = filterSiteOnly ? p.disponivel_site : true;
-      
+
       return matchesCode && matchesName && matchesSite;
     });
   }, [products, searchCode, searchName, filterSiteOnly]);
@@ -132,7 +134,7 @@ const Inventory = () => {
   const handleQuickUpdate = (id: number, field: keyof Produto, value: string) => {
     const numValue = parseFloat(value.replace(',', '.'));
     if (isNaN(numValue)) return;
-    updateMutation.mutate({ id, data: { [field]: numValue } });
+    updateMutation.mutate({ id, data: { [field]: numValue } as Partial<Produto> });
   };
 
   return (
@@ -143,13 +145,21 @@ const Inventory = () => {
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
             <p className="text-slate-500 text-sm">Gerencie seus produtos e acompanhe a lucratividade real.</p>
           </div>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleRefresh} className="gap-2 rounded-xl h-11 border-slate-200">
               <RefreshCw size={18} className={isLoadingProducts ? "animate-spin" : ""} />
               Atualizar
             </Button>
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <Dialog
+              open={isModalOpen}
+              onOpenChange={(open) => {
+                setIsModalOpen(open);
+                if (!open) {
+                  setEditingProduct(undefined);
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button onClick={() => setEditingProduct(undefined)} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 h-11 px-6 shadow-lg">
                   <Plus size={20} /> Novo Produto
@@ -157,12 +167,13 @@ const Inventory = () => {
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
-                <ProductForm 
-                  product={editingProduct} 
-                  onSuccess={async () => { 
-                    setIsModalOpen(false); 
-                    await handleRefresh(); 
-                  }} 
+                <ProductForm
+                  product={editingProduct}
+                  onSuccess={async () => {
+                    setIsModalOpen(false);
+                    setEditingProduct(undefined);
+                    await handleRefresh();
+                  }}
                 />
               </DialogContent>
             </Dialog>
@@ -180,20 +191,20 @@ const Inventory = () => {
           <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <Input 
-                placeholder="Cód. Novo ou Antigo..." 
-                className="pl-10 border-slate-200 h-11 rounded-lg font-bold" 
-                value={searchCode} 
-                onChange={(e) => setSearchCode(e.target.value)} 
+              <Input
+                placeholder="Cód. Novo ou Antigo..."
+                className="pl-10 border-slate-200 h-11 rounded-lg font-bold"
+                value={searchCode}
+                onChange={(e) => setSearchCode(e.target.value)}
               />
             </div>
             <div className="relative flex-[2]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <Input 
-                placeholder="Pesquisar por Nome do Produto..." 
-                className="pl-10 border-slate-200 h-11 rounded-lg" 
-                value={searchName} 
-                onChange={(e) => setSearchName(e.target.value)} 
+              <Input
+                placeholder="Pesquisar por Nome do Produto..."
+                className="pl-10 border-slate-200 h-11 rounded-lg"
+                value={searchName}
+                onChange={(e) => setSearchName(e.target.value)}
               />
             </div>
           </div>
@@ -235,7 +246,7 @@ const Inventory = () => {
                         <TableCell className="font-bold text-indigo-600 text-[10px]">{product.id_manual}</TableCell>
                         <TableCell className="font-bold text-amber-600 text-[10px]">{product.id_importado || "-"}</TableCell>
                         <TableCell>
-                          <div 
+                          <div
                             className="flex items-center gap-1 cursor-pointer hover:text-indigo-600"
                             onClick={() => setSelectedProductForHistory(product)}
                           >
@@ -283,10 +294,10 @@ const Inventory = () => {
         </Card>
 
         {selectedProductForHistory && (
-          <ProductHistoryModal 
-            isOpen={!!selectedProductForHistory} 
-            onClose={() => setSelectedProductForHistory(null)} 
-            product={selectedProductForHistory} 
+          <ProductHistoryModal
+            isOpen={!!selectedProductForHistory}
+            onClose={() => setSelectedProductForHistory(null)}
+            product={selectedProductForHistory}
           />
         )}
       </div>
