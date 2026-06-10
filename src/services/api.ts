@@ -84,7 +84,7 @@ export const db = {
     add: async (p: Partial<Produto>) => {
       const { data: lastProducts, error: fetchError } = await supabase
         .from('produtos')
-        .select('id_manual')
+        .select('id_manual, cd_produto')
         .order('cd_produto', { ascending: false })
         .limit(500);
 
@@ -108,11 +108,16 @@ export const db = {
       const { data, error } = await supabase
         .from('produtos')
         .insert([payload])
-        .select('*')
-        .single();
+        .select('*');
 
       if (error) throw error;
-      return data;
+
+      const inserted = data?.[0];
+      if (!inserted?.cd_produto) {
+        throw new Error("O produto não foi confirmado no banco de dados.");
+      }
+
+      return inserted;
     },
     update: async (id: number, data: Partial<Produto>) => {
       const { cd_produto, ...updateData } = data as Produto;

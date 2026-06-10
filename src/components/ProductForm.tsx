@@ -71,7 +71,7 @@ type ProductFormValues = z.infer<typeof productSchema>;
 
 interface ProductFormProps {
   product?: Produto;
-  onSuccess: () => void;
+  onSuccess: (savedProduct?: Produto) => void;
 }
 
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
@@ -306,15 +306,17 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         data_atualizacao: new Date().toISOString()
       };
 
+      let savedProduct: Produto | undefined;
+
       if (product) {
-        await db.produtos.update(product.cd_produto, payload);
+        savedProduct = await db.produtos.update(product.cd_produto, payload);
         showSuccess("Produto atualizado!");
       } else {
-        await db.produtos.add(payload);
+        savedProduct = await db.produtos.add(payload);
         showSuccess("Produto cadastrado!");
       }
 
-      onSuccess();
+      onSuccess(savedProduct);
     } catch (err: any) {
       console.error("ERRO AO SALVAR:", err);
       showError(err?.message || "Falha na gravação.");

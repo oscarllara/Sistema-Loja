@@ -56,6 +56,7 @@ const Inventory = () => {
   });
 
   const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['produtos'] });
     await queryClient.refetchQueries({ queryKey: ['produtos'], type: 'active' });
   };
 
@@ -170,7 +171,18 @@ const Inventory = () => {
                 <DialogHeader><DialogTitle>{editingProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
                 <ProductForm
                   product={editingProduct}
-                  onSuccess={async () => {
+                  onSuccess={async (savedProduct) => {
+                    if (savedProduct) {
+                      queryClient.setQueryData<Produto[]>(['produtos'], (current = []) => {
+                        const exists = current.some(item => item.cd_produto === savedProduct.cd_produto);
+                        const next = exists
+                          ? current.map(item => item.cd_produto === savedProduct.cd_produto ? savedProduct : item)
+                          : [...current, savedProduct];
+
+                        return [...next].sort((a, b) => a.nome.localeCompare(b.nome));
+                      });
+                    }
+
                     await queryClient.invalidateQueries({ queryKey: ['produtos'] });
                     await handleRefresh();
                     setIsModalOpen(false);
