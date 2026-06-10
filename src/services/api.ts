@@ -7,10 +7,12 @@ const AUTH_KEY = 'dyaderp_auth';
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
 
 const sanitizeProductPayload = (product: Partial<Produto>) => {
-  const payload = { ...product };
+  const payload = { ...product } as Partial<Produto> & { id?: unknown };
+
+  delete payload.id;
 
   if (payload.id_manual === undefined || payload.id_manual === "") delete payload.id_manual;
-  if (payload.id_importado === undefined) payload.id_importado = null;
+  if (payload.id_importado === undefined || payload.id_importado === "") payload.id_importado = null;
   if (payload.cod_barras === undefined) payload.cod_barras = null;
   if (payload.ncm === undefined) payload.ncm = null;
   if (payload.un_fracionada === undefined) payload.un_fracionada = null;
@@ -84,24 +86,32 @@ export const db = {
     add: async (p: Partial<Produto>) => {
       const { data: lastProducts, error: fetchError } = await supabase
         .from('produtos')
-        .select('id_manual, cd_produto')
+        .select('id_manual, id_importado')
         .order('cd_produto', { ascending: false })
         .limit(500);
 
       if (fetchError) throw fetchError;
 
-      let maxId = 0;
+      let maxManualId = 0;
+      let maxImportedId = 0;
+
       (lastProducts || []).forEach(item => {
-        const num = parseInt(item.id_manual || "0", 10);
-        if (!isNaN(num) && num > maxId) maxId = num;
+        const manualNum = parseInt(item.id_manual || "0", 10);
+        if (!isNaN(manualNum) && manualNum > maxManualId) maxManualId = manualNum;
+
+        const importedNum = parseInt(item.id_importado || "0", 10);
+        if (!isNaN(importedNum) && importedNum > maxImportedId) maxImportedId = importedNum;
       });
 
-      const nextId = (maxId + 1).toString().padStart(5, '0');
+      const nextManualId = (maxManualId + 1).toString().padStart(5, '0');
+      const nextImportedId = String(maxImportedId + 1);
+
       const { cd_produto, ...productData } = p as Produto;
 
       const payload = sanitizeProductPayload({
         ...productData,
-        id_manual: nextId,
+        id_manual: nextManualId,
+        id_importado: productData.id_importado?.trim() || nextImportedId,
         data_atualizacao: new Date().toISOString()
       });
 
@@ -110,7 +120,10 @@ export const db = {
         .insert([payload])
         .select('*');
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro Real do Supabase:", error);
+        throw error;
+      }
 
       const inserted = data?.[0];
       if (!inserted?.cd_produto) {
