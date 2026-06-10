@@ -40,7 +40,7 @@ const Inventory = () => {
   const [filterSiteOnly, setFilterSiteOnly] = React.useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = React.useState<Produto | null>(null);
 
-  const { data: products = [], isLoading: isLoadingProducts, refetch } = useQuery({
+  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ['produtos'],
     queryFn: () => db.produtos.getAll(),
   });
@@ -56,13 +56,13 @@ const Inventory = () => {
   });
 
   const handleRefresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['produtos'] });
-    await refetch();
+    await queryClient.refetchQueries({ queryKey: ['produtos'], type: 'active' });
   };
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number, data: Partial<Produto> }) => db.produtos.update(id, data),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['produtos'] });
       await handleRefresh();
       showSuccess("Alteração salva!");
     },
@@ -74,6 +74,7 @@ const Inventory = () => {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => db.produtos.delete(id),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['produtos'] });
       await handleRefresh();
       showSuccess("Produto excluído!");
     },
@@ -170,9 +171,10 @@ const Inventory = () => {
                 <ProductForm
                   product={editingProduct}
                   onSuccess={async () => {
+                    await queryClient.invalidateQueries({ queryKey: ['produtos'] });
+                    await handleRefresh();
                     setIsModalOpen(false);
                     setEditingProduct(undefined);
-                    await handleRefresh();
                   }}
                 />
               </DialogContent>
