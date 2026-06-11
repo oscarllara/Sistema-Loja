@@ -1,7 +1,7 @@
 "use client";
 
 import { supabase } from '@/integrations/supabase/client';
-import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel, CaixaSessao } from '../types/database';
 
 const AUTH_KEY = 'dyaderp_auth';
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
@@ -219,6 +219,36 @@ export const db = {
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('contas').update(data).eq('cd_conta', id);
       if (error) throw error;
+    }
+  },
+  caixa: {
+    getAll: async (): Promise<CaixaSessao[]> => {
+      const { data, error } = await supabase.from('caixa_sessoes').select('*').order('data_caixa', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    open: async (data: Partial<CaixaSessao>) => {
+      const { data: created, error } = await supabase.from('caixa_sessoes').insert([data]).select('*').single();
+      if (error) throw error;
+      if (data.cd_conta) {
+        const { error: accountError } = await supabase.from('contas').update({ saldo: data.saldo_real_abertura || 0 }).eq('cd_conta', data.cd_conta);
+        if (accountError) throw accountError;
+      }
+      return created;
+    },
+    close: async (id: number, data: Partial<CaixaSessao>) => {
+      const { data: updated, error } = await supabase
+        .from('caixa_sessoes')
+        .update({ ...data, status: 'Fechado', fechado_em: new Date().toISOString() })
+        .eq('cd_sessao', id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      if (updated?.cd_conta) {
+        const { error: accountError } = await supabase.from('contas').update({ saldo: data.saldo_real_fechamento || data.saldo_para_dia_seguinte || 0 }).eq('cd_conta', updated.cd_conta);
+        if (accountError) throw accountError;
+      }
+      return updated;
     }
   },
   financeiro: {

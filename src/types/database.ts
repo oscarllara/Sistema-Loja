@@ -267,6 +267,27 @@ export interface ContaBancaria {
   tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
 }
 
+export type StatusCaixa = 'Aberto' | 'Fechado';
+
+export interface CaixaSessao {
+  cd_sessao: number;
+  cd_conta: number;
+  data_caixa: string;
+  status: StatusCaixa;
+  saldo_previsto_abertura: number;
+  saldo_real_abertura: number;
+  diferenca_abertura: number;
+  saldo_sistema_fechamento?: number;
+  saldo_real_fechamento?: number;
+  diferenca_fechamento?: number;
+  saldo_para_dia_seguinte?: number;
+  observacoes?: string;
+  cd_operador?: number;
+  aberto_em?: string;
+  fechado_em?: string;
+  created_at?: string;
+}
+
 export interface Patrimonio {
   cd_patrimonio: number;
   descricao: string;

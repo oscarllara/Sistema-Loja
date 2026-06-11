@@ -53,6 +53,23 @@ const PrintPreview = ({ isOpen, onClose, data, type }: PrintPreviewProps) => {
             <div className="flex justify-between font-bold text-rose-600"><span>(-) SAÍDAS:</span><span>R$ {data.totalSaidas.toFixed(2)}</span></div>
             <div className="flex justify-between border-t border-dashed pt-1 font-black"><span>(=) SALDO FINAL:</span><span>R$ {data.saldoFinal.toFixed(2)}</span></div>
           </div>
+          {data.caixaSessao && (
+            <div className="pt-2 border-t border-dashed space-y-1">
+              <p className="font-bold mb-1">CONFERÊNCIA DO CAIXA:</p>
+              <div className="flex justify-between"><span>ABERTURA PREVISTA:</span><span>R$ {Number(data.caixaSessao.saldo_previsto_abertura || 0).toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>ABERTURA REAL:</span><span>R$ {Number(data.caixaSessao.saldo_real_abertura || 0).toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>DIF. ABERTURA:</span><span>R$ {Number(data.caixaSessao.diferenca_abertura || 0).toFixed(2)}</span></div>
+              {data.caixaSessao.status === 'Fechado' && (
+                <>
+                  <div className="flex justify-between"><span>FECHAMENTO REAL:</span><span>R$ {Number(data.caixaSessao.saldo_real_fechamento || 0).toFixed(2)}</span></div>
+                  <div className="flex justify-between font-bold"><span>DIF. FECHAMENTO:</span><span>R$ {Number(data.caixaSessao.diferenca_fechamento || 0).toFixed(2)}</span></div>
+                </>
+              )}
+              {Number(data.diferencaAberturaSeguinte || 0) !== 0 && (
+                <div className="flex justify-between font-bold text-rose-600"><span>DIF. ABERTURA SEGUINTE:</span><span>R$ {Number(data.diferencaAberturaSeguinte || 0).toFixed(2)}</span></div>
+              )}
+            </div>
+          )}
           <div className="pt-2 border-t border-dashed">
             <p className="font-bold mb-1">RESUMO POR MEIO:</p>
             {Object.entries(data.resumoMeios).map(([meio, valor]: any) => (
