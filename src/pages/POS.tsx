@@ -263,6 +263,27 @@ const POS = () => {
     return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
   };
 
+  const handlePriceModeChange = (nextMode: 'PRAZO' | 'VISTA') => {
+    setPriceMode(nextMode);
+
+    if (pendingProduct) {
+      const price = getProductPrice(pendingProduct, inputUnit, nextMode);
+      setInputUnitPrice(price.toFixed(2).replace('.', ','));
+    }
+
+    setCart(prev => prev.map(item => {
+      const product = products.find(p => p.cd_produto === item.cd_produto);
+      const priceSource = product || item;
+      const price = getProductPrice(priceSource, item.selectedUnit, nextMode);
+
+      return {
+        ...item,
+        finalPrice: Number(price.toFixed(2)),
+        finalPriceInput: price.toFixed(2).replace('.', ',')
+      };
+    }));
+  };
+
   const commitToCart = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedSellerId) { showError("Selecione o Operador!"); return; }
@@ -279,11 +300,13 @@ const POS = () => {
     const price = parseBRNumber(inputUnitPrice);
     const margin = pendingProduct.compra > 0 ? ((price / pendingProduct.compra) - 1) * 100 : 40;
 
-    setCart(prev => [...prev, { 
-      ...pendingProduct, 
-      quantity: qty, 
+    setCart(prev => [...prev, {
+      ...pendingProduct,
+      quantity: qty,
+      quantityInput: qty.toString().replace('.', ','),
       selectedUnit: inputUnit,
       finalPrice: Number(price.toFixed(2)),
+      finalPriceInput: price.toFixed(2).replace('.', ','),
       costPrice: pendingProduct.compra || 0,
       salePrice: pendingProduct.venda || 0,
       margin: margin,
@@ -330,18 +353,39 @@ const POS = () => {
   const updateCartItem = (idx: number, field: string, value: string) => {
     const newCart = [...cart];
     const item = { ...newCart[idx] };
-    const numValue = parseBRNumber(value);
+    const formatted = formatQtyMask(value);
+    const numValue = parseBRNumber(formatted);
     
     if (field === 'quantity') {
+      item.quantityInput = formatted;
       item.quantity = numValue;
     } else if (field === 'boxes') {
+      item.boxesInput = formatted;
       if (item.boxSize > 0) {
         item.quantity = numValue * item.boxSize;
+        item.quantityInput = item.quantity.toFixed(3).replace('.', ',');
       }
     } else if (field === 'finalPrice') {
+      item.finalPriceInput = formatted;
       item.finalPrice = numValue;
     }
     
+    newCart[idx] = item;
+    setCart(newCart);
+  };
+
+  const normalizeCartItemInput = (idx: number, field: 'quantity' | 'boxes' | 'finalPrice') => {
+    const newCart = [...cart];
+    const item = { ...newCart[idx] };
+
+    if (field === 'quantity') {
+      item.quantityInput = (Number(item.quantity) || 0).toString().replace('.', ',');
+    } else if (field === 'boxes' && item.boxSize > 0) {
+      item.boxesInput = ((Number(item.quantity) || 0) / item.boxSize).toFixed(2).replace('.', ',');
+    } else if (field === 'finalPrice') {
+      item.finalPriceInput = (Number(item.finalPrice) || 0).toFixed(2).replace('.', ',');
+    }
+
     newCart[idx] = item;
     setCart(newCart);
   };
@@ -564,10 +608,14 @@ const POS = () => {
               {mode === 'VENDA' && (
                 <>
                   <div className="w-px h-6 bg-white/20 mx-1 lg:mx-2" />
-                  <div className={cn("flex items-center gap-2 px-2 lg:px-4 py-1.5 rounded-xl cursor-pointer transition-all border-2", priceMode === 'VISTA' ? "bg-emerald-500 border-emerald-400 shadow-lg scale-105" : "bg-white/5 border-white/10 hover:bg-white/10")} onClick={() => setPriceMode(priceMode === 'VISTA' ? 'PRAZO' : 'VISTA')}>
-                    <Checkbox id="price-mode-header" checked={priceMode === 'VISTA'} onCheckedChange={(checked) => setPriceMode(checked ? 'VISTA' : 'PRAZO')} className="h-4 w-4 border-white data-[state=checked]:bg-white data-[state=checked]:text-emerald-600" />
-                    <label htmlFor="price-mode-header" className="text-[10px] lg:text-[11px] font-black text-white uppercase cursor-pointer select-none hidden sm:block">Preço À Vista</label>
-                  </div>
+                  <button
+                    type="button"
+                    className={cn("flex items-center gap-2 px-2 lg:px-4 py-1.5 rounded-xl cursor-pointer transition-all border-2", priceMode === 'VISTA' ? "bg-emerald-500 border-emerald-400 shadow-lg scale-105" : "bg-white/5 border-white/10 hover:bg-white/10")}
+                    onClick={() => handlePriceModeChange(priceMode === 'VISTA' ? 'PRAZO' : 'VISTA')}
+                  >
+                    <Checkbox checked={priceMode === 'VISTA'} className="h-4 w-4 border-white pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-emerald-600" />
+                    <span className="text-[10px] lg:text-[11px] font-black text-white uppercase cursor-pointer select-none hidden sm:block">Preço À Vista</span>
+                  </button>
                 </>
               )}
             </div>
@@ -616,14 +664,34 @@ const POS = () => {
                       <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">{item?.nome}</TableCell>
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
                       <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
-                        <input className="w-full bg-transparent text-center text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={item.quantity.toString().replace('.', ',')} onChange={(e) => updateCartItem(idx, 'quantity', e.target.value)} />
+                        <input
+                          className="w-full bg-transparent text-center text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
+                          value={item.quantityInput ?? item.quantity.toString().replace('.', ',')}
+                          onChange={(e) => updateCartItem(idx, 'quantity', e.target.value)}
+                          onBlur={() => normalizeCartItemInput(idx, 'quantity')}
+                        />
                       </TableCell>
                       <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
                         {item.boxSize > 0 ? (
-                          <input className="w-full bg-transparent text-center text-sm font-black text-indigo-600 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1" value={(item.quantity / item.boxSize).toFixed(2).replace('.', ',')} onChange={(e) => updateCartItem(idx, 'boxes', e.target.value)} />
+                          <input
+                            className="w-full bg-transparent text-center text-sm font-black text-indigo-600 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
+                            value={item.boxesInput ?? (item.quantity / item.boxSize).toFixed(2).replace('.', ',')}
+                            onChange={(e) => updateCartItem(idx, 'boxes', e.target.value)}
+                            onBlur={() => normalizeCartItemInput(idx, 'boxes')}
+                          />
                         ) : <span className="block text-center text-slate-300">-</span>}
                       </TableCell>
-                      <TableCell className="py-0 text-sm text-right border-r border-slate-100 w-36 px-6 font-bold text-slate-600">R$ {item.finalPrice.toFixed(2)}</TableCell>
+                      <TableCell className="py-0 border-r border-slate-100 w-36 px-4">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-bold text-slate-500">R$</span>
+                          <input
+                            className="w-full bg-transparent text-right text-sm font-bold text-slate-700 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
+                            value={item.finalPriceInput ?? item.finalPrice.toFixed(2).replace('.', ',')}
+                            onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
+                            onBlur={() => normalizeCartItemInput(idx, 'finalPrice')}
+                          />
+                        </div>
+                      </TableCell>
                       <TableCell className="py-0 text-base text-right font-black border-r border-slate-100 w-36 px-6 text-slate-900">R$ {(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
                       <TableCell className="py-0 text-center w-16"><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 rounded-full opacity-0 group-hover:opacity-100" onClick={() => removeItem(idx)}><Trash2 size={16} /></Button></TableCell>
                     </TableRow>
@@ -707,7 +775,7 @@ const POS = () => {
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
-      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map((i: any) => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, quantity: i.qtde, selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
+      <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map((i: any) => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, finalPriceInput: Number(i.valor || 0).toFixed(2).replace('.', ','), quantity: i.qtde, quantityInput: Number(i.qtde || 0).toString().replace('.', ','), selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
