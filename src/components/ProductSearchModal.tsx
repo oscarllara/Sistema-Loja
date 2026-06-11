@@ -157,13 +157,14 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">DESCRIÇÃO DO PRODUTO</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20 text-right">PREÇO VISTA</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20 text-right">PREÇO PRAZO</TableHead>
-                <TableHead className="text-white font-bold text-[10px] h-8 text-right">ESTOQUE</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20 text-right">ESTOQUE</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 text-right">M²/CX</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && products.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-20">
+                  <TableCell colSpan={7} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2 text-slate-500">
                       <Loader2 className="animate-spin" />
                       <p className="font-bold">CARREGANDO LISTA DE PRODUTOS...</p>
@@ -172,7 +173,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
+                  <TableCell colSpan={7} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
                 </TableRow>
               ) : (
                 filtered.map((p, idx) => (
@@ -194,10 +195,13 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
                       R$ {(p.venda || 0).toFixed(2)}
                     </TableCell>
                     <TableCell className={cn(
-                      "py-0 text-[11px] text-right font-bold",
+                      "py-0 text-[11px] text-right font-bold border-r border-slate-200",
                       (p.estoque || 0) <= 0 ? (idx === selectedIndex ? "text-white" : "text-rose-500") : ""
                     )}>
                       {(p.estoque || 0).toFixed(3)} {p.un || "UN"}
+                    </TableCell>
+                    <TableCell className="py-0 text-[11px] text-right font-bold">
+                      {(p.tamanho_caixa || 0) > 0 ? Number(p.tamanho_caixa).toFixed(3) : "-"}
                     </TableCell>
                   </TableRow>
                 ))

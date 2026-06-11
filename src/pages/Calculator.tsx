@@ -25,11 +25,15 @@ import { cn } from '@/lib/utils';
 const Calculator = () => {
   const navigate = useNavigate();
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
-  const [currentQty, setCurrentQty] = React.useState(0);
+  const [currentCalculation, setCurrentCalculation] = React.useState<{
+    type: 'piso' | 'argamassa' | 'forro';
+    quantity: number;
+    area?: number;
+  } | null>(null);
 
   // Estados para Piso
-  const [piso, setPiso] = React.useState({ comp: "", larg: "", perda: "10", m2Caixa: "" });
-  const [resPiso, setResPiso] = React.useState({ area: 0, areaTotal: 0, caixas: 0 });
+  const [piso, setPiso] = React.useState({ comp: "", larg: "", perda: "10" });
+  const [resPiso, setResPiso] = React.useState({ area: 0, areaTotal: 0 });
 
   // Estados para Argamassa
   const [arg, setArg] = React.useState({ area: "", consumo: "5", pesoSaco: "20" });
@@ -44,11 +48,9 @@ const Calculator = () => {
     const c = parseFloat(piso.comp) || 0;
     const l = parseFloat(piso.larg) || 0;
     const p = parseFloat(piso.perda) || 0;
-    const m2c = parseFloat(piso.m2Caixa) || 0;
     const area = c * l;
     const areaTotal = area * (1 + p / 100);
-    const caixas = m2c > 0 ? Math.ceil(areaTotal / m2c) : 0;
-    setResPiso({ area, areaTotal, caixas });
+    setResPiso({ area, areaTotal });
   }, [piso]);
 
   React.useEffect(() => {
@@ -71,19 +73,36 @@ const Calculator = () => {
     setResForro({ area, laminas });
   }, [forro]);
 
-  const handleAddToSale = (qty: number) => {
-    setCurrentQty(qty);
+  const handleAddToSale = (calculation: { type: 'piso' | 'argamassa' | 'forro'; quantity: number; area?: number }) => {
+    setCurrentCalculation(calculation);
     setIsSearchOpen(true);
   };
 
   const handleProductSelect = (product: Produto) => {
-    // Salva o item pendente no sessionStorage para o PDV ler
+    if (!currentCalculation) return;
+
+    const boxSize = Number(product.tamanho_caixa || 0);
+    const boxes = currentCalculation.type === 'piso' && boxSize > 0
+      ? Math.ceil(currentCalculation.quantity / boxSize)
+      : undefined;
+    const quantity = boxes ? boxes * boxSize : currentCalculation.quantity;
+
     const pendingItem = {
       product,
-      quantity: currentQty
+      quantity,
+      requestedQuantity: currentCalculation.quantity,
+      boxes,
+      calculatorType: currentCalculation.type
     };
+
     sessionStorage.setItem('dyaderp_pending_calc_item', JSON.stringify(pendingItem));
-    showSuccess(`${product.nome} vinculado com ${currentQty} unidades! Redirecionando para o PDV...`);
+
+    const detail = boxes
+      ? `${quantity.toFixed(2).replace('.', ',')} m² (${boxes} caixas)`
+      : currentCalculation.type === 'piso'
+        ? `${quantity.toFixed(2).replace('.', ',')} m²`
+        : `${quantity.toString().replace('.', ',')} unidades`;
+    showSuccess(`${product.nome} vinculado com ${detail}! Redirecionando para o PDV...`);
     
     setTimeout(() => {
       navigate("/pos");
@@ -133,15 +152,12 @@ const Calculator = () => {
                       <Input type="number" value={piso.larg} onChange={(e) => setPiso({...piso, larg: e.target.value})} placeholder="0.00" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Perda Estimada (%)</Label>
-                      <Input type="number" value={piso.perda} onChange={(e) => setPiso({...piso, perda: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>m² por Caixa</Label>
-                      <Input type="number" value={piso.m2Caixa} onChange={(e) => setPiso({...piso, m2Caixa: e.target.value})} placeholder="Ex: 2.40" />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Perda Estimada (%)</Label>
+                    <Input type="number" value={piso.perda} onChange={(e) => setPiso({...piso, perda: e.target.value})} />
+                  </div>
+                  <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-xs font-bold text-indigo-700">
+                    O m² por caixa será puxado automaticamente do produto escolhido no próximo passo.
                   </div>
                 </CardContent>
               </Card>
@@ -149,17 +165,17 @@ const Calculator = () => {
               <div className="space-y-4">
                 <ResultCard title="Área Líquida" value={`${resPiso.area.toFixed(2)} m²`} />
                 <ResultCard title="Área com Perda" value={`${resPiso.areaTotal.toFixed(2)} m²`} color="text-indigo-600" />
-                <ResultCard 
-                  title="Total de Caixas" 
-                  value={`${resPiso.caixas} CX`} 
-                  isHighlight 
+                <ResultCard
+                  title="Quantidade para venda"
+                  value={`${resPiso.areaTotal.toFixed(2)} m²`}
+                  isHighlight
                   action={
-                    <Button 
-                      onClick={() => handleAddToSale(resPiso.caixas)} 
-                      disabled={resPiso.caixas <= 0}
+                    <Button
+                      onClick={() => handleAddToSale({ type: 'piso', quantity: resPiso.areaTotal })}
+                      disabled={resPiso.areaTotal <= 0}
                       className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                     >
-                      <ShoppingCart size={16} /> Adicionar à Venda
+                      <ShoppingCart size={16} /> Escolher Produto
                     </Button>
                   }
                 />
@@ -205,12 +221,12 @@ const Calculator = () => {
                   isHighlight 
                   color="text-emerald-600" 
                   action={
-                    <Button 
-                      onClick={() => handleAddToSale(resArg.sacos)} 
+                    <Button
+                      onClick={() => handleAddToSale({ type: 'argamassa', quantity: resArg.sacos })}
                       disabled={resArg.sacos <= 0}
                       className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                     >
-                      <ShoppingCart size={16} /> Adicionar à Venda
+                      <ShoppingCart size={16} /> Escolher Produto
                     </Button>
                   }
                 />
@@ -254,12 +270,12 @@ const Calculator = () => {
                   isHighlight 
                   color="text-blue-600" 
                   action={
-                    <Button 
-                      onClick={() => handleAddToSale(resForro.laminas)} 
+                    <Button
+                      onClick={() => handleAddToSale({ type: 'forro', quantity: resForro.laminas })}
                       disabled={resForro.laminas <= 0}
                       className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                     >
-                      <ShoppingCart size={16} /> Adicionar à Venda
+                      <ShoppingCart size={16} /> Escolher Produto
                     </Button>
                   }
                 />

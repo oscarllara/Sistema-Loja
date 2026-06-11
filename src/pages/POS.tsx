@@ -17,7 +17,8 @@ import {
   CheckCircle,
   FileText,
   ShieldAlert,
-  DollarSign
+  DollarSign,
+  Calculator
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -178,6 +179,12 @@ const POS = () => {
     return val;
   };
 
+  const getBoxSize = (product: any) => Number(product?.tamanho_caixa || 0) || 0;
+
+  const formatBRNumber = (value: number, decimals = 3) => {
+    return value.toFixed(decimals).replace('.', ',');
+  };
+
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
     if (key === 'F3') { if(confirm("Deseja realmente cancelar esta operação e limpar o carrinho?")) setCart([]); }
@@ -187,12 +194,13 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
+    if (key === 'F6') navigate('/calculator');
     if (key === 'F9') handleSaveQuote();
-  }, [cart, selectedSellerId, mode]);
+  }, [cart, selectedSellerId, mode, navigate]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['F1', 'F3', 'F4', 'F9', 'F10'].includes(e.key)) {
+      if (['F1', 'F3', 'F4', 'F6', 'F9', 'F10'].includes(e.key)) {
         e.preventDefault();
         handleShortcut(e.key);
       }
@@ -210,10 +218,10 @@ const POS = () => {
     const price = getProductPrice(product, product.un, priceMode);
     setInputUnitPrice(price.toFixed(2).replace('.', ','));
     
-    const boxSize = product.tamanho_caixa || 0;
+    const boxSize = getBoxSize(product);
     if (boxSize > 0) {
       setInputBoxes("1");
-      setInputQty(boxSize.toFixed(3).replace('.', ','));
+      setInputQty(formatBRNumber(boxSize));
     } else {
       setInputBoxes("0");
     }
@@ -225,7 +233,7 @@ const POS = () => {
     const formatted = formatQtyMask(val);
     setInputQty(formatted);
     
-    const boxSize = pendingProduct?.tamanho_caixa || 0;
+    const boxSize = getBoxSize(pendingProduct);
     if (boxSize > 0) {
       const qty = parseBRNumber(formatted);
       const boxes = qty / boxSize;
@@ -237,11 +245,11 @@ const POS = () => {
     const formatted = formatQtyMask(val);
     setInputBoxes(formatted);
     
-    const boxSize = pendingProduct?.tamanho_caixa || 0;
+    const boxSize = getBoxSize(pendingProduct);
     if (boxSize > 0) {
       const boxes = parseBRNumber(formatted);
       const qty = boxes * boxSize;
-      setInputQty(qty.toFixed(3).replace('.', ','));
+      setInputQty(formatBRNumber(qty));
     }
   };
 
@@ -290,7 +298,7 @@ const POS = () => {
     if (!pendingProduct) return;
 
     let qty = parseBRNumber(inputQty);
-    const boxSize = pendingProduct.tamanho_caixa || 0;
+    const boxSize = getBoxSize(pendingProduct);
 
     if (inputUnit === pendingProduct.un && boxSize > 0 && !pendingProduct.fracionado) {
       const boxes = Math.ceil(qty / boxSize);
@@ -312,7 +320,8 @@ const POS = () => {
       margin: margin,
       isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
       conversionFactor: pendingProduct.fator_conversao || 1,
-      boxSize: boxSize
+      boxSize: boxSize,
+      boxesInput: boxSize > 0 ? (qty / boxSize).toFixed(2).replace('.', ',') : undefined
     }]);
     
     setPendingProduct(null);
@@ -339,9 +348,9 @@ const POS = () => {
     if (pendingProduct) { commitToCart(); return; }
     
     const paddedVal = inputCode.padStart(5, '0');
-    const product = products.find(p => 
-      p.id_manual === inputCode || 
-      p.id_manual === paddedVal || 
+    const product = products.find(p =>
+      p.id_manual === inputCode ||
+      p.id_manual === paddedVal ||
       p.cod_barras === inputCode ||
       p.id_importado === inputCode
     );
@@ -349,6 +358,54 @@ const POS = () => {
     if (product) startInsertion(product);
     else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
   };
+
+  React.useEffect(() => {
+    if (isLoadingData) return;
+
+    const rawPendingItem = sessionStorage.getItem('dyaderp_pending_calc_item');
+    if (!rawPendingItem) return;
+
+    try {
+      const pendingItem = JSON.parse(rawPendingItem);
+      const storageProduct = pendingItem.product;
+      const product = products.find(p => p.cd_produto === storageProduct?.cd_produto) || storageProduct;
+      const quantity = Number(pendingItem.quantity || 0);
+
+      if (!product || quantity <= 0) return;
+
+      const boxSize = getBoxSize(product);
+      const price = getProductPrice(product, product.un, priceMode);
+      const margin = product.compra > 0 ? ((price / product.compra) - 1) * 100 : 40;
+      const boxes = boxSize > 0 ? quantity / boxSize : undefined;
+
+      setMode('VENDA');
+      setCarts(prev => ({
+        ...prev,
+        VENDA: [...prev.VENDA, {
+          ...product,
+          quantity,
+          quantityInput: formatBRNumber(quantity),
+          selectedUnit: product.un,
+          finalPrice: Number(price.toFixed(2)),
+          finalPriceInput: price.toFixed(2).replace('.', ','),
+          costPrice: product.compra || 0,
+          salePrice: product.venda || 0,
+          margin,
+          isFractional: false,
+          conversionFactor: product.fator_conversao || 1,
+          boxSize,
+          boxesInput: boxes ? boxes.toFixed(2).replace('.', ',') : undefined,
+          requestedQuantity: pendingItem.requestedQuantity,
+          calculatorType: pendingItem.calculatorType
+        }]
+      }));
+
+      sessionStorage.removeItem('dyaderp_pending_calc_item');
+      showSuccess(`${product.nome} adicionado da calculadora ao PDV.`);
+    } catch {
+      sessionStorage.removeItem('dyaderp_pending_calc_item');
+    }
+  }, [isLoadingData, products, priceMode]);
 
   const updateCartItem = (idx: number, field: string, value: string) => {
     const newCart = [...cart];
@@ -581,6 +638,7 @@ const POS = () => {
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
               <div className="grid grid-cols-1 gap-2">
                 <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
+                <ShortcutItem keyName="F6" label="Calculadora" onClick={() => navigate('/calculator')} icon={<Calculator size={14} />} color="indigo" />
                 <ShortcutItem keyName="F7" label="Receber Contas" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
                 <ShortcutItem keyName="F8" label="Orçamentos" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} color="amber" />
               </div>
@@ -647,7 +705,7 @@ const POS = () => {
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 w-24 px-6">CÓDIGO</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 px-6">DESCRIÇÃO DO PRODUTO</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-20">UN</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">QTDE</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">QTDE/METROS</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">CX</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">VALOR UNIT.</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">SUB TOTAL</TableHead>
@@ -719,11 +777,11 @@ const POS = () => {
             </div>
             
             <div className="w-24 lg:w-32 space-y-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Qtde ({inputUnit})</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">{getBoxSize(pendingProduct) > 0 ? `Metros (${inputUnit})` : `Qtde (${inputUnit})`}</label>
               <Input ref={qtyRef} value={inputQty} onChange={(e) => handleQtyChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
             </div>
 
-            {pendingProduct?.tamanho_caixa > 0 && (
+            {getBoxSize(pendingProduct) > 0 && (
               <div className="w-24 lg:w-32 space-y-1.5 animate-in slide-in-from-bottom-2">
                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center block">Caixas (CX)</label>
                 <Input ref={boxesRef} value={inputBoxes} onChange={(e) => handleBoxesChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-indigo-900 border-none text-xl font-black text-white text-center shadow-inner ring-2 ring-indigo-500/50" />
