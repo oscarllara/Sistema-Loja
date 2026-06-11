@@ -75,13 +75,27 @@ export const db = {
   },
   produtos: {
     getAll: async (): Promise<Produto[]> => {
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('*')
-        .order('nome');
+      const pageSize = 1000;
+      let from = 0;
+      let allProducts: Produto[] = [];
 
-      if (error) throw error;
-      return data || [];
+      while (true) {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('*')
+          .order('nome')
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+
+        const batch = data || [];
+        allProducts = [...allProducts, ...batch];
+
+        if (batch.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allProducts;
     },
     add: async (p: Partial<Produto>) => {
       const { data: lastProducts, error: fetchError } = await supabase
