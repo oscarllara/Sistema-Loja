@@ -27,6 +27,7 @@ import { Produto } from '@/types/database';
 import { db } from '@/services/api';
 import ProductForm from '@/components/ProductForm';
 import ProductHistoryModal from '@/components/ProductHistoryModal';
+import DuplicateProductsPanel from '@/components/DuplicateProductsPanel';
 import { showSuccess, showError } from '@/utils/toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -84,7 +85,11 @@ const Inventory = () => {
     }
   });
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
+    await deleteMutation.mutateAsync(id);
+  };
+
+  const handleDeleteWithConfirm = (id: number) => {
     if (confirm("Tem certeza que deseja excluir este produto permanentemente?")) {
       deleteMutation.mutate(id);
     }
@@ -142,6 +147,8 @@ const Inventory = () => {
   return (
     <Layout>
       <div className="space-y-6">
+        <DuplicateProductsPanel products={products} onDeleteProduct={handleDelete} />
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Gestão de Estoque</h1>
@@ -295,7 +302,7 @@ const Inventory = () => {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}><Edit size={12} /></Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-500" onClick={() => handleDelete(product.cd_produto)}><Trash2 size={12} /></Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-500" onClick={() => handleDeleteWithConfirm(product.cd_produto)}><Trash2 size={12} /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
