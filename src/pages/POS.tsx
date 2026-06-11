@@ -382,19 +382,20 @@ const POS = () => {
 
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputCode.trim()) return;
+    const code = inputCode.trim();
+    if (!code) return;
     if (pendingProduct) { commitToCart(); return; }
     
-    const paddedVal = inputCode.padStart(5, '0');
+    const paddedVal = code.padStart(5, '0');
     const product = products.find(p =>
-      p.id_manual === inputCode ||
-      p.id_manual === paddedVal ||
-      p.cod_barras === inputCode ||
-      p.id_importado === inputCode
+      String(p.id_manual || '').trim() === code ||
+      String(p.id_manual || '').trim() === paddedVal ||
+      String(p.cod_barras || '').trim() === code ||
+      String(p.id_importado || '').trim() === code
     );
 
     if (product) startInsertion(product);
-    else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
+    else { setSearchInitialTerm(code); setIsSearchOpen(true); }
   };
 
   const addCalculatedItemToCart = React.useCallback((pendingItem: CalculatorPendingItem) => {
