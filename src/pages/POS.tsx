@@ -192,6 +192,14 @@ const POS = () => {
     return value.toFixed(decimals).replace('.', ',');
   };
 
+  const getRoundedBoxInfo = (quantity: number, boxSize: number) => {
+    const boxes = quantity > 0 && boxSize > 0 ? Math.ceil(quantity / boxSize) : 0;
+    return {
+      boxes,
+      quantity: boxes * boxSize
+    };
+  };
+
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
     if (key === 'F3') {
@@ -249,14 +257,17 @@ const POS = () => {
 
   const handleQtyChange = (val: string) => {
     const formatted = formatQtyMask(val);
-    setInputQty(formatted);
-    
     const boxSize = getBoxSize(pendingProduct);
+
     if (boxSize > 0) {
       const qty = parseBRNumber(formatted);
-      const boxes = qty / boxSize;
-      setInputBoxes(boxes.toFixed(2).replace('.', ','));
+      const rounded = getRoundedBoxInfo(qty, boxSize);
+      setInputQty(rounded.boxes > 0 ? formatBRNumber(rounded.quantity) : formatted);
+      setInputBoxes(rounded.boxes > 0 ? rounded.boxes.toString() : "0");
+      return;
     }
+
+    setInputQty(formatted);
   };
 
   const handleBoxesChange = (val: string) => {
@@ -265,8 +276,9 @@ const POS = () => {
     
     const boxSize = getBoxSize(pendingProduct);
     if (boxSize > 0) {
-      const boxes = parseBRNumber(formatted);
+      const boxes = Math.ceil(parseBRNumber(formatted));
       const qty = boxes * boxSize;
+      setInputBoxes(boxes > 0 ? boxes.toString() : formatted);
       setInputQty(formatBRNumber(qty));
     }
   };
@@ -319,8 +331,7 @@ const POS = () => {
     const boxSize = getBoxSize(pendingProduct);
 
     if (inputUnit === pendingProduct.un && boxSize > 0 && !pendingProduct.fracionado) {
-      const boxes = Math.ceil(qty / boxSize);
-      qty = boxes * boxSize;
+      qty = getRoundedBoxInfo(qty, boxSize).quantity;
     }
 
     const price = parseBRNumber(inputUnitPrice);
@@ -339,7 +350,7 @@ const POS = () => {
       isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
       conversionFactor: pendingProduct.fator_conversao || 1,
       boxSize: boxSize,
-      boxesInput: boxSize > 0 ? (qty / boxSize).toFixed(2).replace('.', ',') : undefined
+      boxesInput: boxSize > 0 ? Math.ceil(qty / boxSize).toString() : undefined
     }]);
     
     setPendingProduct(null);
@@ -388,7 +399,7 @@ const POS = () => {
     const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
     const price = priceMode === 'VISTA' ? precoVista : (product.venda || 0);
     const margin = product.compra > 0 ? ((price / product.compra) - 1) * 100 : 40;
-    const boxes = boxSize > 0 ? quantity / boxSize : undefined;
+    const boxes = boxSize > 0 ? Math.ceil(quantity / boxSize) : undefined;
 
     setMode('VENDA');
     setCarts(prev => ({
@@ -406,7 +417,7 @@ const POS = () => {
         isFractional: false,
         conversionFactor: product.fator_conversao || 1,
         boxSize,
-        boxesInput: boxes ? boxes.toFixed(2).replace('.', ',') : undefined,
+        boxesInput: boxes ? boxes.toString() : undefined,
         requestedQuantity: pendingItem.requestedQuantity,
         calculatorType: pendingItem.calculatorType
       }]
@@ -434,13 +445,21 @@ const POS = () => {
     const numValue = parseBRNumber(formatted);
     
     if (field === 'quantity') {
-      item.quantityInput = formatted;
-      item.quantity = numValue;
-    } else if (field === 'boxes') {
-      item.boxesInput = formatted;
       if (item.boxSize > 0) {
-        item.quantity = numValue * item.boxSize;
-        item.quantityInput = item.quantity.toFixed(3).replace('.', ',');
+        const rounded = getRoundedBoxInfo(numValue, item.boxSize);
+        item.quantity = rounded.quantity;
+        item.quantityInput = rounded.boxes > 0 ? formatBRNumber(rounded.quantity) : formatted;
+        item.boxesInput = rounded.boxes > 0 ? rounded.boxes.toString() : "0";
+      } else {
+        item.quantityInput = formatted;
+        item.quantity = numValue;
+      }
+    } else if (field === 'boxes') {
+      const boxes = Math.ceil(numValue);
+      item.boxesInput = boxes > 0 ? boxes.toString() : formatted;
+      if (item.boxSize > 0) {
+        item.quantity = boxes * item.boxSize;
+        item.quantityInput = formatBRNumber(item.quantity);
       }
     } else if (field === 'finalPrice') {
       item.finalPriceInput = formatted;
@@ -456,9 +475,12 @@ const POS = () => {
     const item = { ...newCart[idx] };
 
     if (field === 'quantity') {
-      item.quantityInput = (Number(item.quantity) || 0).toString().replace('.', ',');
+      item.quantityInput = formatBRNumber(Number(item.quantity) || 0);
+      if (item.boxSize > 0) {
+        item.boxesInput = Math.ceil((Number(item.quantity) || 0) / item.boxSize).toString();
+      }
     } else if (field === 'boxes' && item.boxSize > 0) {
-      item.boxesInput = ((Number(item.quantity) || 0) / item.boxSize).toFixed(2).replace('.', ',');
+      item.boxesInput = Math.ceil((Number(item.quantity) || 0) / item.boxSize).toString();
     } else if (field === 'finalPrice') {
       item.finalPriceInput = (Number(item.finalPrice) || 0).toFixed(2).replace('.', ',');
     }
