@@ -85,6 +85,7 @@ const POS = () => {
     COMPRA: [],
     LOCACAO: []
   });
+  const [selectedCartIndex, setSelectedCartIndex] = React.useState<number | null>(null);
 
   const [entitiesIds, setEntitiesIds] = React.useState<Record<POSMode, number | "">>({
     VENDA: "",
@@ -126,6 +127,10 @@ const POS = () => {
       codeRef.current?.focus();
     }
   }, [selectedSellerId]);
+
+  React.useEffect(() => {
+    setSelectedCartIndex(null);
+  }, [mode]);
 
   const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
     setCarts(prev => ({
@@ -189,16 +194,27 @@ const POS = () => {
 
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
-    if (key === 'F3') { if(confirm("Deseja realmente cancelar esta operação e limpar o carrinho?")) setCart([]); }
+    if (key === 'F3') {
+      if(confirm("Deseja realmente cancelar esta operação e limpar o carrinho?")) {
+        setCart([]);
+        setSelectedCartIndex(null);
+      }
+    }
     if (key === 'F10') {
       if (cart.length === 0) { showError("Carrinho vazio!"); return; }
       if (!selectedSellerId) { showError("Selecione o Operador primeiro!"); return; }
       setIsCheckoutOpen(true);
     }
-    if (key === 'F4') setIsAddEntityOpen(true);
+    if (key === 'F4') {
+      if (cart.length === 0) { showError("Carrinho vazio!"); return; }
+      if (selectedCartIndex === null || !cart[selectedCartIndex]) { showError("Clique em um item da venda para selecionar e aperte F4 para excluir."); return; }
+      setCart(prev => prev.filter((_, index) => index !== selectedCartIndex));
+      setSelectedCartIndex(null);
+      showSuccess("Item removido da venda.");
+    }
     if (key === 'F6') setIsCalculatorOpen(true);
     if (key === 'F9') handleSaveQuote();
-  }, [cart, selectedSellerId, mode]);
+  }, [cart, selectedCartIndex, selectedSellerId, mode]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -453,6 +469,11 @@ const POS = () => {
 
   const removeItem = (idx: number) => {
     setCart(prev => prev.filter((_, index) => index !== idx));
+    setSelectedCartIndex(prev => {
+      if (prev === null) return null;
+      if (prev === idx) return null;
+      return prev > idx ? prev - 1 : prev;
+    });
   };
 
   const handleSaveQuote = async () => {
@@ -478,6 +499,7 @@ const POS = () => {
       await db.orcamentos.add(payload);
       showSuccess("Orçamento salvo!");
       setCart([]);
+      setSelectedCartIndex(null);
     } catch (err) { showError("Erro ao salvar."); }
   };
 
@@ -569,6 +591,7 @@ const POS = () => {
     setLastActionData({ ...payload, type: 'Venda' });
     setIsPrintOpen(true);
     setCart([]);
+    setSelectedCartIndex(null);
     setIsCheckoutOpen(false);
     await loadAllData();
   };
@@ -633,6 +656,16 @@ const POS = () => {
                 <CheckCircle size={24} /> FINALIZAR
                 <span className="text-[10px] opacity-50 ml-auto">F10</span>
               </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" className="h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl font-black text-xs uppercase" onClick={() => handleShortcut('F3')}>
+                  Limpar
+                  <span className="text-[10px] opacity-50 ml-auto">F3</span>
+                </Button>
+                <Button variant="outline" className="h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl font-black text-xs uppercase" onClick={() => handleShortcut('F4')}>
+                  Excluir Item
+                  <span className="text-[10px] opacity-50 ml-auto">F4</span>
+                </Button>
+              </div>
               <Button variant="outline" className="w-full h-11 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-black text-xs uppercase" onClick={handleSaveQuote}>
                 <Save size={16} /> Salvar Orçamento
                 <span className="text-[10px] opacity-50 ml-auto">F9</span>
@@ -721,7 +754,14 @@ const POS = () => {
                   <TableRow><TableCell colSpan={10} className="h-[400px] text-center"><div className="flex flex-col items-center justify-center text-slate-300 gap-4"><ShoppingBag size={80} className="opacity-10" /><p className="text-xl font-black uppercase tracking-widest opacity-20">Carrinho Vazio</p></div></TableCell></TableRow>
                 ) : (
                   cart.map((item, idx) => (
-                    <TableRow key={idx} className="h-12 border-b border-slate-200 hover:bg-indigo-50/50 transition-colors group">
+                    <TableRow
+                      key={idx}
+                      onClick={() => setSelectedCartIndex(idx)}
+                      className={cn(
+                        "h-12 border-b border-slate-200 hover:bg-indigo-50/50 transition-colors group cursor-pointer",
+                        selectedCartIndex === idx && "bg-indigo-100 hover:bg-indigo-100 ring-2 ring-inset ring-indigo-400"
+                      )}
+                    >
                       <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
                       <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">{item?.nome}</TableCell>
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
@@ -755,7 +795,7 @@ const POS = () => {
                         </div>
                       </TableCell>
                       <TableCell className="py-0 text-base text-right font-black border-r border-slate-100 w-36 px-6 text-slate-900">R$ {(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
-                      <TableCell className="py-0 text-center w-16"><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 rounded-full opacity-0 group-hover:opacity-100" onClick={() => removeItem(idx)}><Trash2 size={16} /></Button></TableCell>
+                      <TableCell className="py-0 text-center w-16"><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 rounded-full opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={16} /></Button></TableCell>
                     </TableRow>
                   ))
                 )}
