@@ -37,9 +37,9 @@ const SupabaseProductsCheck = () => {
     const checkResult: CheckResult = {};
 
     try {
-      const { data: listData, error: listError } = await supabase
+      const { data: listData, error: listError, count } = await supabase
         .from("produtos")
-        .select("cd_produto, id_manual, id_importado, nome")
+        .select("cd_produto, id_manual, id_importado, nome", { count: "exact" })
         .order("cd_produto", { ascending: false })
         .limit(5);
 
@@ -47,7 +47,7 @@ const SupabaseProductsCheck = () => {
         throw new Error(`Falha ao ler produtos: ${listError.message}`);
       }
 
-      checkResult.totalProducts = listData?.length ?? 0;
+      checkResult.totalProducts = count ?? listData?.length ?? 0;
       checkResult.latestProduct = listData?.[0] ?? null;
 
       let maxManualId = 0;
@@ -140,7 +140,7 @@ const SupabaseProductsCheck = () => {
         {result && (
           <div className="space-y-3 text-sm">
             <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-              <p><strong>Produtos lidos:</strong> {result.totalProducts ?? "-"}</p>
+              <p><strong>Total de produtos:</strong> {result.totalProducts ?? "-"}</p>
               <p><strong>Último produto:</strong> {result.latestProduct?.nome || "-"}</p>
               <p><strong>Último cd_produto:</strong> {result.latestProduct?.cd_produto ?? "-"}</p>
               <p><strong>Último id_manual:</strong> {result.latestProduct?.id_manual || "-"}</p>
