@@ -18,7 +18,13 @@ import {
   FileText,
   ShieldAlert,
   DollarSign,
-  Calculator
+  Calculator,
+  Banknote,
+  CreditCard,
+  QrCode,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -55,6 +61,7 @@ import TechnicalCalculator, { CalculatorPendingItem } from '@/components/Technic
 import { Produto, Cliente, Configuracoes, ContaBancaria, CaixaSessao, LancamentoFinanceiro } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
+type DailyCashFilter = 'Todos' | 'Dinheiro' | 'Cartão' | 'PIX';
 
 const POS = () => {
   const navigate = useNavigate();
@@ -171,6 +178,8 @@ const POS = () => {
   const [isOpenCashOpen, setIsOpenCashOpen] = React.useState(false);
   const [isCloseCashOpen, setIsCloseCashOpen] = React.useState(false);
   const [isDailyCashAuthOpen, setIsDailyCashAuthOpen] = React.useState(false);
+  const [isDailyCashPanelOpen, setIsDailyCashPanelOpen] = React.useState(false);
+  const [dailyCashFilter, setDailyCashFilter] = React.useState<DailyCashFilter>('Todos');
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
@@ -587,6 +596,36 @@ const POS = () => {
   const cashOpeningBalance = Number(currentCashSession?.saldo_real_abertura || 0);
   const cashSystemBalance = cashOpeningBalance + cashEntriesToday - cashExitsToday;
 
+  const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const getDailyCashGroup = (movement: LancamentoFinanceiro): DailyCashFilter => {
+    if (movement.meio_pagamento === 'PIX') return 'PIX';
+    if (movement.meio_pagamento === 'Cartão Crédito' || movement.meio_pagamento === 'Cartão Débito') return 'Cartão';
+    if (movement.meio_pagamento === 'Dinheiro') return 'Dinheiro';
+    return 'Todos';
+  };
+
+  const getDailyCashTotals = (filter: DailyCashFilter) => {
+    const movements = filter === 'Todos'
+      ? cashMovementsToday
+      : cashMovementsToday.filter(item => getDailyCashGroup(item) === filter);
+    const entries = movements.filter(item => item.tipo === 'R').reduce((acc, item) => acc + Number(item.valor || 0), 0);
+    const exits = movements.filter(item => item.tipo === 'P').reduce((acc, item) => acc + Number(item.valor || 0), 0);
+    return { entries, exits, total: entries - exits, count: movements.length };
+  };
+
+  const dailyCashCards = React.useMemo(() => [
+    { filter: 'Todos' as const, title: 'Todos', description: 'Tudo do dia', icon: Wallet, color: 'slate', ...getDailyCashTotals('Todos') },
+    { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Recebido em espécie', icon: Banknote, color: 'emerald', ...getDailyCashTotals('Dinheiro') },
+    { filter: 'Cartão' as const, title: 'Cartões', description: 'Débito e crédito', icon: CreditCard, color: 'indigo', ...getDailyCashTotals('Cartão') },
+    { filter: 'PIX' as const, title: 'PIX', description: 'Transferências instantâneas', icon: QrCode, color: 'cyan', ...getDailyCashTotals('PIX') },
+  ], [cashMovementsToday]);
+
+  const filteredDailyCashMovements = React.useMemo(() => {
+    if (dailyCashFilter === 'Todos') return cashMovementsToday;
+    return cashMovementsToday.filter(item => getDailyCashGroup(item) === dailyCashFilter);
+  }, [cashMovementsToday, dailyCashFilter]);
+
   const openCashDialog = () => {
     setOpeningRealValue(formatMoneyInput(expectedOpeningBalance));
     setCashNotes("");
@@ -788,11 +827,11 @@ const POS = () => {
       return;
     }
 
-    sessionStorage.setItem('dyaderp_daily_cash_access', String(Date.now() + 15 * 60 * 1000));
     showSuccess(`Acesso liberado por: ${authorizedUser.nome}`);
     setIsDailyCashAuthOpen(false);
     setDailyCashPassword("");
-    navigate('/daily-cash');
+    setDailyCashFilter('Todos');
+    setIsDailyCashPanelOpen(true);
   };
 
   const theme = {
@@ -1192,6 +1231,136 @@ const POS = () => {
             <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha autorizada</Label><div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><Input type="password" autoFocus value={dailyCashPassword} onChange={(e) => setDailyCashPassword(e.target.value)} className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-emerald-500 rounded-2xl shadow-inner" placeholder="••••••" /></div></div>
             <DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsDailyCashAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20">ACESSAR</Button></DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDailyCashPanelOpen} onOpenChange={setIsDailyCashPanelOpen}>
+        <DialogContent className="max-w-6xl h-[92vh] overflow-hidden rounded-3xl border-none shadow-2xl p-0 flex flex-col">
+          <div className="bg-slate-950 text-white p-6 shrink-0">
+            <DialogHeader>
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 text-emerald-300 border border-emerald-400/20 flex items-center justify-center shadow-inner">
+                    <Wallet size={34} />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-3xl font-black uppercase tracking-tighter">Caixa Diário do PDV</DialogTitle>
+                    <p className="text-sm text-slate-400 font-bold mt-1">
+                      {cashAccount?.nome || 'Sem caixa'} • {new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')} • {currentCashSession?.status || 'Fechado'}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" className="bg-white/10 border-white/10 text-white hover:bg-white/20 rounded-2xl font-black" onClick={loadAllData}>
+                  <RefreshCw size={16} className="mr-2" /> Atualizar
+                </Button>
+              </div>
+            </DialogHeader>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+              <div className="rounded-2xl bg-white/10 border border-white/10 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abertura</p>
+                <p className="text-2xl font-black mt-1">{formatCurrency(cashOpeningBalance)}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-500/10 border border-emerald-400/20 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 flex items-center gap-1"><ArrowDownCircle size={13} /> Entradas</p>
+                <p className="text-2xl font-black mt-1 text-emerald-200">{formatCurrency(cashEntriesToday)}</p>
+              </div>
+              <div className="rounded-2xl bg-rose-500/10 border border-rose-400/20 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-1"><ArrowUpCircle size={13} /> Saídas</p>
+                <p className="text-2xl font-black mt-1 text-rose-200">{formatCurrency(cashExitsToday)}</p>
+              </div>
+              <div className="rounded-2xl bg-indigo-500/10 border border-indigo-400/20 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Saldo Conferência</p>
+                <p className="text-2xl font-black mt-1 text-indigo-100">{formatCurrency(cashSystemBalance)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 bg-slate-50 overflow-y-auto flex-1 min-h-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              {dailyCashCards.map(card => {
+                const Icon = card.icon;
+                const active = dailyCashFilter === card.filter;
+                return (
+                  <button
+                    key={card.filter}
+                    type="button"
+                    onClick={() => setDailyCashFilter(card.filter)}
+                    className={cn(
+                      "text-left rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+                      active && "ring-4 ring-offset-2 scale-[1.02]",
+                      card.color === 'slate' && (active ? "border-slate-900 ring-slate-200" : "border-slate-200"),
+                      card.color === 'emerald' && (active ? "border-emerald-600 ring-emerald-100" : "border-emerald-100"),
+                      card.color === 'indigo' && (active ? "border-indigo-600 ring-indigo-100" : "border-indigo-100"),
+                      card.color === 'cyan' && (active ? "border-cyan-600 ring-cyan-100" : "border-cyan-100")
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{card.description}</p>
+                        <h3 className="text-lg font-black text-slate-900 uppercase">{card.title}</h3>
+                      </div>
+                      <div className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center shadow-inner",
+                        card.color === 'slate' && "bg-slate-100 text-slate-700",
+                        card.color === 'emerald' && "bg-emerald-100 text-emerald-700",
+                        card.color === 'indigo' && "bg-indigo-100 text-indigo-700",
+                        card.color === 'cyan' && "bg-cyan-100 text-cyan-700"
+                      )}>
+                        <Icon size={22} />
+                      </div>
+                    </div>
+                    <p className="text-2xl font-black text-slate-900 mt-3">{formatCurrency(card.total)}</p>
+                    <div className="grid grid-cols-2 gap-2 mt-3 text-xs font-bold">
+                      <div className="rounded-xl bg-emerald-50 text-emerald-700 p-2">Entradas<br /><span className="font-black">{formatCurrency(card.entries)}</span></div>
+                      <div className="rounded-xl bg-rose-50 text-rose-700 p-2">Saídas<br /><span className="font-black">{formatCurrency(card.exits)}</span></div>
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">{card.count} lançamento(s)</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Conferência de lançamentos</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Filtro ativo: {dailyCashFilter}</p>
+                </div>
+                <Button variant="outline" className="rounded-xl font-black text-xs uppercase" onClick={() => setDailyCashFilter('Todos')}>Limpar filtro</Button>
+              </div>
+              <ScrollArea className="h-[300px]">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10">
+                    <TableRow>
+                      <TableHead className="text-[10px] font-black uppercase">Tipo</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase">Descrição</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase">Pagamento</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase">Cliente/Fornecedor</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase text-right">Valor</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDailyCashMovements.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-36 text-center text-slate-400 font-bold">Nenhum lançamento encontrado para este filtro.</TableCell>
+                      </TableRow>
+                    ) : filteredDailyCashMovements.map(item => (
+                      <TableRow key={item.cd_lancamento} className="hover:bg-slate-50">
+                        <TableCell>
+                          <span className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", item.tipo === 'R' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{item.tipo === 'R' ? 'Entrada' : 'Saída'}</span>
+                        </TableCell>
+                        <TableCell className="font-bold text-slate-700 max-w-[320px] truncate">{item.descricao}</TableCell>
+                        <TableCell className="font-black text-slate-900">{item.meio_pagamento || 'Não informado'}</TableCell>
+                        <TableCell className="font-bold text-slate-500">{item.nome_entidade || '-'}</TableCell>
+                        <TableCell className={cn("text-right font-black", item.tipo === 'R' ? "text-emerald-700" : "text-rose-700")}>{item.tipo === 'R' ? '+' : '-'} {formatCurrency(Number(item.valor || 0))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
