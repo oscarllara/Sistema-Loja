@@ -114,21 +114,52 @@ const Inventory = () => {
   }, [sales, financeiro]);
 
   const filteredProducts = React.useMemo(() => {
-    return products.filter(p => {
-      const codeTerm = searchCode.toLowerCase().trim();
-      const nameTerm = searchName.toLowerCase().trim();
+    const normalizeCode = (value: string) => value.replace(/^0+/, '') || value;
+    const codeTerm = searchCode.toLowerCase().trim();
+    const normalizedCodeTerm = normalizeCode(codeTerm);
+    const nameTerm = searchName.toLowerCase().trim();
 
-      const matchesCode = !codeTerm || (
-        p.id_manual?.toLowerCase().includes(codeTerm) ||
-        p.id_importado?.toLowerCase().includes(codeTerm) ||
-        p.cod_barras?.toLowerCase().includes(codeTerm)
-      );
+    const getCodes = (product: Produto) => [
+      String(product.id_manual || '').toLowerCase().trim(),
+      String(product.id_importado || '').toLowerCase().trim(),
+      String(product.cod_barras || '').toLowerCase().trim()
+    ].filter(Boolean);
 
-      const matchesName = !nameTerm || p.nome.toLowerCase().includes(nameTerm);
-      const matchesSite = filterSiteOnly ? p.disponivel_site : true;
+    const matchesCodeSearch = (product: Produto, term: string, normalizedTerm: string) => {
+      if (!term) return true;
+      const codes = getCodes(product);
+      return codes.some(code => {
+        const normalizedCode = normalizeCode(code);
+        return code.includes(term) || normalizedCode.includes(normalizedTerm) || normalizedCode === normalizedTerm;
+      });
+    };
 
-      return matchesCode && matchesName && matchesSite;
-    });
+    const matchesGeneralSearch = (product: Produto, term: string) => {
+      if (!term) return true;
+      const normalizedTerm = normalizeCode(term);
+      return product.nome.toLowerCase().includes(term) || matchesCodeSearch(product, term, normalizedTerm);
+    };
+
+    const getCodeScore = (product: Produto) => {
+      if (!codeTerm) return 99;
+      const manual = String(product.id_manual || '').toLowerCase().trim();
+      const imported = String(product.id_importado || '').toLowerCase().trim();
+      const barcode = String(product.cod_barras || '').toLowerCase().trim();
+
+      if (manual === codeTerm || imported === codeTerm || barcode === codeTerm) return 0;
+      if (normalizeCode(manual) === normalizedCodeTerm || normalizeCode(imported) === normalizedCodeTerm || normalizeCode(barcode) === normalizedCodeTerm) return 1;
+      return 2;
+    };
+
+    return products
+      .filter(product => {
+        const matchesCode = matchesCodeSearch(product, codeTerm, normalizedCodeTerm);
+        const matchesName = matchesGeneralSearch(product, nameTerm);
+        const matchesSite = filterSiteOnly ? product.disponivel_site : true;
+
+        return matchesCode && matchesName && matchesSite;
+      })
+      .sort((a, b) => getCodeScore(a) - getCodeScore(b));
   }, [products, searchCode, searchName, filterSiteOnly]);
 
   const viewStats = React.useMemo(() => {
@@ -213,7 +244,7 @@ const Inventory = () => {
             <div className="relative flex-1">
               <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <Input
-                placeholder="Cód. Novo ou Antigo..."
+                placeholder="Cód. novo, antigo ou barras..."
                 className="pl-10 border-slate-200 h-11 rounded-lg font-bold"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
@@ -222,7 +253,7 @@ const Inventory = () => {
             <div className="relative flex-[2]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <Input
-                placeholder="Pesquisar por Nome do Produto..."
+                placeholder="Pesquisar por nome ou código..."
                 className="pl-10 border-slate-200 h-11 rounded-lg"
                 value={searchName}
                 onChange={(e) => setSearchName(e.target.value)}
