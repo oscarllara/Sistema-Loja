@@ -228,6 +228,18 @@ export const db = {
       return data || [];
     },
     open: async (data: Partial<CaixaSessao>) => {
+      if (data.cd_conta && data.data_caixa) {
+        const { data: existing, error: existingError } = await supabase
+          .from('caixa_sessoes')
+          .select('*')
+          .eq('cd_conta', data.cd_conta)
+          .eq('data_caixa', data.data_caixa)
+          .maybeSingle();
+
+        if (existingError) throw existingError;
+        if (existing) return existing;
+      }
+
       const { data: created, error } = await supabase.from('caixa_sessoes').insert([data]).select('*').single();
       if (error) throw error;
       if (data.cd_conta) {

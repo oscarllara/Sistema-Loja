@@ -170,12 +170,14 @@ const POS = () => {
   const [isCalculatorOpen, setIsCalculatorOpen] = React.useState(false);
   const [isOpenCashOpen, setIsOpenCashOpen] = React.useState(false);
   const [isCloseCashOpen, setIsCloseCashOpen] = React.useState(false);
+  const [isDailyCashAuthOpen, setIsDailyCashAuthOpen] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [adminPassword, setAdminPassword] = React.useState("");
+  const [dailyCashPassword, setDailyCashPassword] = React.useState("");
   const [openingRealValue, setOpeningRealValue] = React.useState("0,00");
   const [closingRealValue, setClosingRealValue] = React.useState("0,00");
   const [cashNotes, setCashNotes] = React.useState("");
@@ -240,6 +242,10 @@ const POS = () => {
       if (mode === 'VENDA' && currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de finalizar vendas no PDV."); return; }
       setIsCheckoutOpen(true);
     }
+    if (key === 'F2') {
+      setDailyCashPassword("");
+      setIsDailyCashAuthOpen(true);
+    }
     if (key === 'F4') {
       if (cart.length === 0) { showError("Carrinho vazio!"); return; }
       if (selectedCartIndex === null || !cart[selectedCartIndex]) { showError("Clique em um item da venda para selecionar e aperte F4 para excluir."); return; }
@@ -247,13 +253,16 @@ const POS = () => {
       setSelectedCartIndex(null);
       showSuccess("Item removido da venda.");
     }
+    if (key === 'F5') setIsHistoryOpen(true);
     if (key === 'F6') setIsCalculatorOpen(true);
+    if (key === 'F7') setIsPaymentsOpen(true);
+    if (key === 'F8') setIsQuotesOpen(true);
     if (key === 'F9') handleSaveQuote();
   }, [cart, selectedCartIndex, selectedSellerId, mode, currentCashSession]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['F1', 'F3', 'F4', 'F6', 'F9', 'F10'].includes(e.key)) {
+      if (['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.key)) {
         e.preventDefault();
         handleShortcut(e.key);
       }
@@ -764,6 +773,28 @@ const POS = () => {
     } else { showError("Senha inválida."); }
   };
 
+  const handleDailyCashAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    const authorizedUser = dailyCashPassword === 'admin'
+      ? { nome: 'Administrador' }
+      : sellers.find(s => {
+        const isAdmin = s.usuario === 'admin' || s.permissoes?.settings || s.permissoes?.financial;
+        const isSupervisor = Boolean(s.permissoes?.is_supervisor);
+        return s.senha === dailyCashPassword && (isAdmin || isSupervisor);
+      });
+
+    if (!authorizedUser) {
+      showError("Senha de administrador ou supervisor inválida.");
+      return;
+    }
+
+    sessionStorage.setItem('dyaderp_daily_cash_access', String(Date.now() + 15 * 60 * 1000));
+    showSuccess(`Acesso liberado por: ${authorizedUser.nome}`);
+    setIsDailyCashAuthOpen(false);
+    setDailyCashPassword("");
+    navigate('/daily-cash');
+  };
+
   const theme = {
     VENDA: { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-900', header: 'bg-slate-900', border: 'border-slate-800' },
     COMPRA: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', text: 'text-emerald-900', header: 'bg-emerald-900', border: 'border-emerald-800' },
@@ -772,19 +803,21 @@ const POS = () => {
 
   return (
     <div className="h-screen w-screen bg-slate-200 flex overflow-hidden font-sans">
-      <aside className="w-72 bg-white border-r border-slate-300 flex flex-col shrink-0 shadow-2xl z-20 hidden lg:flex">
-        <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center bg-slate-50">
+      <aside className="w-80 bg-white border-r border-slate-300 flex flex-col shrink-0 shadow-2xl z-20 hidden lg:flex">
+        <div className="p-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50">
           {config?.logo_url ? (
-            <div className="w-full h-24 flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm mb-3">
+            <div className="w-16 h-16 flex items-center justify-center p-1.5 bg-white rounded-2xl border border-slate-200 shadow-sm shrink-0">
               <img src={config.logo_url} alt="Logo Loja" className="max-h-full max-w-full object-contain" />
             </div>
           ) : (
-            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg mb-3", theme.bg)}>
-              <ShoppingCart size={32} />
+            <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0", theme.bg)}>
+              <ShoppingCart size={28} />
             </div>
           )}
-          <h2 className={cn("text-xl font-black tracking-tighter italic uppercase leading-none", theme.text)}>{config?.nome_empresa || 'DyadERP'}</h2>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{config?.slogan}</p>
+          <div className="min-w-0 text-left">
+            <h2 className={cn("text-lg font-black tracking-tighter italic uppercase leading-none truncate", theme.text)}>{config?.nome_empresa || 'DyadERP'}</h2>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 line-clamp-2">{config?.slogan}</p>
+          </div>
         </div>
 
         <div className={cn("p-4 text-white space-y-3", theme.header)}>
@@ -866,6 +899,7 @@ const POS = () => {
             <div className="space-y-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
               <div className="grid grid-cols-1 gap-2">
+                <ShortcutItem keyName="F2" label="Caixa Diário" onClick={() => handleShortcut('F2')} icon={<Wallet size={14} />} color="emerald" />
                 <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
                 <ShortcutItem keyName="F6" label="Calculadora" onClick={() => setIsCalculatorOpen(true)} icon={<Calculator size={14} />} color="indigo" />
                 <ShortcutItem keyName="F7" label="Receber Contas" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
@@ -1143,6 +1177,20 @@ const POS = () => {
           <form onSubmit={handleSupervisorRelease} className="space-y-5 py-4">
             <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Supervisor</Label><div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><Input type="password" autoFocus value={supervisorPassword} onChange={(e) => setSupervisorPassword(e.target.value)} className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner" placeholder="••••••" /></div></div>
             <DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsSupervisorModalOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-14 bg-primary hover:bg-primary/90 rounded-2xl font-black text-lg shadow-xl shadow-primary/20">LIBERAR AGORA</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDailyCashAuthOpen} onOpenChange={setIsDailyCashAuthOpen}>
+        <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
+          <DialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><Wallet size={40} /></div>
+            <DialogTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Caixa Diário</DialogTitle>
+            <p className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">Informe a senha de administrador ou supervisor para acessar.</p>
+          </DialogHeader>
+          <form onSubmit={handleDailyCashAccess} className="space-y-5 py-4">
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha autorizada</Label><div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><Input type="password" autoFocus value={dailyCashPassword} onChange={(e) => setDailyCashPassword(e.target.value)} className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-emerald-500 rounded-2xl shadow-inner" placeholder="••••••" /></div></div>
+            <DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsDailyCashAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-14 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20">ACESSAR</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

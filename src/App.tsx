@@ -22,11 +22,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ children, permission }: { children: React.ReactNode, permission?: string }) => {
+const ProtectedRoute = ({ children, permission, sessionAccessKey }: { children: React.ReactNode, permission?: string, sessionAccessKey?: string }) => {
   const user = db.auth.getUser();
   if (!user) return <Navigate to="/login" replace />;
+
+  const temporaryAccessUntil = sessionAccessKey ? Number(sessionStorage.getItem(sessionAccessKey) || 0) : 0;
+  const hasTemporaryAccess = temporaryAccessUntil > Date.now();
   
-  if (permission && user.permissoes && !(user.permissoes as any)[permission]) {
+  if (permission && user.permissoes && !(user.permissoes as any)[permission] && !hasTemporaryAccess) {
     return <Navigate to="/" replace />;
   }
   
@@ -48,7 +51,7 @@ const App = () => (
           <Route path="/inventory" element={<ProtectedRoute permission="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/registrations" element={<ProtectedRoute permission="registrations"><Registrations /></ProtectedRoute>} />
           <Route path="/financial" element={<ProtectedRoute permission="financial"><Financial /></ProtectedRoute>} />
-          <Route path="/daily-cash" element={<ProtectedRoute permission="financial"><DailyCash /></ProtectedRoute>} />
+          <Route path="/daily-cash" element={<ProtectedRoute permission="financial" sessionAccessKey="dyaderp_daily_cash_access"><DailyCash /></ProtectedRoute>} />
           <Route path="/purchases" element={<ProtectedRoute permission="purchases"><Purchases /></ProtectedRoute>} />
           <Route path="/purchase-quotes" element={<ProtectedRoute permission="purchases"><PurchaseQuotes /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute permission="reports"><Reports /></ProtectedRoute>} />
