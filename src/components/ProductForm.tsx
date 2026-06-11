@@ -74,6 +74,8 @@ interface ProductFormProps {
   onSuccess: (savedProduct?: Produto) => void;
 }
 
+const normalizeText = (value?: string | null) => (value || "").trim().toUpperCase();
+
 const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const [suppliers, setSuppliers] = React.useState<Cliente[]>([]);
   const [allProducts, setAllProducts] = React.useState<Produto[]>([]);
@@ -269,11 +271,48 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     setIsSaving(true);
 
     try {
+      const normalizedName = normalizeText(data.nome);
+      const normalizedImportedId = normalizeText(data.id_importado);
+      const normalizedManualId = normalizeText(data.id_manual);
       const supplierId = data.cd_fornecedores ? parseInt(data.cd_fornecedores, 10) : null;
+
+      const duplicateName = allProducts.find((item) =>
+        item.cd_produto !== product?.cd_produto &&
+        normalizeText(item.nome) === normalizedName
+      );
+
+      if (duplicateName) {
+        showError("Já existe um produto com esta descrição. Use um nome diferente, como 'CIMENTO TUPI 2'.");
+        return;
+      }
+
+      if (normalizedImportedId) {
+        const duplicateImportedId = allProducts.find((item) =>
+          item.cd_produto !== product?.cd_produto &&
+          normalizeText(item.id_importado) === normalizedImportedId
+        );
+
+        if (duplicateImportedId) {
+          showError("Já existe um produto com este código antigo.");
+          return;
+        }
+      }
+
+      if (normalizedManualId) {
+        const duplicateManualId = allProducts.find((item) =>
+          item.cd_produto !== product?.cd_produto &&
+          normalizeText(item.id_manual) === normalizedManualId
+        );
+
+        if (duplicateManualId) {
+          showError("Já existe um produto com este código novo.");
+          return;
+        }
+      }
 
       const payload: Partial<Produto> = {
         id_manual: product ? (data.id_manual?.trim() || undefined) : undefined,
-        nome: data.nome.toUpperCase().trim(),
+        nome: normalizedName,
         id_importado: data.id_importado?.trim() || null,
         un: data.un.toUpperCase().trim(),
         cod_barras: data.cod_barras?.trim() || null,
@@ -351,7 +390,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <Label className={cn("flex items-center gap-2", errors.nome && "text-rose-600")}>
                   <Package size={14} /> Nome do Produto *
                 </Label>
-                <Input {...register("nome")} className="uppercase" placeholder="EX: CIMENTO CAUE 50KG" />
+                <Input {...register("nome")} className="uppercase" placeholder="EX: CIMENTO TUPI 2" />
               </div>
               <div className="space-y-2">
                 <Label className="text-amber-600 font-bold">Código Antigo (ID Importado)</Label>
