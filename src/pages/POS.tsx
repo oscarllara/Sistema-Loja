@@ -52,7 +52,7 @@ import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
 import SyncStatus from '@/components/SyncStatus';
 import TechnicalCalculator, { CalculatorPendingItem } from '@/components/TechnicalCalculator';
-import { Produto, Cliente, Configuracoes, ContaBancaria } from '@/types/database';
+import { Produto, Cliente, Configuracoes, ContaBancaria, CaixaSessao, LancamentoFinanceiro } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
 
@@ -71,6 +71,8 @@ const POS = () => {
   const [clients, setClients] = React.useState<Cliente[]>([]);
   const [sellers, setSellers] = React.useState<Cliente[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
+  const [cashSessions, setCashSessions] = React.useState<CaixaSessao[]>([]);
+  const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
@@ -100,17 +102,21 @@ const POS = () => {
   const loadAllData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const [p, c, cfg, acc] = await Promise.all([
+      const [p, c, cfg, acc, cashData, finData] = await Promise.all([
         db.produtos.getAll(),
         db.clientes.getAll(),
         db.config.get(),
-        db.contas.getAll()
+        db.contas.getAll(),
+        db.caixa.getAll(),
+        db.financeiro.getAll()
       ]);
       setProducts(p);
       setClients(c.filter(item => item.tipo_entidade === 'C' || item.tipo_entidade === 'A'));
       setSellers(c.filter(item => item.is_funcionario || item.usuario === 'admin'));
       setConfig(cfg);
       setContas(acc);
+      setCashSessions(cashData);
+      setLancamentos(finData);
     } catch (err) {
       showError("Erro ao carregar dados do sistema.");
     } finally {
@@ -162,12 +168,17 @@ const POS = () => {
   const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
   const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
   const [isCalculatorOpen, setIsCalculatorOpen] = React.useState(false);
+  const [isOpenCashOpen, setIsOpenCashOpen] = React.useState(false);
+  const [isCloseCashOpen, setIsCloseCashOpen] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
   
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [adminPassword, setAdminPassword] = React.useState("");
+  const [openingRealValue, setOpeningRealValue] = React.useState("0,00");
+  const [closingRealValue, setClosingRealValue] = React.useState("0,00");
+  const [cashNotes, setCashNotes] = React.useState("");
 
   const [isSupervisorModalOpen, setIsSupervisorModalOpen] = React.useState(false);
   const [supervisorPassword, setSupervisorPassword] = React.useState("");
@@ -178,6 +189,21 @@ const POS = () => {
     if (!val) return 0;
     return parseFloat(val.replace(/\./g, "").replace(",", ".")) || 0;
   };
+
+  const formatMoneyInput = (value: number) => value.toFixed(2).replace('.', ',');
+  const today = new Date().toISOString().split('T')[0];
+  const cashAccount = React.useMemo(() => contas.find(c => c.tipo === 'Caixa') || contas[0], [contas]);
+  const currentCashSession = React.useMemo(() => {
+    if (!cashAccount) return undefined;
+    return cashSessions.find(s => s.cd_conta === cashAccount.cd_conta && s.data_caixa === today);
+  }, [cashAccount, cashSessions, today]);
+  const lastClosedCashSession = React.useMemo(() => {
+    if (!cashAccount) return undefined;
+    return cashSessions
+      .filter(s => s.cd_conta === cashAccount.cd_conta && s.status === 'Fechado' && s.data_caixa < today)
+      .sort((a, b) => b.data_caixa.localeCompare(a.data_caixa))[0];
+  }, [cashAccount, cashSessions, today]);
+  const expectedOpeningBalance = Number(lastClosedCashSession?.saldo_para_dia_seguinte ?? lastClosedCashSession?.saldo_real_fechamento ?? cashAccount?.saldo ?? 0);
 
   const formatQtyMask = (value: string) => {
     let val = value.replace(/[^\d,]/g, "");
@@ -211,6 +237,7 @@ const POS = () => {
     if (key === 'F10') {
       if (cart.length === 0) { showError("Carrinho vazio!"); return; }
       if (!selectedSellerId) { showError("Selecione o Operador primeiro!"); return; }
+      if (mode === 'VENDA' && currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de finalizar vendas no PDV."); return; }
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') {
@@ -222,7 +249,7 @@ const POS = () => {
     }
     if (key === 'F6') setIsCalculatorOpen(true);
     if (key === 'F9') handleSaveQuote();
-  }, [cart, selectedCartIndex, selectedSellerId, mode]);
+  }, [cart, selectedCartIndex, selectedSellerId, mode, currentCashSession]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -537,9 +564,87 @@ const POS = () => {
 
   const total = React.useMemo(() => cart.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0), [cart]);
 
+  const cashMovementsToday = React.useMemo(() => {
+    if (!cashAccount) return [];
+    return lancamentos.filter(l => {
+      if (l.status !== 'Pago' || l.cd_conta !== cashAccount.cd_conta) return false;
+      const date = (l.data_pagamento || l.data_vencimento || '').split('T')[0];
+      return date === today;
+    });
+  }, [cashAccount, lancamentos, today]);
+
+  const cashEntriesToday = cashMovementsToday.filter(l => l.tipo === 'R').reduce((acc, l) => acc + Number(l.valor || 0), 0);
+  const cashExitsToday = cashMovementsToday.filter(l => l.tipo === 'P').reduce((acc, l) => acc + Number(l.valor || 0), 0);
+  const cashOpeningBalance = Number(currentCashSession?.saldo_real_abertura || 0);
+  const cashSystemBalance = cashOpeningBalance + cashEntriesToday - cashExitsToday;
+
+  const openCashDialog = () => {
+    setOpeningRealValue(formatMoneyInput(expectedOpeningBalance));
+    setCashNotes("");
+    setIsOpenCashOpen(true);
+  };
+
+  const handleOpenCash = async () => {
+    if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
+    if (!selectedSellerId) { showError("Selecione o operador antes de abrir o caixa."); return; }
+
+    const real = parseBRNumber(openingRealValue);
+    const difference = real - expectedOpeningBalance;
+
+    try {
+      await db.caixa.open({
+        cd_conta: cashAccount.cd_conta,
+        data_caixa: today,
+        status: 'Aberto',
+        saldo_previsto_abertura: Number(expectedOpeningBalance.toFixed(2)),
+        saldo_real_abertura: Number(real.toFixed(2)),
+        diferenca_abertura: Number(difference.toFixed(2)),
+        observacoes: cashNotes || undefined,
+        cd_operador: Number(selectedSellerId)
+      });
+      showSuccess(difference === 0 ? "Caixa aberto com saldo conferido." : "Caixa aberto com diferença registrada.");
+      setIsOpenCashOpen(false);
+      await loadAllData();
+    } catch (err) {
+      showError("Não foi possível abrir o caixa. Verifique se ele já foi aberto hoje.");
+    }
+  };
+
+  const openCloseCashDialog = () => {
+    setClosingRealValue(formatMoneyInput(cashSystemBalance));
+    setCashNotes(currentCashSession?.observacoes || "");
+    setIsCloseCashOpen(true);
+  };
+
+  const handleCloseCash = async () => {
+    if (!currentCashSession) return;
+
+    const real = parseBRNumber(closingRealValue);
+    const difference = real - cashSystemBalance;
+
+    try {
+      await db.caixa.close(currentCashSession.cd_sessao, {
+        saldo_sistema_fechamento: Number(cashSystemBalance.toFixed(2)),
+        saldo_real_fechamento: Number(real.toFixed(2)),
+        diferenca_fechamento: Number(difference.toFixed(2)),
+        saldo_para_dia_seguinte: Number(real.toFixed(2)),
+        observacoes: cashNotes || undefined
+      });
+      showSuccess(difference === 0 ? "Caixa fechado sem diferença." : "Caixa fechado com diferença registrada.");
+      setIsCloseCashOpen(false);
+      await loadAllData();
+    } catch (err) {
+      showError("Não foi possível fechar o caixa.");
+    }
+  };
+
   const confirmCheckout = async (payments: any[]) => {
     try {
       const entity = clients.find(e => e.cd_clientes === selectedEntityId);
+      if (mode === 'VENDA' && currentCashSession?.status !== 'Aberto') {
+        showError("Abra o caixa antes de finalizar vendas no PDV.");
+        return;
+      }
       if (mode === 'VENDA' && payments.some(p => p.method === 'Crediário')) {
         if (!selectedEntityId) { showError("Venda no crediário exige identificação!"); return; }
         const status = await db.clientes.checkStatus(Number(selectedEntityId));
@@ -685,7 +790,7 @@ const POS = () => {
         <div className={cn("p-4 text-white space-y-3", theme.header)}>
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Operador Logado *</label>
-            <select 
+            <select
               ref={sellerRef}
               className={cn(
                 "w-full border-none text-xs font-black h-10 rounded-xl px-3 transition-all",
@@ -697,6 +802,41 @@ const POS = () => {
               <option value="" className="bg-white text-slate-900">SELECIONE O OPERADOR...</option>
               {sellers.map(v => <option key={v.cd_clientes} value={v.cd_clientes} className="bg-white text-slate-900">{v.nome}</option>)}
             </select>
+          </div>
+        </div>
+
+        <div className="p-4 border-b border-slate-100 bg-white">
+          <div className={cn(
+            "rounded-2xl border p-3 space-y-3",
+            currentCashSession?.status === 'Aberto' ? "bg-emerald-50 border-emerald-200" : currentCashSession?.status === 'Fechado' ? "bg-slate-50 border-slate-200" : "bg-amber-50 border-amber-200"
+          )}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Caixa do PDV</p>
+                <p className="text-xs font-black text-slate-900 uppercase">{cashAccount?.nome || 'Sem caixa'}</p>
+              </div>
+              <span className={cn(
+                "text-[9px] font-black px-2 py-1 rounded-full uppercase",
+                currentCashSession?.status === 'Aberto' ? "bg-emerald-600 text-white" : currentCashSession?.status === 'Fechado' ? "bg-slate-600 text-white" : "bg-amber-500 text-white"
+              )}>{currentCashSession?.status || 'Fechado'}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div className="bg-white rounded-xl p-2 border border-white/80">
+                <p className="text-slate-400 font-bold uppercase">Abertura</p>
+                <p className="font-black text-slate-900">R$ {cashOpeningBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-white rounded-xl p-2 border border-white/80">
+                <p className="text-slate-400 font-bold uppercase">Saldo Atual</p>
+                <p className="font-black text-indigo-700">R$ {cashSystemBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+            {currentCashSession?.status === 'Aberto' ? (
+              <Button size="sm" className="w-full h-9 bg-slate-900 hover:bg-slate-800 rounded-xl font-black text-[10px] uppercase" onClick={openCloseCashDialog}>Fechar Caixa</Button>
+            ) : currentCashSession?.status === 'Fechado' ? (
+              <Button size="sm" variant="outline" className="w-full h-9 rounded-xl font-black text-[10px] uppercase" disabled>Caixa Fechado</Button>
+            ) : (
+              <Button size="sm" className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black text-[10px] uppercase" onClick={openCashDialog}>Abrir Caixa</Button>
+            )}
           </div>
         </div>
 
@@ -913,6 +1053,70 @@ const POS = () => {
           </form>
         </footer>
       </main>
+
+      <Dialog open={isOpenCashOpen} onOpenChange={setIsOpenCashOpen}>
+        <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase tracking-tighter">Abrir Caixa do PDV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Conta caixa</p>
+              <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa cadastrado'}</p>
+              <p className="text-sm text-slate-600 mt-2">
+                Saldo esperado: <strong>R$ {expectedOpeningBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor real no caixa</Label>
+              <Input value={openingRealValue} onChange={(e) => setOpeningRealValue(e.target.value)} className="h-14 text-2xl font-black rounded-2xl" autoFocus />
+            </div>
+            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+              Diferença: <strong>R$ {(parseBRNumber(openingRealValue) - expectedOpeningBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Observação</Label>
+              <Input value={cashNotes} onChange={(e) => setCashNotes(e.target.value)} className="rounded-xl" placeholder="Ex: conferido pelo operador" />
+            </div>
+            <DialogFooter className="gap-3">
+              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsOpenCashOpen(false)}>Cancelar</Button>
+              <Button type="button" className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black" onClick={handleOpenCash}>Abrir</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCloseCashOpen} onOpenChange={setIsCloseCashOpen}>
+        <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase tracking-tighter">Fechar Caixa do PDV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resumo</p>
+              <div className="flex justify-between text-sm"><span>Abertura:</span><strong>R$ {cashOpeningBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+              <div className="flex justify-between text-sm text-emerald-700"><span>Entradas:</span><strong>R$ {cashEntriesToday.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+              <div className="flex justify-between text-sm text-rose-700"><span>Saídas:</span><strong>R$ {cashExitsToday.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+              <div className="flex justify-between border-t pt-2 mt-2"><span>Saldo esperado:</span><strong>R$ {cashSystemBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor real contado</Label>
+              <Input value={closingRealValue} onChange={(e) => setClosingRealValue(e.target.value)} className="h-14 text-2xl font-black rounded-2xl" autoFocus />
+            </div>
+            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+              Diferença: <strong>R$ {(parseBRNumber(closingRealValue) - cashSystemBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Observação</Label>
+              <Input value={cashNotes} onChange={(e) => setCashNotes(e.target.value)} className="rounded-xl" placeholder="Ex: sobra/falta conferida" />
+            </div>
+            <DialogFooter className="gap-3">
+              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsCloseCashOpen(false)}>Cancelar</Button>
+              <Button type="button" className="flex-1 h-12 bg-slate-900 hover:bg-slate-800 rounded-xl font-black" onClick={handleCloseCash}>Fechar</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isCalculatorOpen} onOpenChange={setIsCalculatorOpen}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto rounded-3xl border-none shadow-2xl">
