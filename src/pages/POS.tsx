@@ -363,9 +363,18 @@ const POS = () => {
 
   const handleCodeChange = (val: string) => {
     setInputCode(val);
+
+    const isChangingSelectedProduct = pendingProduct && val !== pendingProduct.nome;
+    if (isChangingSelectedProduct) {
+      setPendingProduct(null);
+      setInputQty("0,000");
+      setInputBoxes("0");
+      setInputUnitPrice("0,00");
+      setInputUnit("UN");
+    }
     
     const hasLetters = /[a-zA-Z]/.test(val);
-    if (hasLetters && val.length >= 2 && !pendingProduct) {
+    if (hasLetters && val.length >= 2 && (!pendingProduct || isChangingSelectedProduct)) {
       setSearchInitialTerm(val);
       setIsSearchOpen(true);
     }
@@ -832,12 +841,13 @@ const POS = () => {
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} className="text-amber-500" /> Entrada de Produto (F1)</label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <Input 
-                  ref={codeRef} 
-                  value={inputCode} 
-                  onChange={(e) => handleCodeChange(e.target.value)} 
-                  className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")} 
-                  placeholder="Bipe o código ou digite o nome..." 
+                <Input
+                  ref={codeRef}
+                  value={inputCode}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  onFocus={(e) => { if (pendingProduct) e.currentTarget.select(); }}
+                  className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")}
+                  placeholder="Bipe o código ou digite o nome..."
                 />
               </div>
             </div>
