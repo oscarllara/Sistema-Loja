@@ -8,7 +8,7 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Printer, FileText } from 'lucide-react';
+import { Printer, FileText, X } from 'lucide-react';
 import { db } from '@/services/api';
 
 interface PrintPreviewProps {
@@ -172,13 +172,13 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-4 border-b bg-slate-50">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <DialogTitle>{type} {data.cd_venda || data.cd_orcamento || ''}</DialogTitle>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2">
               {type === 'Orcamento' && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setViewMode(viewMode === 'Normal' ? 'TXT' : 'Normal')}
                   className="gap-2"
                 >
@@ -187,9 +187,9 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
               )}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold">Vias:</span>
-                <input 
-                  type="number" 
-                  value={copies} 
+                <input
+                  type="number"
+                  value={copies}
                   onChange={(e) => setCopies(Number(e.target.value))}
                   className="w-12 h-8 border rounded text-center text-sm"
                   min="1"
@@ -198,12 +198,15 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
               <Button onClick={handlePrint} className="bg-indigo-600 gap-2">
                 <Printer size={18} /> Imprimir
               </Button>
+              <Button variant="outline" onClick={onClose} className="gap-2">
+                <X size={16} /> Voltar
+              </Button>
             </div>
           </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto p-8 bg-slate-200 flex justify-center">
-          <div 
+          <div
             id="printable-area"
             className="bg-white shadow-lg p-8"
             style={{
@@ -217,6 +220,12 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
           >
             {renderContent()}
           </div>
+        </div>
+
+        <div className="border-t bg-white p-3 flex justify-end">
+          <Button variant="outline" onClick={onClose} className="gap-2">
+            <X size={16} /> Fechar e voltar
+          </Button>
         </div>
 
         <style>{`

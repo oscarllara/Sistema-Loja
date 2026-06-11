@@ -300,13 +300,13 @@ const DailyCash = () => {
                   </select>
                 </div>
 
-                <Button 
-                  variant={showAllTime ? "default" : "outline"} 
-                  size="sm" 
+                <Button
+                  variant={showAllTime ? "default" : "outline"}
+                  size="sm"
                   onClick={() => setShowAllTime(!showAllTime)}
                   className={cn("h-8 gap-2 rounded-lg font-bold text-[10px] uppercase", showAllTime && "bg-slate-900")}
                 >
-                  <Infinity size={14} /> {showAllTime ? "Filtrar por Data" : "Ver Tudo (Histórico)"}
+                  <Infinity size={14} /> {showAllTime ? "Voltar ao Caixa Diário" : "Ver Tudo (Histórico)"}
                 </Button>
               </div>
             </div>
