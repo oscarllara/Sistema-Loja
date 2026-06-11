@@ -51,6 +51,7 @@ import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
 import SyncStatus from '@/components/SyncStatus';
+import TechnicalCalculator, { CalculatorPendingItem } from '@/components/TechnicalCalculator';
 import { Produto, Cliente, Configuracoes, ContaBancaria } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
@@ -155,6 +156,7 @@ const POS = () => {
   const [isAddEntityOpen, setIsAddEntityOpen] = React.useState(false);
   const [isAdminAuthOpen, setIsAdminAuthOpen] = React.useState(false);
   const [isQuotesOpen, setIsQuotesOpen] = React.useState(false);
+  const [isCalculatorOpen, setIsCalculatorOpen] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
@@ -194,9 +196,9 @@ const POS = () => {
       setIsCheckoutOpen(true);
     }
     if (key === 'F4') setIsAddEntityOpen(true);
-    if (key === 'F6') navigate('/calculator');
+    if (key === 'F6') setIsCalculatorOpen(true);
     if (key === 'F9') handleSaveQuote();
-  }, [cart, selectedSellerId, mode, navigate]);
+  }, [cart, selectedSellerId, mode]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -359,6 +361,42 @@ const POS = () => {
     else { setSearchInitialTerm(inputCode); setIsSearchOpen(true); }
   };
 
+  const addCalculatedItemToCart = React.useCallback((pendingItem: CalculatorPendingItem) => {
+    const storageProduct = pendingItem.product;
+    const product = products.find(p => p.cd_produto === storageProduct?.cd_produto) || storageProduct;
+    const quantity = Number(pendingItem.quantity || 0);
+
+    if (!product || quantity <= 0) return;
+
+    const boxSize = getBoxSize(product);
+    const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
+    const price = priceMode === 'VISTA' ? precoVista : (product.venda || 0);
+    const margin = product.compra > 0 ? ((price / product.compra) - 1) * 100 : 40;
+    const boxes = boxSize > 0 ? quantity / boxSize : undefined;
+
+    setMode('VENDA');
+    setCarts(prev => ({
+      ...prev,
+      VENDA: [...prev.VENDA, {
+        ...product,
+        quantity,
+        quantityInput: formatBRNumber(quantity),
+        selectedUnit: product.un,
+        finalPrice: Number(price.toFixed(2)),
+        finalPriceInput: price.toFixed(2).replace('.', ','),
+        costPrice: product.compra || 0,
+        salePrice: product.venda || 0,
+        margin,
+        isFractional: false,
+        conversionFactor: product.fator_conversao || 1,
+        boxSize,
+        boxesInput: boxes ? boxes.toFixed(2).replace('.', ',') : undefined,
+        requestedQuantity: pendingItem.requestedQuantity,
+        calculatorType: pendingItem.calculatorType
+      }]
+    }));
+  }, [products, priceMode]);
+
   React.useEffect(() => {
     if (isLoadingData) return;
 
@@ -366,46 +404,12 @@ const POS = () => {
     if (!rawPendingItem) return;
 
     try {
-      const pendingItem = JSON.parse(rawPendingItem);
-      const storageProduct = pendingItem.product;
-      const product = products.find(p => p.cd_produto === storageProduct?.cd_produto) || storageProduct;
-      const quantity = Number(pendingItem.quantity || 0);
-
-      if (!product || quantity <= 0) return;
-
-      const boxSize = getBoxSize(product);
-      const price = getProductPrice(product, product.un, priceMode);
-      const margin = product.compra > 0 ? ((price / product.compra) - 1) * 100 : 40;
-      const boxes = boxSize > 0 ? quantity / boxSize : undefined;
-
-      setMode('VENDA');
-      setCarts(prev => ({
-        ...prev,
-        VENDA: [...prev.VENDA, {
-          ...product,
-          quantity,
-          quantityInput: formatBRNumber(quantity),
-          selectedUnit: product.un,
-          finalPrice: Number(price.toFixed(2)),
-          finalPriceInput: price.toFixed(2).replace('.', ','),
-          costPrice: product.compra || 0,
-          salePrice: product.venda || 0,
-          margin,
-          isFractional: false,
-          conversionFactor: product.fator_conversao || 1,
-          boxSize,
-          boxesInput: boxes ? boxes.toFixed(2).replace('.', ',') : undefined,
-          requestedQuantity: pendingItem.requestedQuantity,
-          calculatorType: pendingItem.calculatorType
-        }]
-      }));
-
+      addCalculatedItemToCart(JSON.parse(rawPendingItem));
       sessionStorage.removeItem('dyaderp_pending_calc_item');
-      showSuccess(`${product.nome} adicionado da calculadora ao PDV.`);
     } catch {
       sessionStorage.removeItem('dyaderp_pending_calc_item');
     }
-  }, [isLoadingData, products, priceMode]);
+  }, [isLoadingData, addCalculatedItemToCart]);
 
   const updateCartItem = (idx: number, field: string, value: string) => {
     const newCart = [...cart];
@@ -638,7 +642,7 @@ const POS = () => {
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
               <div className="grid grid-cols-1 gap-2">
                 <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
-                <ShortcutItem keyName="F6" label="Calculadora" onClick={() => navigate('/calculator')} icon={<Calculator size={14} />} color="indigo" />
+                <ShortcutItem keyName="F6" label="Calculadora" onClick={() => setIsCalculatorOpen(true)} icon={<Calculator size={14} />} color="indigo" />
                 <ShortcutItem keyName="F7" label="Receber Contas" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
                 <ShortcutItem keyName="F8" label="Orçamentos" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} color="amber" />
               </div>
@@ -816,6 +820,21 @@ const POS = () => {
           </form>
         </footer>
       </main>
+
+      <Dialog open={isCalculatorOpen} onOpenChange={setIsCalculatorOpen}>
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto rounded-3xl border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
+              <Calculator size={24} className="text-indigo-600" /> Calculadora Técnica
+            </DialogTitle>
+          </DialogHeader>
+          <TechnicalCalculator
+            compact
+            onAddToSale={addCalculatedItemToCart}
+            onDone={() => setIsCalculatorOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isSupervisorModalOpen} onOpenChange={setIsSupervisorModalOpen}>
         <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
