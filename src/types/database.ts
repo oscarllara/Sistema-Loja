@@ -201,6 +201,61 @@ export interface Orcamento extends Omit<Venda, 'cd_venda'> {
   status: 'Aberto' | 'Convertido' | 'Cancelado';
 }
 
+export interface CompraItem {
+  cd_produto: number;
+  nome_produto: string;
+  quantidade: number;
+  valor_unitario: number;
+  subtotal: number;
+  un?: string;
+}
+
+export interface Compra {
+  cd_compra: number;
+  data: string;
+  nota_fiscal?: string;
+  cd_fornecedores?: number;
+  nome_fornecedor?: string;
+  total: number;
+  status: 'Rascunho' | 'Confirmada' | 'Cancelada';
+  itens?: CompraItem[];
+  items?: CompraItem[];
+}
+
+export type StatusAluguel = 'Ativo' | 'Devolvido' | 'Atrasado' | 'Cancelado';
+export type PeriodoLocacao = 'Diária' | 'Semana' | 'Quinzena' | 'Mês';
+
+export interface AluguelItem {
+  cd_item?: number;
+  cd_aluguel?: number;
+  cd_produto: number;
+  nome_produto: string;
+  quantidade: number;
+  valor_unitario: number;
+  periodo_tipo: PeriodoLocacao;
+  subtotal: number;
+  devolvido?: boolean;
+  data_devolucao?: string;
+}
+
+export interface Aluguel {
+  cd_aluguel: number;
+  data: string;
+  cd_clientes?: number;
+  nome_cliente: string;
+  cd_func?: number;
+  data_inicio: string;
+  data_fim_prevista: string;
+  data_devolucao?: string;
+  periodo_tipo: PeriodoLocacao;
+  dias: number;
+  total: number;
+  valor_pago: number;
+  status: StatusAluguel;
+  observacoes?: string;
+  itens: AluguelItem[];
+}
+
 export interface ContaBancaria {
   cd_conta: number;
   nome: string;

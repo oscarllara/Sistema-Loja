@@ -1,7 +1,7 @@
 "use client";
 
 import { supabase } from '@/integrations/supabase/client';
-import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel } from '../types/database';
 
 const AUTH_KEY = 'dyaderp_auth';
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
@@ -355,6 +355,148 @@ export const db = {
 
       localStorage.setItem(OFFLINE_SALES_KEY, JSON.stringify(remainingSales));
       return syncedCount;
+    }
+  },
+  alugueis: {
+    getAll: async (): Promise<Aluguel[]> => {
+      const { data: rentals, error } = await supabase.from('alugueis').select('*').order('data', { ascending: false });
+      if (error) throw error;
+
+      const ids = (rentals || []).map(r => r.cd_aluguel);
+      if (ids.length === 0) return [];
+
+      const { data: items, error: itemsError } = await supabase
+        .from('aluguel_itens')
+        .select('*')
+        .in('cd_aluguel', ids)
+        .order('cd_item');
+
+      if (itemsError) throw itemsError;
+
+      return (rentals || []).map(rental => ({
+        ...rental,
+        itens: (items || []).filter(item => item.cd_aluguel === rental.cd_aluguel)
+      })) as Aluguel[];
+    },
+    create: async (rental: Omit<Aluguel, 'cd_aluguel' | 'data' | 'valor_pago' | 'status'> & { status?: Aluguel['status'] }) => {
+      const { itens, ...contract } = rental;
+      const { data: created, error } = await supabase
+        .from('alugueis')
+        .insert([{ ...contract, status: rental.status || 'Ativo', valor_pago: 0 }])
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      const itemsPayload = itens.map(item => ({ ...item, cd_aluguel: created.cd_aluguel }));
+      const { error: itemsError } = await supabase.from('aluguel_itens').insert(itemsPayload);
+      if (itemsError) throw itemsError;
+
+      for (const item of itens) {
+        const { data: product, error: productError } = await supabase
+          .from('produtos')
+          .select('estoque')
+          .eq('cd_produto', item.cd_produto)
+          .single();
+
+        if (productError) throw productError;
+
+        const { error: stockError } = await supabase
+          .from('produtos')
+          .update({ estoque: Number(product.estoque || 0) - Number(item.quantidade || 0), data_atualizacao: new Date().toISOString() })
+          .eq('cd_produto', item.cd_produto);
+
+        if (stockError) throw stockError;
+      }
+
+      const { error: financeError } = await supabase.from('financeiro').insert([{
+        tipo: 'R',
+        descricao: `LOCAÇÃO #${created.cd_aluguel} - ${created.nome_cliente}`,
+        valor: created.total,
+        data_vencimento: created.data_fim_prevista,
+        status: 'Pendente',
+        cd_entidade: created.cd_clientes,
+        nome_entidade: created.nome_cliente,
+        categoria: 'Locação',
+        meio_pagamento: 'Crediário',
+        cd_func: created.cd_func,
+        cd_aluguel: created.cd_aluguel
+      }]);
+
+      if (financeError) throw financeError;
+
+      return { ...created, itens } as Aluguel;
+    },
+    returnRental: async (rental: Aluguel) => {
+      const itemsToReturn = rental.itens.filter(item => !item.devolvido);
+
+      for (const item of itemsToReturn) {
+        const { data: product, error: productError } = await supabase
+          .from('produtos')
+          .select('estoque')
+          .eq('cd_produto', item.cd_produto)
+          .single();
+
+        if (productError) throw productError;
+
+        const { error: stockError } = await supabase
+          .from('produtos')
+          .update({ estoque: Number(product.estoque || 0) + Number(item.quantidade || 0), data_atualizacao: new Date().toISOString() })
+          .eq('cd_produto', item.cd_produto);
+
+        if (stockError) throw stockError;
+
+        if (item.cd_item) {
+          const { error: itemError } = await supabase
+            .from('aluguel_itens')
+            .update({ devolvido: true, data_devolucao: new Date().toISOString() })
+            .eq('cd_item', item.cd_item);
+
+          if (itemError) throw itemError;
+        }
+      }
+
+      const { error } = await supabase
+        .from('alugueis')
+        .update({ status: 'Devolvido', data_devolucao: new Date().toISOString() })
+        .eq('cd_aluguel', rental.cd_aluguel);
+
+      if (error) throw error;
+    },
+    cancel: async (rental: Aluguel) => {
+      const itemsToReturn = rental.itens.filter(item => !item.devolvido);
+
+      for (const item of itemsToReturn) {
+        const { data: product, error: productError } = await supabase
+          .from('produtos')
+          .select('estoque')
+          .eq('cd_produto', item.cd_produto)
+          .single();
+
+        if (productError) throw productError;
+
+        const { error: stockError } = await supabase
+          .from('produtos')
+          .update({ estoque: Number(product.estoque || 0) + Number(item.quantidade || 0), data_atualizacao: new Date().toISOString() })
+          .eq('cd_produto', item.cd_produto);
+
+        if (stockError) throw stockError;
+      }
+
+      const { error: rentalError } = await supabase
+        .from('alugueis')
+        .update({ status: 'Cancelado', data_devolucao: new Date().toISOString() })
+        .eq('cd_aluguel', rental.cd_aluguel);
+
+      if (rentalError) throw rentalError;
+
+      const { error: financeError } = await supabase
+        .from('financeiro')
+        .update({ status: 'Cancelado' })
+        .eq('cd_aluguel', rental.cd_aluguel)
+        .eq('status', 'Pendente');
+
+      if (financeError) throw financeError;
     }
   },
   orcamentos: {
