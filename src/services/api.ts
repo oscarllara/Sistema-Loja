@@ -322,8 +322,9 @@ export const db = {
     },
     add: async (v: any) => {
       try {
-        const { error } = await supabase.from('vendas').insert([v]);
+        const { data, error } = await supabase.from('vendas').insert([v]).select('*').single();
         if (error) throw error;
+        return data;
       } catch (err) {
         const offlineSales = JSON.parse(localStorage.getItem(OFFLINE_SALES_KEY) || '[]');
         offlineSales.push({ ...v, offline: true, timestamp: Date.now() });

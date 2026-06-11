@@ -572,30 +572,50 @@ const POS = () => {
       }))
     };
 
-    await db.vendas.add(payload);
+    const savedSale = await db.vendas.add(payload);
+    const saleId = savedSale?.cd_venda;
+    const caixaLoja = contas.find(c => c.tipo === 'Caixa') || contas[0];
+    let saldoCaixa = Number(caixaLoja?.saldo || 0);
 
-    if (payload.tipo_venda === 'Vista') {
-      const caixaLoja = contas.find(c => c.tipo === 'Caixa') || contas[0];
-      if (caixaLoja) {
-        for (const p of payments) {
-          if (p.method !== 'Crediário') {
-            await db.financeiro.add({
-              tipo: 'R',
-              descricao: `VENDA PDV #${Date.now().toString().slice(-6)} - ${payload.nome_cliente}`,
-              valor: p.amount,
-              data_vencimento: new Date().toISOString().split('T')[0],
-              data_pagamento: new Date().toISOString(),
-              status: 'Pago',
-              cd_entidade: payload.cd_clientes,
-              nome_entidade: payload.nome_cliente,
-              categoria: 'Venda',
-              meio_pagamento: p.method,
-              cd_conta: caixaLoja.cd_conta,
-              cd_func: Number(selectedSellerId)
-            });
-            await db.contas.update(caixaLoja.cd_conta, { saldo: Number(caixaLoja.saldo) + Number(p.amount) });
-          }
+    for (const p of payments) {
+      if (p.method === 'Crediário') {
+        const installments = Array.isArray(p.installments) && p.installments.length > 0
+          ? p.installments
+          : [{ date: new Date().toISOString().split('T')[0], amount: p.amount }];
+
+        for (const [index, inst] of installments.entries()) {
+          await db.financeiro.add({
+            tipo: 'R',
+            descricao: `VENDA PDV #${saleId || Date.now().toString().slice(-6)} - Parcela ${index + 1}/${installments.length} - ${payload.nome_cliente}`,
+            valor: Number(inst.amount || 0),
+            data_vencimento: inst.date,
+            status: 'Pendente',
+            cd_entidade: payload.cd_clientes,
+            nome_entidade: payload.nome_cliente,
+            categoria: 'Venda',
+            meio_pagamento: 'Crediário',
+            cd_venda: saleId,
+            cd_func: Number(selectedSellerId)
+          });
         }
+      } else if (caixaLoja && Number(p.amount || 0) > 0) {
+        await db.financeiro.add({
+          tipo: 'R',
+          descricao: `VENDA PDV #${saleId || Date.now().toString().slice(-6)} - ${payload.nome_cliente}`,
+          valor: p.amount,
+          data_vencimento: new Date().toISOString().split('T')[0],
+          data_pagamento: new Date().toISOString(),
+          status: 'Pago',
+          cd_entidade: payload.cd_clientes,
+          nome_entidade: payload.nome_cliente,
+          categoria: 'Venda',
+          meio_pagamento: p.method,
+          cd_conta: caixaLoja.cd_conta,
+          cd_venda: saleId,
+          cd_func: Number(selectedSellerId)
+        });
+        saldoCaixa += Number(p.amount || 0);
+        await db.contas.update(caixaLoja.cd_conta, { saldo: saldoCaixa });
       }
     }
     
