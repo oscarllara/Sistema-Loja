@@ -35,11 +35,22 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+const toISODate = (date: Date) => date.toISOString().split('T')[0];
+
+const getDateDaysAgo = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return toISODate(date);
+};
+
 const Reports = () => {
   const navigate = useNavigate();
   const [data, setData] = React.useState<any>(null);
   const [birthdays, setBirthdays] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [periodPreset, setPeriodPreset] = React.useState<'7' | '15' | '30' | '90' | 'custom'>('30');
+  const [startDate, setStartDate] = React.useState(() => getDateDaysAgo(29));
+  const [endDate, setEndDate] = React.useState(() => toISODate(new Date()));
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -50,17 +61,26 @@ const Reports = () => {
         db.clientes.getAll()
       ]);
 
+      const isInPeriod = (dateValue?: string) => {
+        if (!dateValue) return false;
+        const date = dateValue.split('T')[0];
+        return date >= startDate && date <= endDate;
+      };
+
+      const filteredVendas = vendas.filter(v => isInPeriod(v.data));
+      const filteredLancamentos = lancamentos.filter(l => isInPeriod(l.data_pagamento || l.data_vencimento));
+
       // 1. Faturamento Real
-      const totalVendas = vendas.reduce((acc, v) => acc + v.total, 0);
-      const receitasOperacionais = lancamentos
+      const totalVendas = filteredVendas.reduce((acc, v) => acc + v.total, 0);
+      const receitasOperacionais = filteredLancamentos
         .filter(l => l.tipo === 'R' && !l.is_non_operational && l.status === 'Pago' && !l.cd_venda)
         .reduce((acc, l) => acc + l.valor, 0);
       
       const faturamentoTotal = totalVendas + receitasOperacionais;
 
       // 2. Custos e Despesas Operacionais
-      const totalCustoProd = vendas.reduce((acc, v) => acc + (v.custo_total || 0), 0);
-      const despesasOperacionais = lancamentos
+      const totalCustoProd = filteredVendas.reduce((acc, v) => acc + (v.custo_total || 0), 0);
+      const despesasOperacionais = filteredLancamentos
         .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago')
         .reduce((acc, l) => acc + l.valor, 0);
 
@@ -69,28 +89,30 @@ const Reports = () => {
       const margemLucro = faturamentoTotal > 0 ? (lucroLiquido / faturamentoTotal) * 100 : 0;
 
       // 4. Ticket Médio
-      const ticketMedio = vendas.length > 0 ? totalVendas / vendas.length : 0;
+      const ticketMedio = filteredVendas.length > 0 ? totalVendas / filteredVendas.length : 0;
 
       // 5. Vendas por Meio de Pagamento
-      const methodsMap = vendas.reduce((acc: any, v) => {
+      const methodsMap = filteredVendas.reduce((acc: any, v) => {
         acc[v.meio_pagamento] = (acc[v.meio_pagamento] || 0) + v.total;
         return acc;
       }, {});
       const salesByMethod = Object.entries(methodsMap).map(([name, value]) => ({ name, value }));
 
-      // 6. Fluxo de Caixa (Últimos 7 dias)
-      const last7Days = [...Array(7)].map((_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        return d.toISOString().split('T')[0];
-      }).reverse();
+      // 6. Fluxo de Caixa por período
+      const periodDates: string[] = [];
+      const cursor = new Date(`${startDate}T00:00:00`);
+      const finalDate = new Date(`${endDate}T00:00:00`);
+      while (cursor <= finalDate) {
+        periodDates.push(toISODate(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
 
-      const cashFlowData = last7Days.map(date => {
-        const entradas = lancamentos
-          .filter(l => l.tipo === 'R' && (l.data_pagamento || "").startsWith(date))
+      const cashFlowData = periodDates.map(date => {
+        const entradas = filteredLancamentos
+          .filter(l => l.tipo === 'R' && (l.data_pagamento || l.data_vencimento || "").startsWith(date))
           .reduce((acc, l) => acc + l.valor, 0);
-        const saidas = lancamentos
-          .filter(l => l.tipo === 'P' && (l.data_pagamento || "").startsWith(date))
+        const saidas = filteredLancamentos
+          .filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento || "").startsWith(date))
           .reduce((acc, l) => acc + l.valor, 0);
         
         return {
@@ -139,18 +161,27 @@ const Reports = () => {
         margemLucro,
         ticketMedio,
         salesByMethod,
-        cashFlowData
+        cashFlowData,
+        totalVendas: filteredVendas.length
       });
     } catch (err) {
       console.error("Erro ao carregar relatórios:", err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [startDate, endDate]);
 
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const setQuickPeriod = (days: 7 | 15 | 30 | 90) => {
+    setPeriodPreset(String(days) as '7' | '15' | '30' | '90');
+    setStartDate(getDateDaysAgo(days - 1));
+    setEndDate(toISODate(new Date()));
+  };
+
+  const periodLabel = `${new Date(`${startDate}T00:00:00`).toLocaleDateString('pt-BR')} até ${new Date(`${endDate}T00:00:00`).toLocaleDateString('pt-BR')}`;
 
   if (isLoading) {
     return (
@@ -166,14 +197,55 @@ const Reports = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Inteligência de Negócio</h1>
             <p className="text-slate-500">Análise de lucratividade real e engajamento com clientes.</p>
+            <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-2">Período analisado: {periodLabel}</p>
           </div>
-          <Button variant="outline" onClick={loadData} className="gap-2">
-            Atualizar Dados
-          </Button>
+          <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {([7, 15, 30, 90] as const).map(days => (
+                <Button
+                  key={days}
+                  type="button"
+                  size="sm"
+                  variant={periodPreset === String(days) ? 'default' : 'outline'}
+                  className="rounded-xl font-black text-xs"
+                  onClick={() => setQuickPeriod(days)}
+                >
+                  {days} dias
+                </Button>
+              ))}
+              <Button type="button" size="sm" variant={periodPreset === 'custom' ? 'default' : 'outline'} className="rounded-xl font-black text-xs" onClick={() => setPeriodPreset('custom')}>
+                Personalizado
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">De</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => { setPeriodPreset('custom'); setStartDate(e.target.value); }}
+                  className="h-9 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Até</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  onChange={(e) => { setPeriodPreset('custom'); setEndDate(e.target.value); }}
+                  className="h-9 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
+                />
+              </label>
+              <Button variant="outline" onClick={loadData} className="gap-2 h-9 rounded-xl font-black text-xs">
+                Atualizar Dados
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-4">
@@ -209,7 +281,10 @@ const Reports = () => {
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2 border-none shadow-sm">
-            <CardHeader><CardTitle className="text-lg font-bold">Fluxo de Caixa (Últimos 7 dias)</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Fluxo de Caixa ({periodLabel})</CardTitle>
+              <p className="text-xs text-slate-500 font-bold">Use os botões acima para alternar entre 7, 15, 30, 90 dias ou informe um período personalizado.</p>
+            </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.cashFlowData}>
