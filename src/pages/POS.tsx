@@ -225,6 +225,38 @@ const POS = () => {
 
   const getBoxSize = (product: any) => Number(product?.tamanho_caixa || 0) || 0;
 
+  const normalizeProductCode = (value: unknown) => {
+    const raw = String(value ?? '').trim().toLowerCase();
+    const onlyDigits = raw.replace(/\D/g, '');
+    return {
+      raw,
+      digits: onlyDigits,
+      noLeadingZeros: onlyDigits.replace(/^0+/, '') || onlyDigits
+    };
+  };
+
+  const productMatchesCode = (product: Produto, typedCode: string) => {
+    const typed = normalizeProductCode(typedCode);
+    const productCodes = [
+      product.id_manual,
+      product.id_importado,
+      product.cod_barras,
+      product.cd_produto
+    ];
+
+    return productCodes.some(code => {
+      const current = normalizeProductCode(code);
+      if (!current.raw) return false;
+
+      return (
+        current.raw === typed.raw ||
+        current.digits === typed.digits ||
+        current.noLeadingZeros === typed.noLeadingZeros ||
+        current.raw === typed.digits.padStart(5, '0')
+      );
+    });
+  };
+
   const formatBRNumber = (value: number, decimals = 3) => {
     return value.toFixed(decimals).replace('.', ',');
   };
@@ -431,13 +463,7 @@ const POS = () => {
     if (!code) return;
     if (pendingProduct) { commitToCart(); return; }
     
-    const paddedVal = code.padStart(5, '0');
-    const product = products.find(p =>
-      String(p.id_manual || '').trim() === code ||
-      String(p.id_manual || '').trim() === paddedVal ||
-      String(p.cod_barras || '').trim() === code ||
-      String(p.id_importado || '').trim() === code
-    );
+    const product = products.find(p => productMatchesCode(p, code));
 
     if (product) startInsertion(product);
     else { setSearchInitialTerm(code); setIsSearchOpen(true); }
