@@ -366,7 +366,8 @@ const DailyCash = () => {
     const movements = filter === 'Todos' ? movDia : movDia.filter(item => getPaymentGroup(item) === filter);
     const entries = movements.filter(item => item.tipo === 'R').reduce((acc, item) => acc + Number(item.valor || 0), 0);
     const exits = movements.filter(item => item.tipo === 'P').reduce((acc, item) => acc + Number(item.valor || 0), 0);
-    return { entries, exits, total: entries - exits, count: movements.length };
+    const opening = !showAllTime && selectedAccountId !== "all" && (filter === 'Todos' || filter === 'Dinheiro') ? saldoAnterior : 0;
+    return { entries, exits, total: opening + entries - exits, count: movements.length };
   };
 
   const dailyCashCards = [
