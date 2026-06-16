@@ -5,17 +5,20 @@ import Layout from '@/components/Layout';
 import { 
   ArrowUpCircle, 
   ArrowDownCircle, 
-  Calendar, 
-  Printer, 
-  Plus, 
-  Minus, 
+  Calendar,
+  Printer,
   History,
   Loader2,
   FilterX,
   Edit,
   Trash2,
   Infinity,
-  Wallet
+  Wallet,
+  Banknote,
+  CreditCard,
+  QrCode,
+  ArrowRightLeft,
+  RefreshCw
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,11 +33,11 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { db } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -45,19 +48,29 @@ import { CaixaSessao, LancamentoFinanceiro, ContaBancaria } from '@/types/databa
 
 const parseMoney = (value: string) => Number(value.replace(/\./g, '').replace(',', '.')) || 0;
 const formatMoneyInput = (value: number) => value.toFixed(2).replace('.', ',');
+const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+type DailyCashPaymentFilter = 'Todos' | 'Dinheiro' | 'Cartão' | 'PIX';
 
 const DailyCash = () => {
   const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
   const [showAllTime, setShowAllTime] = React.useState(false);
   const [selectedAccountId, setSelectedAccountId] = React.useState<string>("all");
   const [refreshKey, setRefreshKey] = React.useState(0);
-  const [isEntradaOpen, setIsEntradaOpen] = React.useState(false);
-  const [isSaidaOpen, setIsSaidaOpen] = React.useState(false);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [isPrintOpen, setIsPrintOpen] = React.useState(false);
   const [isOpenCashOpen, setIsOpenCashOpen] = React.useState(false);
   const [isCloseCashOpen, setIsCloseCashOpen] = React.useState(false);
   const [filterType, setFilterType] = React.useState<'All' | 'R' | 'P'>('All');
+  const [paymentFilter, setPaymentFilter] = React.useState<DailyCashPaymentFilter>('Todos');
+  const [isCashMovementOpen, setIsCashMovementOpen] = React.useState(false);
+  const [cashMovementType, setCashMovementType] = React.useState<'R' | 'P'>('R');
+  const [cashMovementDescription, setCashMovementDescription] = React.useState("");
+  const [cashMovementValue, setCashMovementValue] = React.useState("0,00");
+  const [cashMovementMethod, setCashMovementMethod] = React.useState("Dinheiro");
+  const [isCashTransferOpen, setIsCashTransferOpen] = React.useState(false);
+  const [cashTransferDestinationId, setCashTransferDestinationId] = React.useState<number | "">("");
+  const [cashTransferValue, setCashTransferValue] = React.useState("0,00");
+  const [cashTransferNotes, setCashTransferNotes] = React.useState("");
   
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
@@ -123,6 +136,10 @@ const DailyCash = () => {
   }, [cashAccount, cashSessions, selectedDate]);
 
   const expectedOpeningBalance = Number(lastClosedCashSession?.saldo_para_dia_seguinte ?? lastClosedCashSession?.saldo_real_fechamento ?? cashAccount?.saldo ?? 0);
+  const transferDestinationAccounts = React.useMemo(
+    () => contas.filter(conta => conta.cd_conta !== cashAccount?.cd_conta),
+    [contas, cashAccount]
+  );
 
   const handleDelete = async (id: number) => {
     if (confirm("Deseja realmente excluir este lançamento? Esta ação não pode ser desfeita.")) {
@@ -203,6 +220,93 @@ const DailyCash = () => {
     }
   };
 
+  const openCashMovementDialog = (type: 'R' | 'P') => {
+    if (!cashAccount) { showError("Nenhuma conta caixa selecionada."); return; }
+    if (showAllTime) { showError("Volte ao Caixa Diário para lançar movimentações."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de lançar entradas ou saídas."); return; }
+
+    setCashMovementType(type);
+    setCashMovementDescription(type === 'R' ? 'ENTRADA AVULSA' : 'SAÍDA AVULSA');
+    setCashMovementValue('0,00');
+    setCashMovementMethod('Dinheiro');
+    setIsCashMovementOpen(true);
+  };
+
+  const handleAddCashMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashAccount) { showError("Nenhuma conta caixa selecionada."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de lançar entradas ou saídas."); return; }
+
+    const value = parseMoney(cashMovementValue);
+    if (value <= 0) { showError("Informe um valor válido."); return; }
+    if (!cashMovementDescription.trim()) { showError("Informe a descrição do lançamento."); return; }
+
+    try {
+      await db.financeiro.add({
+        tipo: cashMovementType,
+        descricao: cashMovementDescription.trim().toUpperCase(),
+        valor: Number(value.toFixed(2)),
+        data_vencimento: selectedDate,
+        data_pagamento: new Date().toISOString(),
+        status: 'Pago',
+        categoria: 'Ajuste',
+        meio_pagamento: cashMovementMethod,
+        cd_conta: cashAccount.cd_conta,
+        cd_func: db.auth.getUser()?.cd_clientes || null
+      });
+
+      const nextBalance = cashMovementType === 'R'
+        ? Number(cashAccount.saldo || 0) + value
+        : Number(cashAccount.saldo || 0) - value;
+      await db.contas.update(cashAccount.cd_conta, { saldo: Number(nextBalance.toFixed(2)) });
+
+      showSuccess(cashMovementType === 'R' ? "Entrada registrada." : "Saída registrada.");
+      setIsCashMovementOpen(false);
+      setRefreshKey(k => k + 1);
+    } catch {
+      showError("Não foi possível registrar o lançamento.");
+    }
+  };
+
+  const openCashTransferDialog = () => {
+    if (!cashAccount) { showError("Nenhuma conta caixa selecionada."); return; }
+    if (showAllTime) { showError("Volte ao Caixa Diário para transferir recursos."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de transferir recursos."); return; }
+    if (transferDestinationAccounts.length === 0) { showError("Cadastre outra conta para receber a transferência."); return; }
+
+    setCashTransferDestinationId(transferDestinationAccounts[0].cd_conta);
+    setCashTransferValue('0,00');
+    setCashTransferNotes(`TRANSFERÊNCIA DO ${cashAccount.nome}`);
+    setIsCashTransferOpen(true);
+  };
+
+  const handleCashTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashAccount) { showError("Nenhuma conta caixa selecionada."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de transferir recursos."); return; }
+    if (!cashTransferDestinationId) { showError("Selecione a conta de destino."); return; }
+    if (cashTransferDestinationId === cashAccount.cd_conta) { showError("A conta de destino precisa ser diferente da origem."); return; }
+
+    const value = parseMoney(cashTransferValue);
+    if (value <= 0) { showError("Informe um valor válido."); return; }
+
+    try {
+      await db.financeiro.transferir({
+        cd_conta_origem: cashAccount.cd_conta,
+        cd_conta_destino: Number(cashTransferDestinationId),
+        valor: Number(value.toFixed(2)),
+        data: selectedDate,
+        obs: cashTransferNotes.trim().toUpperCase()
+      });
+
+      showSuccess("Transferência registrada.");
+      setIsCashTransferOpen(false);
+      setRefreshKey(k => k + 1);
+    } catch {
+      showError("Não foi possível registrar a transferência.");
+    }
+  };
+
   // Filtra as movimentações baseadas na data e na conta selecionada
   const movDia = lancamentos.filter(l => {
     if (l.status !== 'Pago') return false;
@@ -231,6 +335,27 @@ const DailyCash = () => {
   const totalSaidas = movDia.filter(l => l.tipo === 'P').reduce((acc, l) => acc + Number(l.valor || 0), 0);
   const saldoDia = totalEntradas - totalSaidas;
   const saldoFinal = saldoAnterior + saldoDia;
+
+  const getPaymentGroup = (movement: LancamentoFinanceiro): DailyCashPaymentFilter => {
+    if (movement.meio_pagamento === 'PIX') return 'PIX';
+    if (movement.meio_pagamento === 'Cartão Crédito' || movement.meio_pagamento === 'Cartão Débito') return 'Cartão';
+    if (movement.meio_pagamento === 'Dinheiro') return 'Dinheiro';
+    return 'Todos';
+  };
+
+  const getPaymentTotals = (filter: DailyCashPaymentFilter) => {
+    const movements = filter === 'Todos' ? movDia : movDia.filter(item => getPaymentGroup(item) === filter);
+    const entries = movements.filter(item => item.tipo === 'R').reduce((acc, item) => acc + Number(item.valor || 0), 0);
+    const exits = movements.filter(item => item.tipo === 'P').reduce((acc, item) => acc + Number(item.valor || 0), 0);
+    return { entries, exits, total: entries - exits, count: movements.length };
+  };
+
+  const dailyCashCards = [
+    { filter: 'Todos' as const, title: 'Todos', description: 'Tudo do período', icon: Wallet, color: 'slate', ...getPaymentTotals('Todos') },
+    { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Recebido em espécie', icon: Banknote, color: 'emerald', ...getPaymentTotals('Dinheiro') },
+    { filter: 'Cartão' as const, title: 'Cartões', description: 'Débito e crédito', icon: CreditCard, color: 'indigo', ...getPaymentTotals('Cartão') },
+    { filter: 'PIX' as const, title: 'PIX', description: 'Transferências instantâneas', icon: QrCode, color: 'cyan', ...getPaymentTotals('PIX') },
+  ];
 
   const resumoMeios = movDia.reduce((acc, curr) => {
     const meio = curr.meio_pagamento || 'Outros';
@@ -262,7 +387,11 @@ const DailyCash = () => {
     return { ...l, valor, anterior, atual: runningBalance, contaNome };
   });
 
-  const filteredExtrato = filterType === 'All' ? extrato : extrato.filter(i => i.tipo === filterType);
+  const filteredExtrato = extrato.filter(i => {
+    const matchesType = filterType === 'All' || i.tipo === filterType;
+    const matchesPayment = paymentFilter === 'Todos' || getPaymentGroup(i) === paymentFilter;
+    return matchesType && matchesPayment;
+  });
 
   return (
     <Layout>
@@ -329,33 +458,25 @@ const DailyCash = () => {
               )
             )}
 
+            <Button variant="outline" className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => openCashMovementDialog('R')}>
+              <ArrowDownCircle size={18} /> Nova Entrada
+            </Button>
+
+            <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => openCashMovementDialog('P')}>
+              <ArrowUpCircle size={18} /> Nova Saída
+            </Button>
+
+            <Button variant="outline" className="gap-2 border-sky-200 text-sky-700 hover:bg-sky-50" onClick={openCashTransferDialog}>
+              <ArrowRightLeft size={18} /> Transferência
+            </Button>
+
+            <Button variant="outline" className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50" onClick={() => setRefreshKey(k => k + 1)}>
+              <RefreshCw size={18} /> Atualizar
+            </Button>
+
             <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => setIsPrintOpen(true)}>
               <Printer size={18} /> Imprimir {showAllTime ? 'Histórico' : 'Fechamento'}
             </Button>
-
-            <Dialog open={isEntradaOpen} onOpenChange={setIsEntradaOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                  <Plus size={18} /> Entrada
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Nova Entrada</DialogTitle></DialogHeader>
-                <FinancialForm defaultType="R" onSuccess={() => { setIsEntradaOpen(false); setRefreshKey(k => k+1); }} />
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isSaidaOpen} onOpenChange={setIsSaidaOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50">
-                  <Minus size={18} /> Saída
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Nova Saída</DialogTitle></DialogHeader>
-                <FinancialForm defaultType="P" onSuccess={() => { setIsSaidaOpen(false); setRefreshKey(k => k+1); }} />
-              </DialogContent>
-            </Dialog>
           </div>
         </div>
 
@@ -394,9 +515,53 @@ const DailyCash = () => {
           </div>
         ) : (
           <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              {dailyCashCards.map(card => {
+                const Icon = card.icon;
+                const active = paymentFilter === card.filter;
+                return (
+                  <button
+                    key={card.filter}
+                    type="button"
+                    onClick={() => setPaymentFilter(card.filter)}
+                    className={cn(
+                      "text-left rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+                      active && "ring-4 ring-offset-2 scale-[1.02]",
+                      card.color === 'slate' && (active ? "border-slate-900 ring-slate-200" : "border-slate-200"),
+                      card.color === 'emerald' && (active ? "border-emerald-600 ring-emerald-100" : "border-emerald-100"),
+                      card.color === 'indigo' && (active ? "border-indigo-600 ring-indigo-100" : "border-indigo-100"),
+                      card.color === 'cyan' && (active ? "border-cyan-600 ring-cyan-100" : "border-cyan-100")
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{card.description}</p>
+                        <h3 className="text-lg font-black text-slate-900 uppercase">{card.title}</h3>
+                      </div>
+                      <div className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center shadow-inner",
+                        card.color === 'slate' && "bg-slate-100 text-slate-700",
+                        card.color === 'emerald' && "bg-emerald-100 text-emerald-700",
+                        card.color === 'indigo' && "bg-indigo-100 text-indigo-700",
+                        card.color === 'cyan' && "bg-cyan-100 text-cyan-700"
+                      )}>
+                        <Icon size={22} />
+                      </div>
+                    </div>
+                    <p className="text-2xl font-black text-slate-900 mt-3">{formatCurrency(card.total)}</p>
+                    <div className="grid grid-cols-2 gap-2 mt-3 text-xs font-bold">
+                      <div className="rounded-xl bg-emerald-50 text-emerald-700 p-2">Entradas<br /><span className="font-black">{formatCurrency(card.entries)}</span></div>
+                      <div className="rounded-xl bg-rose-50 text-rose-700 p-2">Saídas<br /><span className="font-black">{formatCurrency(card.exits)}</span></div>
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">{card.count} lançamento(s)</p>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <SummaryCard 
-                title={showAllTime ? "Saldo Inicial" : "Saldo Anterior"} 
+              <SummaryCard
+                title={showAllTime ? "Saldo Inicial" : "Saldo Anterior"}
                 value={saldoAnterior} 
                 color="text-slate-600" 
                 onClick={() => setFilterType('All')}
@@ -435,10 +600,11 @@ const DailyCash = () => {
               <div className="p-3 bg-slate-50 border-b flex items-center justify-between">
                 <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
                   {showAllTime ? 'Histórico Completo' : (filterType === 'All' ? 'Extrato do Dia' : filterType === 'R' ? 'Apenas Entradas' : 'Apenas Saídas')}
+                  {paymentFilter !== 'Todos' && ` - ${paymentFilter}`}
                   {selectedAccountId !== "all" && ` - CONTA: ${contas.find(c => c.cd_conta === Number(selectedAccountId))?.nome.toUpperCase()}`}
                 </h3>
-                {filterType !== 'All' && (
-                  <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-indigo-600 font-bold" onClick={() => setFilterType('All')}>
+                {(filterType !== 'All' || paymentFilter !== 'Todos') && (
+                  <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-indigo-600 font-bold" onClick={() => { setFilterType('All'); setPaymentFilter('Todos'); }}>
                     <FilterX size={12} /> Limpar Filtro
                   </Button>
                 )}
@@ -488,6 +654,95 @@ const DailyCash = () => {
             </Card>
           </>
         )}
+
+        <Dialog open={isCashMovementOpen} onOpenChange={setIsCashMovementOpen}>
+          <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className={cn("text-2xl font-black uppercase tracking-tighter flex items-center gap-2", cashMovementType === 'R' ? "text-emerald-700" : "text-rose-700")}>
+                {cashMovementType === 'R' ? <ArrowDownCircle size={24} /> : <ArrowUpCircle size={24} />}
+                {cashMovementType === 'R' ? 'Nova Entrada' : 'Nova Saída'}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleAddCashMovement} className="space-y-4 py-2">
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Caixa</p>
+                <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('pt-BR')}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descrição</Label>
+                <Input value={cashMovementDescription} onChange={(e) => setCashMovementDescription(e.target.value)} className="h-12 rounded-2xl font-bold uppercase" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
+                  <Input value={cashMovementValue} onChange={(e) => setCashMovementValue(e.target.value)} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pagamento</Label>
+                  <select value={cashMovementMethod} onChange={(e) => setCashMovementMethod(e.target.value)} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Cartão Débito">Cartão Débito</option>
+                    <option value="Cartão Crédito">Cartão Crédito</option>
+                    <option value="Transferência">Transferência</option>
+                  </select>
+                </div>
+              </div>
+              <DialogFooter className="gap-3">
+                <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsCashMovementOpen(false)}>Cancelar</Button>
+                <Button type="submit" className={cn("flex-1 h-12 rounded-xl font-black", cashMovementType === 'R' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")}>
+                  Salvar
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isCashTransferOpen} onOpenChange={setIsCashTransferOpen}>
+          <DialogContent className="max-w-lg rounded-3xl border-none shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2 text-sky-700">
+                <ArrowRightLeft size={24} /> Transferência entre contas
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCashTransfer} className="space-y-4 py-2">
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origem</p>
+                <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • Saldo {formatCurrency(Number(cashAccount?.saldo || 0))}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Destino</Label>
+                <select value={cashTransferDestinationId} onChange={(e) => setCashTransferDestinationId(Number(e.target.value))} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
+                  {transferDestinationAccounts.map(conta => (
+                    <option key={conta.cd_conta} value={conta.cd_conta}>
+                      {conta.nome} • {conta.tipo} • Saldo {formatCurrency(Number(conta.saldo || 0))}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
+                  <Input value={cashTransferValue} onChange={(e) => setCashTransferValue(e.target.value)} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" autoFocus />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data</Label>
+                  <Input value={new Date(`${selectedDate}T00:00:00`).toLocaleDateString('pt-BR')} className="h-12 rounded-2xl font-black" disabled />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Observação</Label>
+                <Input value={cashTransferNotes} onChange={(e) => setCashTransferNotes(e.target.value)} className="h-12 rounded-2xl font-bold uppercase" />
+              </div>
+              <DialogFooter className="gap-3">
+                <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsCashTransferOpen(false)}>Cancelar</Button>
+                <Button type="submit" className="flex-1 h-12 rounded-xl font-black bg-sky-600 hover:bg-sky-700">
+                  Transferir
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent>
