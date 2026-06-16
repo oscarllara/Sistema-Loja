@@ -17,3 +17,7 @@ Available packages and libraries:
 - You ALREADY have ALL the shadcn/ui components and their dependencies installed. So you don't need to install them again.
 - You have ALL the necessary Radix UI components installed.
 - Use prebuilt components from the shadcn/ui library after importing them. Note that these files shouldn't be edited, so make new components if you need to change them.
+
+# Business Rules
+
+- Reports profit logic: simple profit = sales value - cost of goods sold. Cost of goods sold comes from product cost saved in the sale, not from supplier accounts payable. Profit after operating expenses = sales value - cost of goods sold - paid operating expenses in the selected period. Operating expenses are paid financial payables such as water, electricity, phone, rent, salaries, taxes, internet, commissions, pro-labore, and similar categories. Supplier payments are cash-flow items and must not duplicate product cost in profit.

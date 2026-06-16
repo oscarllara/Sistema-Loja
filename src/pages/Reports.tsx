@@ -72,30 +72,37 @@ const Reports = () => {
       const filteredVendas = vendas.filter(v => isInPeriod(v.data));
       const filteredLancamentos = lancamentos.filter(l => isInPeriod(l.data_pagamento || l.data_vencimento));
 
-      // 1. Faturamento operacional: vendas realizadas + receitas operacionais avulsas pagas.
+      // 1. Faturamento de vendas: base principal para lucro.
       const totalVendasValor = filteredVendas.reduce((acc, v) => acc + Number(v.total || 0), 0);
       const receitasOperacionais = filteredLancamentos
         .filter(l => l.tipo === 'R' && !l.is_non_operational && l.status === 'Pago' && !l.cd_venda)
         .reduce((acc, l) => acc + Number(l.valor || 0), 0);
       
-      const faturamentoTotal = totalVendasValor + receitasOperacionais;
+      const faturamentoTotal = totalVendasValor;
 
-      // 2. DRE operacional: CMV vem da venda; pagamento de fornecedor fica no fluxo de caixa para não duplicar custo.
+      // 2. Custo da mercadoria vem da venda, calculado a partir do custo cadastrado no produto.
+      // Despesas operacionais entram somente quando a conta a pagar é marcada como paga no financeiro.
       const totalCustoProd = filteredVendas.reduce((acc, v) => acc + Number(v.custo_total || 0), 0);
-      const isFornecedor = (categoria?: string) => (categoria || '').trim().toLowerCase() === 'fornecedor';
+      const normalizeCategory = (categoria?: string) => (categoria || '').trim().toLowerCase();
+      const isFornecedor = (categoria?: string) => normalizeCategory(categoria) === 'fornecedor';
+      const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'outros']);
+      const isDespesaOperacional = (categoria?: string) => {
+        const normalized = normalizeCategory(categoria);
+        return !isFornecedor(categoria) && operationalExpenseCategories.has(normalized);
+      };
       const comprasFornecedorPagas = filteredLancamentos
         .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && isFornecedor(l.categoria))
         .reduce((acc, l) => acc + Number(l.valor || 0), 0);
       const despesasOperacionais = filteredLancamentos
-        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && !isFornecedor(l.categoria))
+        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && isDespesaOperacional(l.categoria))
         .reduce((acc, l) => acc + Number(l.valor || 0), 0);
 
-      // 3. Resultado operacional
-      const lucroBruto = faturamentoTotal - totalCustoProd;
-      const lucroLiquido = lucroBruto - despesasOperacionais;
-      const margemBruta = faturamentoTotal > 0 ? (lucroBruto / faturamentoTotal) * 100 : 0;
-      const margemLucro = faturamentoTotal > 0 ? (lucroLiquido / faturamentoTotal) * 100 : 0;
-      const pesoDespesaOperacional = faturamentoTotal > 0 ? (despesasOperacionais / faturamentoTotal) * 100 : 0;
+      // 3. Resultado operacional conforme regra da loja.
+      const lucroSimples = totalVendasValor - totalCustoProd;
+      const lucroAposDespesas = lucroSimples - despesasOperacionais;
+      const margemSimples = totalVendasValor > 0 ? (lucroSimples / totalVendasValor) * 100 : 0;
+      const margemAposDespesas = totalVendasValor > 0 ? (lucroAposDespesas / totalVendasValor) * 100 : 0;
+      const pesoDespesaOperacional = totalVendasValor > 0 ? (despesasOperacionais / totalVendasValor) * 100 : 0;
 
       // 4. Ticket Médio
       const ticketMedio = filteredVendas.length > 0 ? totalVendasValor / filteredVendas.length : 0;
@@ -171,10 +178,10 @@ const Reports = () => {
         totalCustoProd,
         comprasFornecedorPagas,
         despesasOperacionais,
-        lucroBruto,
-        lucroLiquido,
-        margemBruta,
-        margemLucro,
+        lucroSimples,
+        lucroAposDespesas,
+        margemSimples,
+        margemAposDespesas,
         pesoDespesaOperacional,
         ticketMedio,
         salesByMethod,
@@ -218,8 +225,9 @@ const Reports = () => {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Inteligência de Negócio</h1>
-            <p className="text-slate-500">Análise de lucratividade real e engajamento com clientes.</p>
+            <p className="text-slate-500">Lucro por vendas, custo dos produtos e despesas operacionais pagas.</p>
             <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mt-2">Período analisado: {periodLabel}</p>
+
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -268,17 +276,17 @@ const Reports = () => {
 
         <div className="grid gap-6 md:grid-cols-4">
           <ReportStatCard
-            title="Margem Líquida Operacional"
-            value={`${data.margemLucro.toFixed(1)}%`}
-            subtitle="Lucro operacional ÷ faturamento"
-            color={data.margemLucro >= 0 ? "text-emerald-600" : "text-rose-600"}
+            title="Margem Simples"
+            value={`${data.margemSimples.toFixed(1)}%`}
+            subtitle="(Venda - custo) ÷ venda"
+            color={data.margemSimples >= 0 ? "text-emerald-600" : "text-rose-600"}
             onClick={() => navigate('/financial')}
           />
           <ReportStatCard
-            title="Lucro Operacional"
-            value={`R$ ${brl(data.lucroLiquido)}`}
-            subtitle="Faturamento - CMV - despesas operacionais"
-            color={data.lucroLiquido >= 0 ? "text-emerald-600" : "text-rose-600"}
+            title="Margem Após Despesas"
+            value={`${data.margemAposDespesas.toFixed(1)}%`}
+            subtitle="(Venda - custo - despesas pagas) ÷ venda"
+            color={data.margemAposDespesas >= 0 ? "text-emerald-600" : "text-rose-600"}
             onClick={() => navigate('/financial')}
           />
           <ReportStatCard
@@ -289,9 +297,9 @@ const Reports = () => {
             onClick={() => navigate('/pos')}
           />
           <ReportStatCard
-            title="Faturamento Operacional"
+            title="Faturamento de Vendas"
             value={`R$ ${brl(data.faturamentoTotal)}`}
-            subtitle="Vendas realizadas + receitas operacionais"
+            subtitle="Soma das vendas no período"
             color="text-blue-600"
             onClick={() => navigate('/financial')}
           />
@@ -299,22 +307,25 @@ const Reports = () => {
 
         <Card className="border-none shadow-sm">
           <CardHeader>
-            <CardTitle className="text-lg font-bold">Como o lucro operacional foi calculado</CardTitle>
+            <CardTitle className="text-lg font-bold">Como o lucro foi calculado</CardTitle>
             <p className="text-xs text-slate-500 font-bold">
-              Compra paga para fornecedor aparece no fluxo de caixa, mas não entra novamente como despesa aqui, porque o custo da mercadoria vendida já vem salvo em cada venda.
+              O custo da mercadoria vem do custo cadastrado no produto e salvo na venda. As despesas operacionais entram somente quando a conta é paga no financeiro.
             </p>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-5">
+          <CardContent className="grid gap-3 md:grid-cols-6">
             <BreakdownItem label="Vendas" value={data.totalVendasValor} color="text-blue-600" />
-            <BreakdownItem label="Receitas operacionais" value={data.receitasOperacionais} color="text-blue-600" />
             <BreakdownItem label="CMV / custo vendido" value={-data.totalCustoProd} color="text-amber-600" />
-            <BreakdownItem label="Despesas operacionais" value={-data.despesasOperacionais} color="text-rose-600" />
-            <BreakdownItem label="Lucro operacional" value={data.lucroLiquido} color={data.lucroLiquido >= 0 ? "text-emerald-600" : "text-rose-600"} strong />
+            <BreakdownItem label="Lucro simples" value={data.lucroSimples} color={data.lucroSimples >= 0 ? "text-emerald-600" : "text-rose-600"} strong />
+            <BreakdownItem label="Despesas pagas" value={-data.despesasOperacionais} color="text-rose-600" />
+            <BreakdownItem label="Lucro após despesas" value={data.lucroAposDespesas} color={data.lucroAposDespesas >= 0 ? "text-emerald-600" : "text-rose-600"} strong />
+            <BreakdownItem label="Receitas avulsas" value={data.receitasOperacionais} color="text-slate-500" />
           </CardContent>
           <div className="px-6 pb-5 text-[11px] font-bold text-slate-500">
+            Fórmula simples: <span className="text-slate-900">vendas - custo da mercadoria vendida</span>. Fórmula após despesas: <span className="text-slate-900">vendas - custo - despesas operacionais pagas</span>.
+            <br />
             Fornecedor pago no período: <span className="text-slate-900">R$ {brl(data.comprasFornecedorPagas)}</span> — usado para caixa, não para duplicar custo na lucratividade.
             {data.faturamentoTotal > 0 && (
-              <span> Despesas operacionais representam <span className="text-slate-900">{data.pesoDespesaOperacional.toFixed(1)}%</span> do faturamento.</span>
+              <span> Despesas operacionais pagas representam <span className="text-slate-900">{data.pesoDespesaOperacional.toFixed(1)}%</span> das vendas.</span>
             )}
           </div>
         </Card>
