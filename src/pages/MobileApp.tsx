@@ -41,7 +41,7 @@ const vehicleActions = [
   { type: 'Impostos', label: 'Impostos', icon: FileText, color: 'bg-rose-500' },
 ] as const;
 
-const personalCategories = ['Almoço', 'Supermercado', 'Padaria', 'Lazer', 'Viagem', 'Saúde', 'Educação', 'Outros'];
+const personalCategories = ['Almoço', 'Lanche', 'Supermercado', 'Padaria', 'Lazer', 'Viagem', 'Saúde', 'Educação', 'Outros'];
 const familyMembers = ['Eu', 'Esposa', 'Filho'];
 const paymentMethods = ['Dinheiro', 'PIX', 'Cartão Crédito'];
 
@@ -77,7 +77,7 @@ const MobileApp = () => {
   const [personalForm, setPersonalForm] = React.useState({ pessoa: familyLabels[0], categoria: 'Almoço', descricao: '', valor: '0,00', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
 
   const saveFamilyLabels = () => {
-    const cleaned = familyLabels.map((label, index) => label.trim() || familyMembers[index]);
+    const cleaned = familyLabels.map((label, index) => titleCase(label) || familyMembers[index]);
     setFamilyLabels(cleaned);
     localStorage.setItem('dyaderp_mobile_family_labels', JSON.stringify(cleaned));
     setPersonalForm(prev => cleaned.includes(prev.pessoa) ? prev : { ...prev, pessoa: cleaned[0] });
@@ -482,9 +482,10 @@ const MobileApp = () => {
             )}
             <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor total" value={eventForm.valorTotal} onFocus={e => e.currentTarget.select()} onChange={e => setEventForm({ ...eventForm, valorTotal: e.target.value })} onBlur={e => setEventForm(prev => ({ ...prev, valorTotal: formatMoneyInput(e.target.value) }))} /><Input placeholder="Km atual" value={eventForm.kmAtual} onChange={e => setEventForm({ ...eventForm, kmAtual: e.target.value })} /></div>
             {eventType !== 'Abastecimento' && <Input placeholder="Km para próxima troca/serviço" value={eventForm.kmProxima} onChange={e => setEventForm({ ...eventForm, kmProxima: e.target.value })} />}
-            <PaymentFields accounts={accounts} method={eventForm.meioPagamento} accountId={eventForm.cdConta} onMethod={meioPagamento => setEventForm({ ...eventForm, meioPagamento, cdConta: '' })} onAccount={cdConta => setEventForm({ ...eventForm, cdConta })} />
+            <PaymentFields accounts={accounts} method={eventForm.meioPagamento} accountId={eventForm.cdConta} onMethod={meioPagamento => setEventForm(prev => ({ ...prev, meioPagamento, cdConta: '' }))} onAccount={cdConta => setEventForm(prev => ({ ...prev, cdConta }))} />
 
             <Button className="h-12 w-full rounded-2xl font-black" onClick={saveEvent}>Lançar gasto</Button>
+
           </div>
         </DialogContent>
       </Dialog>
@@ -497,8 +498,9 @@ const MobileApp = () => {
             <Field label="Categoria"><select className="h-10 w-full rounded-md border px-3 text-sm" value={personalForm.categoria} onChange={e => setPersonalForm({ ...personalForm, categoria: e.target.value })}>{personalCategories.map(item => <option key={item}>{item}</option>)}</select></Field>
             <Input placeholder="Descrição opcional" value={personalForm.descricao} onChange={e => setPersonalForm({ ...personalForm, descricao: e.target.value })} />
             <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor" value={personalForm.valor} onFocus={e => e.currentTarget.select()} onChange={e => setPersonalForm({ ...personalForm, valor: e.target.value })} onBlur={e => setPersonalForm(prev => ({ ...prev, valor: formatMoneyInput(e.target.value) }))} /><Input type="date" value={personalForm.data} onChange={e => setPersonalForm({ ...personalForm, data: e.target.value })} /></div>
-            <PaymentFields accounts={accounts} method={personalForm.meioPagamento} accountId={personalForm.cdConta} onMethod={meioPagamento => setPersonalForm({ ...personalForm, meioPagamento, cdConta: '' })} onAccount={cdConta => setPersonalForm({ ...personalForm, cdConta })} />
+            <PaymentFields accounts={accounts} method={personalForm.meioPagamento} accountId={personalForm.cdConta} onMethod={meioPagamento => setPersonalForm(prev => ({ ...prev, meioPagamento, cdConta: '' }))} onAccount={cdConta => setPersonalForm(prev => ({ ...prev, cdConta }))} />
             <Button className="h-12 w-full rounded-2xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={savePersonalExpense}>Lançar gasto</Button>
+
           </div>
 
         </DialogContent>
@@ -536,9 +538,10 @@ const PaymentFields = ({ accounts, method, accountId, onMethod, onAccount }: { a
   return (
     <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
       <div className="flex items-center gap-2 text-xs font-black text-slate-600"><WalletCards size={16} /> Canal do gasto</div>
-      <Field label="Forma"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={method} onChange={e => { onMethod(e.target.value); onAccount(''); }}>{paymentMethods.map(item => <option key={item}>{item}</option>)}</select></Field>
+      <Field label="Forma"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={method} onChange={e => onMethod(e.target.value)}>{paymentMethods.map(item => <option key={item}>{item}</option>)}</select></Field>
       <Field label="Conta / caixa / cartão"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={accountId} onChange={e => onAccount(e.target.value)}><option value="">Selecione...</option>{filteredAccounts.map(account => <option key={account.cd_conta} value={account.cd_conta}>{account.nome} • {account.tipo}</option>)}</select></Field>
       <p className="text-[10px] font-bold text-slate-400">{helpText}</p>
+
     </div>
   );
 };
