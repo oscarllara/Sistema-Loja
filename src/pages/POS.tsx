@@ -1583,22 +1583,22 @@ const POS = () => {
             </DialogHeader>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
-              <div className="rounded-2xl bg-white/10 border border-white/10 p-4">
+              <button type="button" className={cn("text-left rounded-2xl bg-white/10 border border-white/10 p-4 transition-all hover:bg-white/15", dailyCashFilter === 'Todos' && dailyCashTypeFilter === 'Todos' && "ring-2 ring-white/30")} onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('Todos'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abertura</p>
                 <p className="text-2xl font-black mt-1">{formatCurrency(cashOpeningBalance)}</p>
-              </div>
-              <div className="rounded-2xl bg-emerald-500/10 border border-emerald-400/20 p-4">
+              </button>
+              <button type="button" className={cn("text-left rounded-2xl bg-emerald-500/10 border border-emerald-400/20 p-4 transition-all hover:bg-emerald-500/15", dailyCashTypeFilter === 'R' && "ring-2 ring-emerald-300/60")} onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('R'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 flex items-center gap-1"><ArrowDownCircle size={13} /> Entradas</p>
                 <p className="text-2xl font-black mt-1 text-emerald-200">{formatCurrency(cashEntriesToday)}</p>
-              </div>
-              <div className="rounded-2xl bg-rose-500/10 border border-rose-400/20 p-4">
+              </button>
+              <button type="button" className={cn("text-left rounded-2xl bg-rose-500/10 border border-rose-400/20 p-4 transition-all hover:bg-rose-500/15", dailyCashTypeFilter === 'P' && "ring-2 ring-rose-300/60")} onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('P'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-1"><ArrowUpCircle size={13} /> Saídas</p>
                 <p className="text-2xl font-black mt-1 text-rose-200">{formatCurrency(cashExitsToday)}</p>
-              </div>
-              <div className="rounded-2xl bg-indigo-500/10 border border-indigo-400/20 p-4">
+              </button>
+              <button type="button" className="text-left rounded-2xl bg-indigo-500/10 border border-indigo-400/20 p-4 transition-all hover:bg-indigo-500/15" onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('Todos'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Saldo Conferência</p>
                 <p className="text-2xl font-black mt-1 text-indigo-100">{formatCurrency(cashSystemBalance)}</p>
-              </div>
+              </button>
             </div>
           </div>
 
