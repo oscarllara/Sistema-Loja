@@ -168,14 +168,14 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
             </div>
 
             <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-auto min-h-0">
-              <Table>
+              <Table className="table-fixed w-full">
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
-                    <TableHead className="text-[10px] font-black uppercase">Vencimento</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase">Descrição</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase">Cliente/Fornecedor</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase text-right">Valor</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase text-center">Ação</TableHead>
+                    <TableHead className="w-[92px] text-[10px] font-black uppercase">Vencimento</TableHead>
+                    <TableHead className="w-[250px] text-[10px] font-black uppercase">Descrição</TableHead>
+                    <TableHead className="w-[150px] text-[10px] font-black uppercase">Cliente/Fornecedor</TableHead>
+                    <TableHead className="w-[105px] text-[10px] font-black uppercase text-right">Valor</TableHead>
+                    <TableHead className="w-[116px] text-[10px] font-black uppercase text-center">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -185,12 +185,12 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
                     <TableRow><TableCell colSpan={5} className="h-48 text-center text-slate-400 font-bold">Nenhuma conta pendente encontrada.</TableCell></TableRow>
                   ) : filteredEntries.map(entry => (
                     <TableRow key={entry.cd_lancamento} className={cn("hover:bg-slate-50", selectedEntry?.cd_lancamento === entry.cd_lancamento && "bg-indigo-50") }>
-                      <TableCell className="font-bold text-xs">{new Date(`${entry.data_vencimento}T00:00:00`).toLocaleDateString('pt-BR')}</TableCell>
-                      <TableCell className="font-bold text-slate-800 max-w-[320px] truncate">{entry.descricao}</TableCell>
-                      <TableCell className="font-bold text-slate-500">{entry.nome_entidade || '-'}</TableCell>
-                      <TableCell className={cn("text-right font-black", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{Number(entry.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                      <TableCell className="font-bold text-xs whitespace-nowrap">{new Date(`${entry.data_vencimento}T00:00:00`).toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell className="font-bold text-slate-800 truncate" title={entry.descricao}>{entry.descricao}</TableCell>
+                      <TableCell className="font-bold text-slate-500 truncate" title={entry.nome_entidade || '-'}>{entry.nome_entidade || '-'}</TableCell>
+                      <TableCell className={cn("text-right font-black whitespace-nowrap", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{Number(entry.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                       <TableCell className="text-center">
-                        <Button size="sm" className={cn("h-8 rounded-xl font-black text-xs", activeType === 'R' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")} onClick={() => { setSelectedEntry(entry); setMethod(activeType === 'R' ? 'Dinheiro' : 'PIX'); }}>
+                        <Button size="sm" className={cn("h-8 w-24 rounded-xl font-black text-xs", activeType === 'R' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")} onClick={() => { setSelectedEntry(entry); setMethod(activeType === 'R' ? 'Dinheiro' : 'PIX'); }}>
                           <CheckCircle2 size={13} className="mr-1" /> {activeType === 'R' ? 'Receber' : 'Pagar'}
                         </Button>
                       </TableCell>
