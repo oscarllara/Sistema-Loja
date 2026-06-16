@@ -67,53 +67,54 @@ const getProductRentalPrice = (product: Produto, period: PeriodoLocacao) => {
   return Number(product.valor_diaria || 0);
 };
 
-const rentalPeriodDays: Record<PeriodoLocacao, number> = {
-  Diária: 1,
-  Semana: 7,
-  Quinzena: 15,
-  Mês: 30
+const addDaysToDateString = (date: string, days: number) => {
+  const nextDate = new Date(`${date}T00:00:00`);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate.toISOString().split('T')[0];
 };
 
-const calculateRentalCharge = (product: Produto, days: number) => {
-  const availablePeriods = (['Diária', 'Semana', 'Quinzena', 'Mês'] as PeriodoLocacao[])
-    .map(period => ({ period, days: rentalPeriodDays[period], price: getProductRentalPrice(product, period) }))
-    .filter(option => option.price > 0);
+const getMonthDays = (date: string) => {
+  const baseDate = new Date(`${date}T00:00:00`);
+  return new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0).getDate();
+};
 
-  if (availablePeriods.length === 0) {
-    return { total: 0, mainPeriod: 'Diária' as PeriodoLocacao, description: 'Sem tabela de preço configurada' };
+const addRentalPart = (parts: Partial<Record<PeriodoLocacao, number>>, period: PeriodoLocacao, quantity: number) => ({
+  ...parts,
+  [period]: (parts[period] || 0) + quantity
+});
+
+const calculateRentalParts = (days: number, startDate: string): Partial<Record<PeriodoLocacao, number>> => {
+  if (days <= 3) return { Diária: days };
+  if (days <= 10) return { Semana: 1 };
+  if (days <= 18) return { Quinzena: 1 };
+
+  const monthDays = getMonthDays(startDate);
+  if (days <= monthDays) return { Mês: 1 };
+
+  const remainingDays = days - monthDays;
+  const nextStartDate = addDaysToDateString(startDate, monthDays);
+  const remainingParts = calculateRentalParts(remainingDays, nextStartDate);
+  return addRentalPart(remainingParts, 'Mês', 1);
+};
+
+const calculateRentalCharge = (product: Produto, startDate: string, endDate: string) => {
+  const days = calculateDays(startDate, endDate);
+  const parts = calculateRentalParts(days, startDate);
+  const orderedPeriods = ['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[];
+  const missingPrice = orderedPeriods.find(period => (parts[period] || 0) > 0 && getProductRentalPrice(product, period) <= 0);
+
+  if (missingPrice) {
+    return { total: 0, mainPeriod: missingPrice, description: `Sem preço de ${missingPrice.toLowerCase()}`, parts, days };
   }
 
-  const dp: Array<{ total: number; parts: Partial<Record<PeriodoLocacao, number>> }> = [
-    { total: 0, parts: {} }
-  ];
-
-  for (let currentDay = 1; currentDay <= days; currentDay++) {
-    let best: { total: number; parts: Partial<Record<PeriodoLocacao, number>> } | null = null;
-
-    for (const option of availablePeriods) {
-      const previous = dp[Math.max(0, currentDay - option.days)];
-      const candidate = {
-        total: previous.total + option.price,
-        parts: {
-          ...previous.parts,
-          [option.period]: (previous.parts[option.period] || 0) + 1
-        }
-      };
-
-      if (!best || candidate.total < best.total) best = candidate;
-    }
-
-    dp[currentDay] = best || { total: 0, parts: {} };
-  }
-
-  const result = dp[days];
-  const description = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[])
-    .filter(period => result.parts[period])
-    .map(period => `${result.parts[period]}x ${period}`)
+  const total = orderedPeriods.reduce((acc, period) => acc + ((parts[period] || 0) * getProductRentalPrice(product, period)), 0);
+  const description = orderedPeriods
+    .filter(period => parts[period])
+    .map(period => `${parts[period]}x ${period}`)
     .join(' + ');
-  const mainPeriod = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[]).find(period => result.parts[period]) || 'Diária';
+  const mainPeriod = orderedPeriods.find(period => parts[period]) || 'Diária';
 
-  return { total: result.total, mainPeriod, description };
+  return { total, mainPeriod, description, parts, days };
 };
 
 const formatDate = (date?: string | null) => {
@@ -148,7 +149,7 @@ const Rentals = () => {
   const days = React.useMemo(() => calculateDays(startDate, endDate), [startDate, endDate]);
   const total = React.useMemo(() => draftItems.reduce((acc, item) => acc + Number(item.subtotal || 0), 0), [draftItems]);
   const selectedProductPreview = React.useMemo(() => products.find(item => String(item.cd_produto) === selectedProductId), [products, selectedProductId]);
-  const previewCharge = React.useMemo(() => selectedProductPreview ? calculateRentalCharge(selectedProductPreview, days) : null, [days, selectedProductPreview]);
+  const previewCharge = React.useMemo(() => selectedProductPreview ? calculateRentalCharge(selectedProductPreview, startDate, endDate) : null, [endDate, selectedProductPreview, startDate]);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -256,9 +257,9 @@ const Rentals = () => {
     }
 
     const rentalDays = calculateDays(startDate, endDate);
-    const charge = calculateRentalCharge(product, rentalDays);
+    const charge = calculateRentalCharge(product, startDate, endDate);
     if (charge.total <= 0) {
-      showError("Informe pelo menos um valor de locação no cadastro do produto: diária, semanal, quinzenal ou mensal.");
+      showError(charge.description || "Informe pelo menos um valor de locação no cadastro do produto: diária, semanal, quinzenal ou mensal.");
       return;
     }
 

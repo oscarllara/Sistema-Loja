@@ -617,12 +617,18 @@ const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }
         {data.length === 0 ? (
           <TableRow><TableCell colSpan={5} className="text-center py-12 text-slate-400">Nenhum lançamento no período.</TableCell></TableRow>
         ) : (
-          data.map((l: any) => (
-            <TableRow key={l.cd_lancamento} className="hover:bg-slate-50/50 transition-colors">
+          data.map((l: any) => {
+            const isRentalEntry = l.categoria === 'Locação' || !!l.cd_aluguel;
+
+            return (
+            <TableRow key={l.cd_lancamento} className={cn("transition-colors", isRentalEntry ? "bg-amber-50/70 hover:bg-amber-100/80" : "hover:bg-slate-50/50")}>
               <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
                   <div className="text-sm font-bold text-slate-900">{l.descricao}</div>
+                  {isRentalEntry && (
+                    <Badge variant="outline" className="text-[8px] h-4 px-1 border-amber-300 text-amber-700 bg-amber-100">LOCAÇÃO</Badge>
+                  )}
                   {l.is_non_operational && (
                     <Badge variant="outline" className="text-[8px] h-4 px-1 border-amber-200 text-amber-600 bg-amber-50">NÃO OPERACIONAL</Badge>
                   )}
@@ -668,7 +674,8 @@ const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }
                 </div>
               </TableCell>
             </TableRow>
-          ))
+            );
+          })
         )}
       </TableBody>
     </Table>

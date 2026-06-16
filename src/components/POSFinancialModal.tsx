@@ -306,10 +306,18 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, paym
                     <TableRow><TableCell colSpan={5} className="h-48 text-center text-slate-400"><Loader2 className="animate-spin mx-auto mb-2" />Carregando...</TableCell></TableRow>
                   ) : filteredEntries.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-48 text-center text-slate-400 font-bold">Nenhuma conta pendente encontrada.</TableCell></TableRow>
-                  ) : filteredEntries.map(entry => (
-                    <TableRow key={entry.cd_lancamento} className={cn("hover:bg-slate-50", selectedEntry?.cd_lancamento === entry.cd_lancamento && "bg-indigo-50") }>
+                  ) : filteredEntries.map(entry => {
+                    const isRentalEntry = entry.categoria === 'Locação' || !!entry.cd_aluguel;
+
+                    return (
+                    <TableRow key={entry.cd_lancamento} className={cn("hover:bg-slate-50", isRentalEntry && "bg-amber-50/70 hover:bg-amber-100/80", selectedEntry?.cd_lancamento === entry.cd_lancamento && "bg-indigo-50") }>
                       <TableCell className="font-bold text-xs whitespace-nowrap">{new Date(`${entry.data_vencimento}T00:00:00`).toLocaleDateString('pt-BR')}</TableCell>
-                      <TableCell className="font-bold text-slate-800 truncate" title={entry.descricao}>{entry.descricao}</TableCell>
+                      <TableCell className="font-bold text-slate-800 truncate" title={entry.descricao}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isRentalEntry && <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[8px] font-black uppercase text-white">Locação</span>}
+                          <span className="truncate">{entry.descricao}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="font-bold text-slate-500 truncate" title={entry.nome_entidade || '-'}>{entry.nome_entidade || '-'}</TableCell>
                       <TableCell className={cn("text-right font-black whitespace-nowrap", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{Number(entry.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                       <TableCell className="text-center">
@@ -318,7 +326,8 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, paym
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

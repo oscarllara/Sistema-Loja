@@ -426,7 +426,7 @@ const POS = () => {
 
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
-    if (mode === 'LOCACAO') return calculateRentalCharge(product, rentalDays).total;
+    if (mode === 'LOCACAO') return calculateRentalCharge(product, rentalStartDate || today, rentalEndDate || today).total;
     if (product.fracionado && unit === product.un_fracionada) {
       return product.venda_fracionada || (product.venda * (product.fator_conversao || 1));
     }
@@ -449,48 +449,58 @@ const POS = () => {
     return Math.max(diff, 1);
   };
 
-  const calculateRentalCharge = (product: any, days: number) => {
-    const availablePeriods = (['Diária', 'Semana', 'Quinzena', 'Mês'] as PeriodoLocacao[])
-      .map(period => ({ period, days: rentalPeriodDays[period], price: getProductRentalPrice(product, period) }))
-      .filter(option => option.price > 0);
+  const addDaysToDateString = (date: string, days: number) => {
+    const nextDate = new Date(`${date}T00:00:00`);
+    nextDate.setDate(nextDate.getDate() + days);
+    return nextDate.toISOString().split('T')[0];
+  };
 
-    if (availablePeriods.length === 0) {
-      return { total: 0, mainPeriod: 'Diária' as PeriodoLocacao, description: 'Sem preço de locação' };
+  const getMonthDays = (date: string) => {
+    const baseDate = new Date(`${date}T00:00:00`);
+    return new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0).getDate();
+  };
+
+  const addRentalPart = (parts: Partial<Record<PeriodoLocacao, number>>, period: PeriodoLocacao, quantity: number) => ({
+    ...parts,
+    [period]: (parts[period] || 0) + quantity
+  });
+
+  const calculateRentalParts = (days: number, startDate: string): Partial<Record<PeriodoLocacao, number>> => {
+    if (days <= 3) return { Diária: days };
+    if (days <= 10) return { Semana: 1 };
+    if (days <= 18) return { Quinzena: 1 };
+
+    const monthDays = getMonthDays(startDate);
+    if (days <= monthDays) return { Mês: 1 };
+
+    const remainingDays = days - monthDays;
+    const nextStartDate = addDaysToDateString(startDate, monthDays);
+    const remainingParts = calculateRentalParts(remainingDays, nextStartDate);
+    return addRentalPart(remainingParts, 'Mês', 1);
+  };
+
+  const calculateRentalCharge = (product: any, startDate: string, endDate: string) => {
+    const days = calculateRentalDays(startDate, endDate);
+    const parts = calculateRentalParts(days, startDate);
+    const orderedPeriods = ['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[];
+    const missingPrice = orderedPeriods.find(period => (parts[period] || 0) > 0 && getProductRentalPrice(product, period) <= 0);
+
+    if (missingPrice) {
+      return { total: 0, mainPeriod: missingPrice, description: `Sem preço de ${missingPrice.toLowerCase()}`, parts, days };
     }
 
-    const dp: Array<{ total: number; parts: Partial<Record<PeriodoLocacao, number>> }> = [{ total: 0, parts: {} }];
-
-    for (let currentDay = 1; currentDay <= days; currentDay++) {
-      let best: { total: number; parts: Partial<Record<PeriodoLocacao, number>> } | null = null;
-
-      for (const option of availablePeriods) {
-        const previous = dp[Math.max(0, currentDay - option.days)];
-        const candidate = {
-          total: previous.total + option.price,
-          parts: {
-            ...previous.parts,
-            [option.period]: (previous.parts[option.period] || 0) + 1
-          }
-        };
-
-        if (!best || candidate.total < best.total) best = candidate;
-      }
-
-      dp[currentDay] = best || { total: 0, parts: {} };
-    }
-
-    const result = dp[days];
-    const description = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[])
-      .filter(period => result.parts[period])
-      .map(period => `${result.parts[period]}x ${period}`)
+    const total = orderedPeriods.reduce((acc, period) => acc + ((parts[period] || 0) * getProductRentalPrice(product, period)), 0);
+    const description = orderedPeriods
+      .filter(period => parts[period])
+      .map(period => `${parts[period]}x ${period}`)
       .join(' + ');
-    const mainPeriod = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[]).find(period => result.parts[period]) || 'Diária';
+    const mainPeriod = orderedPeriods.find(period => parts[period]) || 'Diária';
 
-    return { total: result.total, mainPeriod, description };
+    return { total, mainPeriod, description, parts, days };
   };
 
   const rentalDays = React.useMemo(() => calculateRentalDays(rentalStartDate || today, rentalEndDate || today), [rentalEndDate, rentalStartDate, today]);
-  const pendingRentalCharge = React.useMemo(() => pendingProduct ? calculateRentalCharge(pendingProduct, rentalDays) : null, [pendingProduct, rentalDays]);
+  const pendingRentalCharge = React.useMemo(() => pendingProduct ? calculateRentalCharge(pendingProduct, rentalStartDate || today, rentalEndDate || today) : null, [pendingProduct, rentalEndDate, rentalStartDate, today]);
 
   const handleRentalDateChange = (field: 'start' | 'end', value: string) => {
     const nextStart = field === 'start' ? value : rentalStartDate;
@@ -500,8 +510,7 @@ const POS = () => {
     if (field === 'end') setRentalEndDate(value);
 
     if (pendingProduct && mode === 'LOCACAO') {
-      const days = calculateRentalDays(nextStart || today, nextEnd || today);
-      const charge = calculateRentalCharge(pendingProduct, days);
+      const charge = calculateRentalCharge(pendingProduct, nextStart || today, nextEnd || today);
       setInputUnitPrice(charge.total.toFixed(2).replace('.', ','));
     }
   };
@@ -544,9 +553,9 @@ const POS = () => {
       return;
     }
 
-    const rentalCharge = mode === 'LOCACAO' ? calculateRentalCharge(pendingProduct, rentalDays) : null;
+    const rentalCharge = mode === 'LOCACAO' ? calculateRentalCharge(pendingProduct, rentalStartDate || today, rentalEndDate || today) : null;
     if (mode === 'LOCACAO' && (!rentalCharge || rentalCharge.total <= 0)) {
-      showError("Cadastre o valor de locação deste produto: diária, semanal, quinzenal ou mensal.");
+      showError(rentalCharge?.description || "Cadastre o valor de locação deste produto: diária, semanal, quinzenal ou mensal.");
       return;
     }
 
@@ -571,7 +580,8 @@ const POS = () => {
       rentalEndDate: mode === 'LOCACAO' ? (rentalEndDate || today) : undefined,
       rentalDays: mode === 'LOCACAO' ? rentalDays : undefined,
       rentalPeriodType: mode === 'LOCACAO' ? rentalCharge?.mainPeriod : undefined,
-      rentalCalculation: mode === 'LOCACAO' ? rentalCharge?.description : undefined
+      rentalCalculation: mode === 'LOCACAO' ? rentalCharge?.description : undefined,
+      rentalCalculationParts: mode === 'LOCACAO' ? rentalCharge?.parts : undefined
     }]);
     
     setPendingProduct(null);
@@ -1497,8 +1507,8 @@ const POS = () => {
                 <TableRow className="bg-slate-800 hover:bg-slate-800 border-none shadow-md">
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 w-24 px-6">CÓDIGO</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 px-6">DESCRIÇÃO DO PRODUTO</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-20">UN</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">QTDE/METROS</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-20">{mode === 'LOCACAO' ? 'COBRANÇA' : 'UN'}</TableHead>
+                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">{mode === 'LOCACAO' ? 'QTDE EQUIP.' : 'QTDE/METROS'}</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">CX</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">VALOR UNIT.</TableHead>
                   <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">SUB TOTAL</TableHead>
@@ -1514,8 +1524,9 @@ const POS = () => {
                       key={idx}
                       onClick={() => setSelectedCartIndex(idx)}
                       className={cn(
-                        "h-12 border-b border-slate-200 hover:bg-indigo-50/50 transition-colors group cursor-pointer",
-                        selectedCartIndex === idx && "bg-indigo-100 hover:bg-indigo-100 ring-2 ring-inset ring-indigo-400"
+                        "h-12 border-b border-slate-200 transition-colors group cursor-pointer",
+                        mode === 'LOCACAO' ? "bg-amber-50/70 hover:bg-amber-100/80" : "hover:bg-indigo-50/50",
+                        selectedCartIndex === idx && (mode === 'LOCACAO' ? "bg-amber-100 hover:bg-amber-100 ring-2 ring-inset ring-amber-400" : "bg-indigo-100 hover:bg-indigo-100 ring-2 ring-inset ring-indigo-400")
                       )}
                     >
                       <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
@@ -1527,7 +1538,9 @@ const POS = () => {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
+                      <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">
+                        {mode === 'LOCACAO' ? item.rentalCalculation : item?.selectedUnit}
+                      </TableCell>
                       <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
                         <input
                           className="w-full bg-transparent text-center text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
@@ -1592,7 +1605,7 @@ const POS = () => {
             </div>
             
             <div className="w-24 lg:w-32 space-y-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">{getBoxSize(pendingProduct) > 0 ? `Metros (${inputUnit})` : `Qtde (${inputUnit})`}</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">{mode === 'LOCACAO' ? 'Qtde Equip.' : getBoxSize(pendingProduct) > 0 ? `Metros (${inputUnit})` : `Qtde (${inputUnit})`}</label>
               <Input ref={qtyRef} value={inputQty} onChange={(e) => handleQtyChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
             </div>
 
