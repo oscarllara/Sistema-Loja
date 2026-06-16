@@ -1,10 +1,11 @@
 "use client";
 
 import React from 'react';
-import { Car, Plus, Fuel, Wrench, Droplets, CircleDot, AlignCenter, Home, ReceiptText, User, ArrowLeft, WalletCards, AlertTriangle } from 'lucide-react';
+import { Car, Plus, Fuel, Wrench, Droplets, CircleDot, AlignCenter, Home, ReceiptText, User, ArrowLeft, WalletCards, AlertTriangle, Pencil, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,10 +15,17 @@ import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 
 const money = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const parseNumber = (value: string) => parseFloat(value.replace(',', '.')) || 0;
+const parseNumber = (value: string) => {
+  const normalized = value.trim().includes(',')
+    ? value.replace(/\./g, '').replace(',', '.')
+    : value.trim();
+  return parseFloat(normalized) || 0;
+};
+const formatMoneyInput = (value: string) => money(parseNumber(value));
 const today = () => new Date().toISOString().split('T')[0];
 
 const vehicleActions = [
+
   { type: 'Abastecimento', label: 'Abastecer', icon: Fuel, color: 'bg-emerald-500' },
   { type: 'Manutenção', label: 'Mecânica', icon: Wrench, color: 'bg-slate-700', subtype: 'Mecânica' },
   { type: 'Manutenção', label: 'Elétrica', icon: Wrench, color: 'bg-amber-500', subtype: 'Elétrica' },
@@ -43,15 +51,34 @@ const MobileApp = () => {
   const [isPersonalOpen, setIsPersonalOpen] = React.useState(false);
   const [eventType, setEventType] = React.useState<string>('');
   const [eventSubtype, setEventSubtype] = React.useState<string>('');
+  const [familyLabels, setFamilyLabels] = React.useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dyaderp_mobile_family_labels');
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) && parsed.length === 3 ? parsed : familyMembers;
+    } catch {
+      return familyMembers;
+    }
+  });
+  const [editingFamilyNames, setEditingFamilyNames] = React.useState(false);
 
   const [vehicleForm, setVehicleForm] = React.useState({ marca: '', modelo: '', ano: '', placa: '' });
   const [eventForm, setEventForm] = React.useState({
-    combustivel: 'Gasolina', litros: '', valorLitro: '', valorTotal: '', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false,
+    combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false,
     meioPagamento: 'Dinheiro', cdConta: ''
   });
-  const [personalForm, setPersonalForm] = React.useState({ pessoa: 'Eu', categoria: 'Almoço', descricao: '', valor: '', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
+  const [personalForm, setPersonalForm] = React.useState({ pessoa: familyLabels[0], categoria: 'Almoço', descricao: '', valor: '0,00', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
+
+  const saveFamilyLabels = () => {
+    const cleaned = familyLabels.map((label, index) => label.trim() || familyMembers[index]);
+    setFamilyLabels(cleaned);
+    localStorage.setItem('dyaderp_mobile_family_labels', JSON.stringify(cleaned));
+    setPersonalForm(prev => cleaned.includes(prev.pessoa) ? prev : { ...prev, pessoa: cleaned[0] });
+    setEditingFamilyNames(false);
+  };
 
   const loadData = React.useCallback(async () => {
+
     try {
       const [vData, eData, gData, cData] = await Promise.all([
         db.mobile.veiculos.getAll(),
@@ -105,6 +132,11 @@ const MobileApp = () => {
     await db.contas.update(accountId, { saldo: Number((Number(account.saldo || 0) - amount).toFixed(2)) });
   };
 
+  const isCashAccount = (account: ContaBancaria) => {
+    const name = (account.nome || '').toLowerCase();
+    return ['Caixa', 'Retaguarda'].includes(account.tipo) || name.includes('caixa') || name.includes('retaguarda');
+  };
+
   const validatePayment = (method: string, accountId: string) => {
     if (!accountId) {
       showError('Selecione a conta/caixa/cartão de onde saiu o valor.');
@@ -112,10 +144,11 @@ const MobileApp = () => {
     }
     const account = accounts.find(c => c.cd_conta === Number(accountId));
     if (!account) return false;
-    if (method === 'Dinheiro' && !['Caixa', 'Retaguarda'].includes(account.tipo)) {
+    if (method === 'Dinheiro' && !isCashAccount(account)) {
       showError('Dinheiro deve sair de um caixa ou retaguarda.');
       return false;
     }
+
     if (method === 'PIX' && !['Banco', 'Digital'].includes(account.tipo)) {
       showError('PIX deve sair de banco ou conta digital.');
       return false;
@@ -148,11 +181,12 @@ const MobileApp = () => {
   const openEvent = (type: string, subtype = '') => {
     setEventType(type);
     setEventSubtype(subtype);
-    setEventForm({ combustivel: 'Gasolina', litros: '', valorLitro: '', valorTotal: '', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false, meioPagamento: 'Dinheiro', cdConta: '' });
+    setEventForm({ combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false, meioPagamento: 'Dinheiro', cdConta: '' });
     setIsEventOpen(true);
   };
 
   const saveEvent = async () => {
+
     if (!selectedVehicle) return;
     const total = eventType === 'Abastecimento'
       ? parseNumber(eventForm.valorTotal) || (parseNumber(eventForm.litros) * parseNumber(eventForm.valorLitro))
@@ -237,12 +271,13 @@ const MobileApp = () => {
 
     await updateAccountBalance(Number(personalForm.cdConta), total);
     showSuccess('Gasto pessoal lançado.');
-    setPersonalForm({ pessoa: 'Eu', categoria: 'Almoço', descricao: '', valor: '', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
+    setPersonalForm({ pessoa: familyLabels[0], categoria: 'Almoço', descricao: '', valor: '0,00', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
     setIsPersonalOpen(false);
     loadData();
   };
 
   const alerts = getDueAlerts();
+
   const totalPersonal = expenses.reduce((acc, item) => acc + Number(item.valor || 0), 0);
 
   return (
@@ -360,18 +395,34 @@ const MobileApp = () => {
                   <h2 className="text-2xl font-black">Gastos familiares</h2>
                   <p className="text-xs font-bold text-slate-500">Total lançado: R$ {money(totalPersonal)}</p>
                 </div>
-                <Button size="icon" className="rounded-2xl bg-emerald-600 hover:bg-emerald-700" onClick={() => setIsPersonalOpen(true)}><Plus /></Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="rounded-2xl bg-white px-3 text-[10px] font-black" onClick={() => editingFamilyNames ? saveFamilyLabels() : setEditingFamilyNames(true)}>
+                    {editingFamilyNames ? <Check size={14} /> : <Pencil size={14} />} {editingFamilyNames ? 'Salvar' : 'Nomes'}
+                  </Button>
+                  <Button size="icon" className="rounded-2xl bg-emerald-600 hover:bg-emerald-700" onClick={() => { setPersonalForm({ pessoa: familyLabels[0], categoria: 'Almoço', descricao: '', valor: '0,00', data: today(), meioPagamento: 'Dinheiro', cdConta: '' }); setIsPersonalOpen(true); }}><Plus /></Button>
+                </div>
+
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {familyMembers.map(member => (
-                  <div key={member} className="rounded-2xl bg-white p-3 text-center shadow-sm">
+                {familyLabels.map((member, index) => (
+                  <div key={index} className="rounded-2xl bg-white p-3 text-center shadow-sm">
                     <User className="mx-auto mb-1 text-emerald-600" size={18} />
-                    <p className="text-[10px] font-black uppercase text-slate-500">{member}</p>
-                    <p className="text-xs font-black">R$ {money(expenses.filter(e => e.pessoa === member).reduce((acc, e) => acc + Number(e.valor || 0), 0))}</p>
+                    {editingFamilyNames ? (
+                      <Input
+                        value={member}
+                        onChange={e => setFamilyLabels(prev => prev.map((label, labelIndex) => labelIndex === index ? e.target.value : label))}
+                        className="h-7 px-1 text-center text-[10px] font-black uppercase"
+                      />
+                    ) : (
+                      <p className="text-[10px] font-black uppercase text-slate-500">{member}</p>
+                    )}
+                    <p className="mt-1 text-xs font-black">R$ {money(expenses.filter(e => e.pessoa === member).reduce((acc, e) => acc + Number(e.valor || 0), 0))}</p>
                   </div>
                 ))}
               </div>
+              {editingFamilyNames && <p className="text-center text-[10px] font-bold text-slate-400">Edite os nomes e toque no botão de confirmar.</p>}
               {expenses.slice(0, 20).map(expense => (
+
                 <div key={expense.id} className="rounded-2xl bg-white p-3 shadow-sm">
                   <div className="flex justify-between gap-3">
                     <div>
@@ -410,15 +461,16 @@ const MobileApp = () => {
             {eventType === 'Abastecimento' ? (
               <>
                 <Field label="Tipo de combustível"><select className="h-10 w-full rounded-md border px-3 text-sm" value={eventForm.combustivel} onChange={e => setEventForm({ ...eventForm, combustivel: e.target.value })}><option>Gasolina</option><option>Etanol</option><option>Diesel</option><option>GNV</option></select></Field>
-                <div className="grid grid-cols-2 gap-2"><Input placeholder="Litros" value={eventForm.litros} onChange={e => setEventForm({ ...eventForm, litros: e.target.value, valorTotal: formatAutoTotal(e.target.value, eventForm.valorLitro) })} /><Input placeholder="Valor/litro" value={eventForm.valorLitro} onChange={e => setEventForm({ ...eventForm, valorLitro: e.target.value, valorTotal: formatAutoTotal(eventForm.litros, e.target.value) })} /></div>
+                <div className="grid grid-cols-2 gap-2"><Input placeholder="Litros" value={eventForm.litros} onChange={e => setEventForm({ ...eventForm, litros: e.target.value, valorTotal: formatAutoTotal(e.target.value, eventForm.valorLitro) })} /><Input placeholder="Valor/litro" value={eventForm.valorLitro} onFocus={e => e.currentTarget.select()} onChange={e => setEventForm({ ...eventForm, valorLitro: e.target.value, valorTotal: formatAutoTotal(eventForm.litros, e.target.value) })} onBlur={e => setEventForm(prev => ({ ...prev, valorLitro: formatMoneyInput(e.target.value), valorTotal: formatAutoTotal(prev.litros, formatMoneyInput(e.target.value)) }))} /></div>
                 <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-3"><Checkbox checked={eventForm.tanqueCheio} onCheckedChange={checked => setEventForm({ ...eventForm, tanqueCheio: Boolean(checked) })} /><span className="text-xs font-bold">Tanque cheio para cálculo real de km/l</span></div>
               </>
             ) : (
               <Input placeholder="Tipo de serviço / descrição" value={eventForm.descricao} onChange={e => setEventForm({ ...eventForm, descricao: e.target.value })} />
             )}
-            <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor total" value={eventForm.valorTotal} onChange={e => setEventForm({ ...eventForm, valorTotal: e.target.value })} /><Input placeholder="Km atual" value={eventForm.kmAtual} onChange={e => setEventForm({ ...eventForm, kmAtual: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor total" value={eventForm.valorTotal} onFocus={e => e.currentTarget.select()} onChange={e => setEventForm({ ...eventForm, valorTotal: e.target.value })} onBlur={e => setEventForm(prev => ({ ...prev, valorTotal: formatMoneyInput(e.target.value) }))} /><Input placeholder="Km atual" value={eventForm.kmAtual} onChange={e => setEventForm({ ...eventForm, kmAtual: e.target.value })} /></div>
             {eventType !== 'Abastecimento' && <Input placeholder="Km para próxima troca/serviço" value={eventForm.kmProxima} onChange={e => setEventForm({ ...eventForm, kmProxima: e.target.value })} />}
-            <PaymentFields accounts={accounts} method={eventForm.meioPagamento} accountId={eventForm.cdConta} onMethod={meioPagamento => setEventForm({ ...eventForm, meioPagamento })} onAccount={cdConta => setEventForm({ ...eventForm, cdConta })} />
+            <PaymentFields accounts={accounts} method={eventForm.meioPagamento} accountId={eventForm.cdConta} onMethod={meioPagamento => setEventForm({ ...eventForm, meioPagamento, cdConta: '' })} onAccount={cdConta => setEventForm({ ...eventForm, cdConta })} />
+
             <Button className="h-12 w-full rounded-2xl font-black" onClick={saveEvent}>Lançar gasto</Button>
           </div>
         </DialogContent>
@@ -428,13 +480,14 @@ const MobileApp = () => {
         <DialogContent className="max-w-sm rounded-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Novo gasto pessoal</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Field label="Pessoa"><select className="h-10 w-full rounded-md border px-3 text-sm" value={personalForm.pessoa} onChange={e => setPersonalForm({ ...personalForm, pessoa: e.target.value })}>{familyMembers.map(item => <option key={item}>{item}</option>)}</select></Field>
+            <Field label="Pessoa"><select className="h-10 w-full rounded-md border px-3 text-sm" value={personalForm.pessoa} onChange={e => setPersonalForm({ ...personalForm, pessoa: e.target.value })}>{familyLabels.map(item => <option key={item}>{item}</option>)}</select></Field>
             <Field label="Categoria"><select className="h-10 w-full rounded-md border px-3 text-sm" value={personalForm.categoria} onChange={e => setPersonalForm({ ...personalForm, categoria: e.target.value })}>{personalCategories.map(item => <option key={item}>{item}</option>)}</select></Field>
             <Input placeholder="Descrição opcional" value={personalForm.descricao} onChange={e => setPersonalForm({ ...personalForm, descricao: e.target.value })} />
-            <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor" value={personalForm.valor} onChange={e => setPersonalForm({ ...personalForm, valor: e.target.value })} /><Input type="date" value={personalForm.data} onChange={e => setPersonalForm({ ...personalForm, data: e.target.value })} /></div>
-            <PaymentFields accounts={accounts} method={personalForm.meioPagamento} accountId={personalForm.cdConta} onMethod={meioPagamento => setPersonalForm({ ...personalForm, meioPagamento })} onAccount={cdConta => setPersonalForm({ ...personalForm, cdConta })} />
+            <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor" value={personalForm.valor} onFocus={e => e.currentTarget.select()} onChange={e => setPersonalForm({ ...personalForm, valor: e.target.value })} onBlur={e => setPersonalForm(prev => ({ ...prev, valor: formatMoneyInput(e.target.value) }))} /><Input type="date" value={personalForm.data} onChange={e => setPersonalForm({ ...personalForm, data: e.target.value })} /></div>
+            <PaymentFields accounts={accounts} method={personalForm.meioPagamento} accountId={personalForm.cdConta} onMethod={meioPagamento => setPersonalForm({ ...personalForm, meioPagamento, cdConta: '' })} onAccount={cdConta => setPersonalForm({ ...personalForm, cdConta })} />
             <Button className="h-12 w-full rounded-2xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={savePersonalExpense}>Lançar gasto</Button>
           </div>
+
         </DialogContent>
       </Dialog>
     </div>
@@ -443,22 +496,42 @@ const MobileApp = () => {
 
 const formatAutoTotal = (liters: string, unit: string) => {
   const total = parseNumber(liters) * parseNumber(unit);
-  return total > 0 ? total.toFixed(2).replace('.', ',') : '';
+  return total > 0 ? total.toFixed(2).replace('.', ',') : '0,00';
 };
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+
   <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-slate-400">{label}</Label>{children}</div>
 );
 
-const PaymentFields = ({ accounts, method, accountId, onMethod, onAccount }: { accounts: ContaBancaria[]; method: string; accountId: string; onMethod: (value: string) => void; onAccount: (value: string) => void }) => (
-  <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-    <div className="flex items-center gap-2 text-xs font-black text-slate-600"><WalletCards size={16} /> Canal do gasto</div>
-    <Field label="Forma"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={method} onChange={e => { onMethod(e.target.value); onAccount(''); }}>{paymentMethods.map(item => <option key={item}>{item}</option>)}</select></Field>
-    <Field label="Conta / caixa / cartão"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={accountId} onChange={e => onAccount(e.target.value)}><option value="">Selecione...</option>{accounts.map(account => <option key={account.cd_conta} value={account.cd_conta}>{account.nome} • {account.tipo}</option>)}</select></Field>
-  </div>
-);
+const PaymentFields = ({ accounts, method, accountId, onMethod, onAccount }: { accounts: ContaBancaria[]; method: string; accountId: string; onMethod: (value: string) => void; onAccount: (value: string) => void }) => {
+  const filteredAccounts = accounts.filter(account => {
+    const name = (account.nome || '').toLowerCase();
+    const isCash = ['Caixa', 'Retaguarda'].includes(account.tipo) || name.includes('caixa') || name.includes('retaguarda');
+    if (method === 'Dinheiro') return isCash;
+    if (method === 'PIX') return ['Banco', 'Digital'].includes(account.tipo);
+    if (method === 'Cartão Crédito') return account.tipo === 'Cartão';
+    return true;
+  });
+
+  const helpText = method === 'Dinheiro'
+    ? 'Dinheiro mostra somente caixas e retaguarda.'
+    : method === 'PIX'
+      ? 'PIX mostra somente bancos e contas digitais.'
+      : 'Cartão mostra somente contas do tipo Cartão.';
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+      <div className="flex items-center gap-2 text-xs font-black text-slate-600"><WalletCards size={16} /> Canal do gasto</div>
+      <Field label="Forma"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={method} onChange={e => { onMethod(e.target.value); onAccount(''); }}>{paymentMethods.map(item => <option key={item}>{item}</option>)}</select></Field>
+      <Field label="Conta / caixa / cartão"><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={accountId} onChange={e => onAccount(e.target.value)}><option value="">Selecione...</option>{filteredAccounts.map(account => <option key={account.cd_conta} value={account.cd_conta}>{account.nome} • {account.tipo}</option>)}</select></Field>
+      <p className="text-[10px] font-bold text-slate-400">{helpText}</p>
+    </div>
+  );
+};
 
 const EmptyState = ({ text }: { text: string }) => (
+
   <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-400">{text}</div>
 );
 
