@@ -106,6 +106,13 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
     return cost * (1 + margin / 100);
   };
 
+  const initialFractionalEnabled = Boolean(
+    product?.fracionado ||
+    product?.un_fracionada ||
+    Number(product?.venda_fracionada || 0) > 0 ||
+    (Number(product?.fator_conversao || 1) > 0 && Number(product?.fator_conversao || 1) !== 1)
+  );
+
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product ? {
@@ -134,6 +141,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       ncm: product.ncm || "",
       cod_barras: product.cod_barras || "",
       id_importado: product.id_importado || "",
+      fracionado: initialFractionalEnabled,
     } : {
       id_manual: "",
       un: "UN",
@@ -325,8 +333,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         minimo: parseToNumber(data.minimo),
         ncm: data.ncm?.trim() || null,
         fracionado: !!data.fracionado,
-        un_fracionada: data.fracionado ? (data.un_fracionada?.toUpperCase().trim() || null) : null,
-        fator_conversao: data.fracionado ? (parseToNumber(data.fator_conversao) || 1) : null as any,
+        un_fracionada: data.un_fracionada?.toUpperCase().trim() || null,
+        fator_conversao: parseToNumber(data.fator_conversao) || 1,
         tamanho_caixa: parseToNumber(data.tamanho_caixa) || 0,
         is_kit: !!data.is_kit,
         itens_kit: data.is_kit ? kitItems : null as any,

@@ -20,11 +20,6 @@ const sanitizeProductPayload = (product: Partial<Produto>) => {
   if (payload.link_externo === undefined) payload.link_externo = null;
   if (payload.descricao_site === undefined) payload.descricao_site = null;
   if (payload.cd_fornecedores === undefined) payload.cd_fornecedores = null;
-  if (!payload.fracionado) {
-    payload.un_fracionada = null;
-    payload.fator_conversao = null;
-    payload.venda_fracionada = 0;
-  }
   if (!payload.is_kit) {
     payload.itens_kit = null;
   }
