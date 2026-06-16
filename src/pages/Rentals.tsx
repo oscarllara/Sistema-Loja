@@ -47,8 +47,6 @@ type DraftItem = AluguelItem & {
   estoque_atual: number;
 };
 
-const periodOptions: PeriodoLocacao[] = ['Diária', 'Semana', 'Quinzena', 'Mês'];
-
 const todayString = () => new Date().toISOString().split('T')[0];
 
 const toCurrency = (value: number) =>
@@ -62,18 +60,65 @@ const calculateDays = (start: string, end: string) => {
   return Math.max(diff, 1);
 };
 
-const chargeUnitsForPeriod = (days: number, period: PeriodoLocacao) => {
-  if (period === 'Semana') return Math.ceil(days / 7);
-  if (period === 'Quinzena') return Math.ceil(days / 15);
-  if (period === 'Mês') return Math.ceil(days / 30);
-  return days;
-};
-
 const getProductRentalPrice = (product: Produto, period: PeriodoLocacao) => {
   if (period === 'Semana') return Number(product.valor_semana || 0);
   if (period === 'Quinzena') return Number(product.valor_quinzena || 0);
   if (period === 'Mês') return Number(product.valor_mes || 0);
   return Number(product.valor_diaria || 0);
+};
+
+const rentalPeriodDays: Record<PeriodoLocacao, number> = {
+  Diária: 1,
+  Semana: 7,
+  Quinzena: 15,
+  Mês: 30
+};
+
+const calculateRentalCharge = (product: Produto, days: number) => {
+  const availablePeriods = (['Diária', 'Semana', 'Quinzena', 'Mês'] as PeriodoLocacao[])
+    .map(period => ({ period, days: rentalPeriodDays[period], price: getProductRentalPrice(product, period) }))
+    .filter(option => option.price > 0);
+
+  if (availablePeriods.length === 0) {
+    return { total: 0, mainPeriod: 'Diária' as PeriodoLocacao, description: 'Sem tabela de preço configurada' };
+  }
+
+  const dp: Array<{ total: number; parts: Partial<Record<PeriodoLocacao, number>> }> = [
+    { total: 0, parts: {} }
+  ];
+
+  for (let currentDay = 1; currentDay <= days; currentDay++) {
+    let best: { total: number; parts: Partial<Record<PeriodoLocacao, number>> } | null = null;
+
+    for (const option of availablePeriods) {
+      const previous = dp[Math.max(0, currentDay - option.days)];
+      const candidate = {
+        total: previous.total + option.price,
+        parts: {
+          ...previous.parts,
+          [option.period]: (previous.parts[option.period] || 0) + 1
+        }
+      };
+
+      if (!best || candidate.total < best.total) best = candidate;
+    }
+
+    dp[currentDay] = best || { total: 0, parts: {} };
+  }
+
+  const result = dp[days];
+  const description = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[])
+    .filter(period => result.parts[period])
+    .map(period => `${result.parts[period]}x ${period}`)
+    .join(' + ');
+  const mainPeriod = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[]).find(period => result.parts[period]) || 'Diária';
+
+  return { total: result.total, mainPeriod, description };
+};
+
+const formatDate = (date?: string | null) => {
+  if (!date) return '-';
+  return new Date(`${date.split('T')[0]}T00:00:00`).toLocaleDateString('pt-BR');
 };
 
 const getDisplayStatus = (rental: Aluguel): StatusAluguel => {
@@ -94,7 +139,6 @@ const Rentals = () => {
   const [selectedClientId, setSelectedClientId] = React.useState("");
   const [startDate, setStartDate] = React.useState(todayString());
   const [endDate, setEndDate] = React.useState(todayString());
-  const [periodType, setPeriodType] = React.useState<PeriodoLocacao>('Diária');
   const [observations, setObservations] = React.useState("");
   const [productSearch, setProductSearch] = React.useState("");
   const [selectedProductId, setSelectedProductId] = React.useState("");
@@ -102,8 +146,9 @@ const Rentals = () => {
   const [draftItems, setDraftItems] = React.useState<DraftItem[]>([]);
 
   const days = React.useMemo(() => calculateDays(startDate, endDate), [startDate, endDate]);
-  const chargeUnits = React.useMemo(() => chargeUnitsForPeriod(days, periodType), [days, periodType]);
   const total = React.useMemo(() => draftItems.reduce((acc, item) => acc + Number(item.subtotal || 0), 0), [draftItems]);
+  const selectedProductPreview = React.useMemo(() => products.find(item => String(item.cd_produto) === selectedProductId), [products, selectedProductId]);
+  const previewCharge = React.useMemo(() => selectedProductPreview ? calculateRentalCharge(selectedProductPreview, days) : null, [days, selectedProductPreview]);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -132,7 +177,6 @@ const Rentals = () => {
     setSelectedClientId("");
     setStartDate(todayString());
     setEndDate(todayString());
-    setPeriodType('Diária');
     setObservations("");
     setProductSearch("");
     setSelectedProductId("");
@@ -206,9 +250,15 @@ const Rentals = () => {
       return;
     }
 
-    const unitPrice = getProductRentalPrice(product, periodType);
-    if (unitPrice <= 0) {
-      showError(`Informe o valor de ${periodType.toLowerCase()} no cadastro do produto.`);
+    if (endDate < startDate) {
+      showError("A data prevista de devolução não pode ser menor que a data de retirada.");
+      return;
+    }
+
+    const rentalDays = calculateDays(startDate, endDate);
+    const charge = calculateRentalCharge(product, rentalDays);
+    if (charge.total <= 0) {
+      showError("Informe pelo menos um valor de locação no cadastro do produto: diária, semanal, quinzenal ou mensal.");
       return;
     }
 
@@ -221,15 +271,19 @@ const Rentals = () => {
       return;
     }
 
-    const subtotal = unitPrice * parsedQuantity * chargeUnits;
+    const subtotal = charge.total * parsedQuantity;
 
     setDraftItems(prev => [...prev, {
       cd_produto: product.cd_produto,
       nome_produto: product.nome,
       quantidade: parsedQuantity,
-      valor_unitario: unitPrice,
-      periodo_tipo: periodType,
+      valor_unitario: charge.total,
+      periodo_tipo: charge.mainPeriod,
       subtotal,
+      data_retirada: startDate,
+      data_devolucao_prevista: endDate,
+      dias: rentalDays,
+      calculo_descricao: charge.description,
       estoque_atual: Number(product.estoque || 0)
     }]);
 
@@ -255,10 +309,15 @@ const Rentals = () => {
       return;
     }
 
-    if (endDate < startDate) {
-      showError("A data final não pode ser menor que a data inicial.");
-      return;
-    }
+    const contractStartDate = draftItems.reduce((earliest, item) => {
+      const itemDate = item.data_retirada || startDate;
+      return itemDate < earliest ? itemDate : earliest;
+    }, draftItems[0].data_retirada || startDate);
+
+    const contractEndDate = draftItems.reduce((latest, item) => {
+      const itemDate = item.data_devolucao_prevista || endDate;
+      return itemDate > latest ? itemDate : latest;
+    }, draftItems[0].data_devolucao_prevista || endDate);
 
     try {
       const user = db.auth.getUser();
@@ -266,14 +325,15 @@ const Rentals = () => {
         cd_clientes: client.cd_clientes,
         nome_cliente: client.nome,
         cd_func: user?.cd_clientes,
-        data_inicio: startDate,
-        data_fim_prevista: endDate,
-        periodo_tipo: periodType,
-        dias: days,
+        data_inicio: contractStartDate,
+        data_fim_prevista: contractEndDate,
+        periodo_tipo: 'Diária',
+        dias: calculateDays(contractStartDate, contractEndDate),
         total: Number(total.toFixed(2)),
         observacoes: observations || undefined,
         itens: draftItems.map(({ estoque_atual, ...item }) => ({
           ...item,
+          valor_unitario: Number(item.valor_unitario.toFixed(2)),
           subtotal: Number(item.subtotal.toFixed(2))
         }))
       });
@@ -427,8 +487,8 @@ const Rentals = () => {
                         <div className="text-xs text-slate-500">{rental.itens.length} item(ns)</div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm font-bold">{new Date(`${rental.data_inicio}T00:00:00`).toLocaleDateString('pt-BR')} até {new Date(`${rental.data_fim_prevista}T00:00:00`).toLocaleDateString('pt-BR')}</div>
-                        <div className="text-xs text-slate-500">{rental.dias} dia(s) · {rental.periodo_tipo}</div>
+                        <div className="text-sm font-bold">{formatDate(rental.data_inicio)} até {formatDate(rental.data_fim_prevista)}</div>
+                        <div className="text-xs text-slate-500">{rental.dias} dia(s) no período total</div>
                       </TableCell>
                       <TableCell className="font-black">{toCurrency(Number(rental.total || 0))}</TableCell>
                       <TableCell><StatusBadge status={status} /></TableCell>
@@ -457,34 +517,19 @@ const Rentals = () => {
             <DialogTitle>Novo Contrato de Locação</DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="space-y-2 lg:col-span-3">
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
               <Label>Cliente</Label>
               <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm">
                 <option value="">Selecione o cliente</option>
                 {clients.map(client => <option key={client.cd_clientes} value={client.cd_clientes}>{client.nome}</option>)}
               </select>
             </div>
-
-            <div className="space-y-2">
-              <Label>Início</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Previsão de Devolução</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Cobrança</Label>
-              <select value={periodType} onChange={(e) => setPeriodType(e.target.value as PeriodoLocacao)} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
-                {periodOptions.map(period => <option key={period} value={period}>{period}</option>)}
-              </select>
-            </div>
           </div>
 
           <div className="rounded-2xl border bg-slate-50 p-4 space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-              <div className="lg:col-span-4 space-y-2">
+              <div className="lg:col-span-3 space-y-2">
                 <Label>Buscar equipamento</Label>
                 <Input value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="Digite nome ou código" />
               </div>
@@ -500,17 +545,26 @@ const Rentals = () => {
                 </select>
               </div>
               <div className="lg:col-span-2 space-y-2">
-                <Label>Quantidade</Label>
+                <Label>Retirada / Aluguel</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="lg:col-span-2 space-y-2">
+                <Label>Devolução Prevista</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+              <div className="lg:col-span-1 space-y-2">
+                <Label>Qtde</Label>
                 <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} />
               </div>
-              <div className="lg:col-span-2">
-                <Button onClick={addItem} className="w-full bg-indigo-600 hover:bg-indigo-700 gap-2"><Plus size={16} /> Adicionar</Button>
+              <div className="lg:col-span-12">
+                <Button onClick={addItem} className="w-full bg-indigo-600 hover:bg-indigo-700 gap-2"><Plus size={16} /> Adicionar item calculado</Button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <InfoBox label="Período calculado" value={`${days} dia(s)`} />
-              <InfoBox label="Unidades de cobrança" value={`${chargeUnits} x ${periodType}`} />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Dias do item" value={`${days} dia(s)`} />
+              <InfoBox label="Cálculo previsto" value={previewCharge?.description || 'Selecione um produto'} />
+              <InfoBox label="Valor por unidade" value={previewCharge ? toCurrency(previewCharge.total) : toCurrency(0)} />
               <InfoBox label="Total do contrato" value={toCurrency(total)} highlight />
             </div>
           </div>
@@ -520,8 +574,9 @@ const Rentals = () => {
               <TableHeader className="bg-slate-50">
                 <TableRow>
                   <TableHead>Equipamento</TableHead>
+                  <TableHead>Datas</TableHead>
                   <TableHead>Qtde</TableHead>
-                  <TableHead>Valor</TableHead>
+                  <TableHead>Cálculo</TableHead>
                   <TableHead>Subtotal</TableHead>
                   <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
@@ -529,7 +584,7 @@ const Rentals = () => {
               <TableBody>
                 {draftItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-400">Nenhum equipamento adicionado.</TableCell>
+                    <TableCell colSpan={6} className="text-center py-8 text-slate-400">Nenhum equipamento adicionado.</TableCell>
                   </TableRow>
                 ) : draftItems.map((item, index) => (
                   <TableRow key={`${item.cd_produto}-${index}`}>
@@ -537,8 +592,16 @@ const Rentals = () => {
                       <div className="font-bold">{item.nome_produto}</div>
                       <div className="text-xs text-slate-500">Estoque atual: {item.estoque_atual}</div>
                     </TableCell>
+                    <TableCell>
+                      <div className="text-xs font-bold">Retirada: {formatDate(item.data_retirada)}</div>
+                      <div className="text-xs text-slate-500">Prevista: {formatDate(item.data_devolucao_prevista)}</div>
+                    </TableCell>
                     <TableCell>{item.quantidade}</TableCell>
-                    <TableCell>{toCurrency(item.valor_unitario)} / {item.periodo_tipo}</TableCell>
+                    <TableCell>
+                      <div className="font-bold">{item.dias || 1} dia(s)</div>
+                      <div className="text-xs text-slate-500">{item.calculo_descricao}</div>
+                      <div className="text-xs text-slate-500">{toCurrency(item.valor_unitario)} por unidade</div>
+                    </TableCell>
                     <TableCell className="font-black">{toCurrency(item.subtotal)}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" className="text-rose-600" onClick={() => removeDraftItem(index)}><Trash2 size={16} /></Button>
@@ -571,7 +634,7 @@ const Rentals = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <InfoBox icon={User} label="Cliente" value={selectedRental.nome_cliente} />
-                <InfoBox icon={CalendarClock} label="Período" value={`${new Date(`${selectedRental.data_inicio}T00:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${selectedRental.data_fim_prevista}T00:00:00`).toLocaleDateString('pt-BR')}`} />
+                <InfoBox icon={CalendarClock} label="Período" value={`${formatDate(selectedRental.data_inicio)} a ${formatDate(selectedRental.data_fim_prevista)}`} />
                 <InfoBox icon={CheckCircle2} label="Status" value={getDisplayStatus(selectedRental)} />
               </div>
 
@@ -580,8 +643,9 @@ const Rentals = () => {
                   <TableHeader className="bg-slate-50">
                     <TableRow>
                       <TableHead>Equipamento</TableHead>
+                      <TableHead>Datas</TableHead>
                       <TableHead>Qtde</TableHead>
-                      <TableHead>Valor</TableHead>
+                      <TableHead>Cálculo</TableHead>
                       <TableHead>Subtotal</TableHead>
                       <TableHead>Retorno</TableHead>
                     </TableRow>
@@ -590,8 +654,17 @@ const Rentals = () => {
                     {selectedRental.itens.map(item => (
                       <TableRow key={item.cd_item}>
                         <TableCell className="font-bold">{item.nome_produto}</TableCell>
+                        <TableCell>
+                          <div className="text-xs font-bold">Retirada: {formatDate(item.data_retirada || selectedRental.data_inicio)}</div>
+                          <div className="text-xs text-slate-500">Prevista: {formatDate(item.data_devolucao_prevista || selectedRental.data_fim_prevista)}</div>
+                          <div className="text-xs text-slate-500">Realizada: {formatDate(item.data_devolucao_realizada || item.data_devolucao)}</div>
+                        </TableCell>
                         <TableCell>{item.quantidade}</TableCell>
-                        <TableCell>{toCurrency(Number(item.valor_unitario || 0))} / {item.periodo_tipo}</TableCell>
+                        <TableCell>
+                          <div className="font-bold">{item.dias || selectedRental.dias} dia(s)</div>
+                          <div className="text-xs text-slate-500">{item.calculo_descricao || item.periodo_tipo}</div>
+                          <div className="text-xs text-slate-500">{toCurrency(Number(item.valor_unitario || 0))} por unidade</div>
+                        </TableCell>
                         <TableCell className="font-black">{toCurrency(Number(item.subtotal || 0))}</TableCell>
                         <TableCell>{item.devolvido ? 'Devolvido' : 'Pendente'}</TableCell>
                       </TableRow>

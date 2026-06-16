@@ -236,7 +236,12 @@ export interface AluguelItem {
   periodo_tipo: PeriodoLocacao;
   subtotal: number;
   devolvido?: boolean;
+  data_retirada?: string;
+  data_devolucao_prevista?: string;
+  data_devolucao_realizada?: string;
   data_devolucao?: string;
+  dias?: number;
+  calculo_descricao?: string;
 }
 
 export interface Aluguel {

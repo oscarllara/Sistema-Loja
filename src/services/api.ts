@@ -517,9 +517,10 @@ export const db = {
         if (stockError) throw stockError;
 
         if (item.cd_item) {
+          const returnedAt = new Date().toISOString();
           const { error: itemError } = await supabase
             .from('aluguel_itens')
-            .update({ devolvido: true, data_devolucao: new Date().toISOString() })
+            .update({ devolvido: true, data_devolucao: returnedAt, data_devolucao_realizada: returnedAt })
             .eq('cd_item', item.cd_item);
 
           if (itemError) throw itemError;
