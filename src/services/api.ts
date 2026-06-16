@@ -12,15 +12,16 @@ const sanitizeProductPayload = (product: Partial<Produto>) => {
   delete payload.id;
 
   if (payload.id_manual === undefined || payload.id_manual === "") delete payload.id_manual;
-  if (payload.id_importado === undefined || payload.id_importado === "") payload.id_importado = null;
-  if (payload.cod_barras === undefined) payload.cod_barras = null;
-  if (payload.ncm === undefined) payload.ncm = null;
-  if (payload.un_fracionada === undefined) payload.un_fracionada = null;
-  if (payload.imagem_url === undefined) payload.imagem_url = null;
-  if (payload.link_externo === undefined) payload.link_externo = null;
-  if (payload.descricao_site === undefined) payload.descricao_site = null;
-  if (payload.cd_fornecedores === undefined) payload.cd_fornecedores = null;
-  if (!payload.is_kit) {
+
+  if ('id_importado' in payload && payload.id_importado === "") payload.id_importado = null;
+  if ('cod_barras' in payload && payload.cod_barras === "") payload.cod_barras = null;
+  if ('ncm' in payload && payload.ncm === "") payload.ncm = null;
+  if ('un_fracionada' in payload && payload.un_fracionada === "") payload.un_fracionada = null;
+  if ('imagem_url' in payload && payload.imagem_url === "") payload.imagem_url = null;
+  if ('link_externo' in payload && payload.link_externo === "") payload.link_externo = null;
+  if ('descricao_site' in payload && payload.descricao_site === "") payload.descricao_site = null;
+  if ('cd_fornecedores' in payload && payload.cd_fornecedores === undefined) payload.cd_fornecedores = null;
+  if ('is_kit' in payload && !payload.is_kit) {
     payload.itens_kit = null;
   }
 
