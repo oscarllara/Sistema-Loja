@@ -58,6 +58,14 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
   const filtered = React.useMemo(() => {
     const term = search.toLowerCase().trim();
+    const normalizeCode = (value: unknown) => {
+      const raw = String(value ?? '').trim().toLowerCase();
+      const decimal = raw.replace(',', '.').replace(/\s+/g, '');
+      const digits = raw.replace(/\D/g, '');
+      const numericValue = decimal && /^\d+(\.\d+)?$/.test(decimal) ? Number(decimal) : null;
+      return { raw, decimal, digits, noLeadingZeros: digits.replace(/^0+/, '') || digits, numericValue };
+    };
+    const typedCode = normalizeCode(term);
     
     let matches = products.filter(p => {
       if (!p) return false;
@@ -65,14 +73,19 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
       
       if (!term) return true;
 
-      const paddedTerm = term.padStart(5, '0');
-      return (
-        (p.nome || "").toLowerCase().includes(term) ||
-        (p.id_manual || "") === paddedTerm || 
-        (p.id_manual || "").includes(term) ||
-        (p.id_importado || "").includes(term) ||
-        (p.cod_barras || "").includes(term)
-      );
+      const codeMatches = [p.id_manual, p.id_importado, p.cod_barras, p.cd_produto].some(code => {
+        const current = normalizeCode(code);
+        if (!current.raw) return false;
+        return (
+          current.raw.includes(term) ||
+          current.decimal.includes(typedCode.decimal) ||
+          current.digits === typedCode.digits ||
+          current.noLeadingZeros === typedCode.noLeadingZeros ||
+          (typedCode.numericValue !== null && current.numericValue !== null && current.numericValue === typedCode.numericValue)
+        );
+      });
+
+      return (p.nome || "").toLowerCase().includes(term) || codeMatches;
     });
 
     if (!term) return matches.slice(0, 50);

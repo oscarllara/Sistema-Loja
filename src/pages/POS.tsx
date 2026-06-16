@@ -227,11 +227,18 @@ const POS = () => {
 
   const normalizeProductCode = (value: unknown) => {
     const raw = String(value ?? '').trim().toLowerCase();
+    const normalizedDecimal = raw.replace(',', '.').replace(/\s+/g, '');
     const onlyDigits = raw.replace(/\D/g, '');
+    const numericValue = normalizedDecimal && /^\d+(\.\d+)?$/.test(normalizedDecimal)
+      ? Number(normalizedDecimal)
+      : null;
+
     return {
       raw,
+      decimal: normalizedDecimal,
       digits: onlyDigits,
-      noLeadingZeros: onlyDigits.replace(/^0+/, '') || onlyDigits
+      noLeadingZeros: onlyDigits.replace(/^0+/, '') || onlyDigits,
+      numericValue
     };
   };
 
@@ -248,11 +255,17 @@ const POS = () => {
       const current = normalizeProductCode(code);
       if (!current.raw) return false;
 
+      const decimalNumberMatches = typed.numericValue !== null
+        && current.numericValue !== null
+        && current.numericValue === typed.numericValue;
+
       return (
         current.raw === typed.raw ||
+        current.decimal === typed.decimal ||
         current.digits === typed.digits ||
         current.noLeadingZeros === typed.noLeadingZeros ||
-        current.raw === typed.digits.padStart(5, '0')
+        current.decimal === typed.digits.padStart(5, '0') ||
+        decimalNumberMatches
       );
     });
   };
