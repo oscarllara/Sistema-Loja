@@ -62,25 +62,25 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
     }
   });
 
-  const onSubmit = (data: AccountFormValues) => {
+  const onSubmit = async (data: AccountFormValues) => {
     try {
       const saldoInicialNum = parseNumericInput(data.saldo_inicial);
       
       const payload = {
-        nome: data.nome.toUpperCase(),
-        banco_numero: data.banco_numero,
-        agencia: data.agencia,
-        conta_numero: data.conta_numero,
+        nome: data.nome.trim().toUpperCase(),
+        banco_numero: data.banco_numero?.trim() || null,
+        agencia: data.agencia?.trim() || null,
+        conta_numero: data.conta_numero?.trim() || null,
         tipo: data.tipo,
         saldo_inicial: saldoInicialNum,
         ...(account ? {} : { saldo: saldoInicialNum })
       };
 
       if (account) {
-        db.contas.update(account.cd_conta, payload);
+        await db.contas.update(account.cd_conta, payload);
         showSuccess("Conta atualizada com sucesso!");
       } else {
-        db.contas.add(payload as any);
+        await db.contas.add(payload as any);
         showSuccess("Conta cadastrada com sucesso!");
       }
       onSuccess();
@@ -91,6 +91,7 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
   };
 
   return (
+
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-2">

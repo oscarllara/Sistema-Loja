@@ -100,6 +100,14 @@ const sanitizeClientPayload = (client: any) => ({
   complemento: client.complemento ? formatAddressTitleCase(client.complemento) : client.complemento,
 });
 
+const sanitizeAccountPayload = (account: any) => ({
+  ...account,
+  nome: account.nome ? account.nome.trim().toUpperCase() : account.nome,
+  banco_numero: account.banco_numero ? account.banco_numero.trim() : account.banco_numero,
+  agencia: account.agencia ? account.agencia.trim() : account.agencia,
+  conta_numero: account.conta_numero ? account.conta_numero.trim() : account.conta_numero,
+});
+
 export const db = {
 
   auth: {
@@ -291,15 +299,16 @@ export const db = {
       return data || [];
     },
     add: async (c: any) => {
-      const { error } = await supabase.from('contas').insert([c]);
+      const { error } = await supabase.from('contas').insert([sanitizeAccountPayload(c)]);
       if (error) throw error;
     },
     update: async (id: number, data: any) => {
-      const { error } = await supabase.from('contas').update(data).eq('cd_conta', id);
+      const { error } = await supabase.from('contas').update(sanitizeAccountPayload(data)).eq('cd_conta', id);
       if (error) throw error;
     }
   },
   caixa: {
+
     getAll: async (): Promise<CaixaSessao[]> => {
       const { data, error } = await supabase.from('caixa_sessoes').select('*').order('data_caixa', { ascending: false });
       if (error) throw error;

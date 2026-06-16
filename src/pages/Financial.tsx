@@ -74,8 +74,10 @@ const Financial = () => {
   const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
   const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
   const [editingPatrimony, setEditingPatrimony] = React.useState<Patrimonio | undefined>(undefined);
+  const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
   
   const [isCompensateOpen, setIsCompensateOpen] = React.useState(false);
+
   const [selectedCheque, setSelectedCheque] = React.useState<LancamentoFinanceiro | null>(null);
   const [targetAccountId, setTargetAccountId] = React.useState<string>("");
 
@@ -236,18 +238,19 @@ const Financial = () => {
                 </DialogContent>
               </Dialog>
             ) : activeTab === 'accounts' ? (
-              <Dialog open={isAccountOpen} onOpenChange={setIsAccountOpen}>
+              <Dialog open={isAccountOpen} onOpenChange={(open) => { setIsAccountOpen(open); if (!open) setEditingAccount(undefined); }}>
                 <DialogTrigger asChild>
-                  <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 shadow-lg shadow-indigo-100">
+                  <Button onClick={() => setEditingAccount(undefined)} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 shadow-lg shadow-indigo-100">
                     <PlusCircle size={20} /> Nova Conta / Caixa
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
-                  <DialogHeader><DialogTitle>Cadastrar Nova Conta Bancária ou Caixa</DialogTitle></DialogHeader>
-                  <AccountForm onSuccess={() => { setIsAccountOpen(false); loadData(); }} />
+                  <DialogHeader><DialogTitle>{editingAccount ? "Editar Conta / Caixa" : "Cadastrar Nova Conta Bancária ou Caixa"}</DialogTitle></DialogHeader>
+                  <AccountForm account={editingAccount} onSuccess={() => { setIsAccountOpen(false); setEditingAccount(undefined); loadData(); }} />
                 </DialogContent>
               </Dialog>
             ) : (
+
               <>
                 <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
                   <DialogTrigger asChild>
@@ -350,20 +353,37 @@ const Financial = () => {
           <TabsContent value="accounts">
             <div className="grid gap-4 md:grid-cols-3">
               {contas.map((account) => (
-                <Card 
-                  key={account.cd_conta} 
+                <Card
+                  key={account.cd_conta}
                   className="border-none shadow-sm group relative cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all"
                   onClick={() => setSelectedAccountForDetails(account)}
                 >
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-2 bg-slate-100 rounded-lg"><Wallet className="text-slate-600" size={20} /></div>
-                      <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px]">{account.tipo}</Badge>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-indigo-600 hover:bg-indigo-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingAccount(account);
+                            setIsAccountOpen(true);
+                          }}
+                          title="Editar conta"
+                        >
+                          <Edit size={14} />
+                        </Button>
+                      </div>
                     </div>
                     <h3 className="font-bold text-slate-900">{account.nome}</h3>
                     <p className="text-2xl font-bold text-indigo-600 mt-2">
                       R$ {(Number(account.saldo) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
+                    <p className="text-[10px] font-bold uppercase text-slate-400 mt-3">Clique para ver extrato · use o lápis para editar</p>
                   </CardContent>
                 </Card>
               ))}
