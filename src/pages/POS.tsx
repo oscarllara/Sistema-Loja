@@ -57,6 +57,7 @@ import ClientForm from '@/components/ClientForm';
 import SalesHistoryModal from '@/components/SalesHistoryModal';
 import QuotesModal from '@/components/QuotesModal';
 import PaymentsModal from '@/components/PaymentsModal';
+import POSFinancialModal from '@/components/POSFinancialModal';
 import SyncStatus from '@/components/SyncStatus';
 import TechnicalCalculator, { CalculatorPendingItem } from '@/components/TechnicalCalculator';
 import { Produto, Cliente, Configuracoes, ContaBancaria, CaixaSessao, LancamentoFinanceiro } from '@/types/database';
@@ -197,10 +198,13 @@ const POS = () => {
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
+  const [isPOSFinancialOpen, setIsPOSFinancialOpen] = React.useState(false);
+  const [isPOSFinancialAuthOpen, setIsPOSFinancialAuthOpen] = React.useState(false);
   
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [adminPassword, setAdminPassword] = React.useState("");
   const [dailyCashPassword, setDailyCashPassword] = React.useState("");
+  const [posFinancialPassword, setPOSFinancialPassword] = React.useState("");
   const [openingRealValue, setOpeningRealValue] = React.useState("0,00");
   const [closingRealValue, setClosingRealValue] = React.useState("0,00");
   const [cashNotes, setCashNotes] = React.useState("");
@@ -283,6 +287,16 @@ const POS = () => {
     };
   };
 
+  const requestDailyCashAccess = () => {
+    setDailyCashPassword("");
+    setIsDailyCashAuthOpen(true);
+  };
+
+  const requestPOSFinancialAccess = () => {
+    setPOSFinancialPassword("");
+    setIsPOSFinancialAuthOpen(true);
+  };
+
   const handleShortcut = React.useCallback((key: string) => {
     if (key === 'F1') { setSearchInitialTerm(""); setIsSearchOpen(true); }
     if (key === 'F3') {
@@ -297,10 +311,7 @@ const POS = () => {
       if (mode === 'VENDA' && currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de finalizar vendas no PDV."); return; }
       setIsCheckoutOpen(true);
     }
-    if (key === 'F2') {
-      setDailyCashPassword("");
-      setIsDailyCashAuthOpen(true);
-    }
+    if (key === 'F2') requestDailyCashAccess();
     if (key === 'F4') {
       if (cart.length === 0) { showError("Carrinho vazio!"); return; }
       if (selectedCartIndex === null || !cart[selectedCartIndex]) { showError("Clique em um item da venda para selecionar e aperte F4 para excluir."); return; }
@@ -310,7 +321,7 @@ const POS = () => {
     }
     if (key === 'F5') setIsHistoryOpen(true);
     if (key === 'F6') setIsCalculatorOpen(true);
-    if (key === 'F7') setIsPaymentsOpen(true);
+    if (key === 'F7') requestPOSFinancialAccess();
     if (key === 'F8') setIsQuotesOpen(true);
     if (key === 'F9') handleSaveQuote();
   }, [cart, selectedCartIndex, selectedSellerId, mode, currentCashSession]);
@@ -904,7 +915,29 @@ const POS = () => {
     setIsDailyCashAuthOpen(false);
     setDailyCashPassword("");
     setDailyCashFilter('Todos');
+    setDailyCashTypeFilter('Todos');
     setIsDailyCashPanelOpen(true);
+  };
+
+  const handlePOSFinancialAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    const authorizedUser = posFinancialPassword === 'admin'
+      ? { nome: 'Administrador' }
+      : sellers.find(s => {
+        const isAdmin = s.usuario === 'admin' || s.permissoes?.settings || s.permissoes?.financial;
+        const isSupervisor = Boolean(s.permissoes?.is_supervisor);
+        return s.senha === posFinancialPassword && (isAdmin || isSupervisor);
+      });
+
+    if (!authorizedUser) {
+      showError("Senha de administrador ou supervisor inválida.");
+      return;
+    }
+
+    showSuccess(`Financeiro liberado por: ${authorizedUser.nome}`);
+    setIsPOSFinancialAuthOpen(false);
+    setPOSFinancialPassword("");
+    setIsPOSFinancialOpen(true);
   };
 
   const getDailyCashSaleNumber = (item: LancamentoFinanceiro) => {
@@ -1069,10 +1102,22 @@ const POS = () => {
         </div>
 
         <div className="p-4 border-b border-slate-100 bg-white">
-          <div className={cn(
-            "rounded-2xl border p-3 space-y-3",
-            currentCashSession?.status === 'Aberto' ? "bg-emerald-50 border-emerald-200" : currentCashSession?.status === 'Fechado' ? "bg-slate-50 border-slate-200" : "bg-amber-50 border-amber-200"
-          )}>
+          <div
+            role="button"
+            tabIndex={0}
+            title="Clique para abrir o Caixa Diário"
+            onClick={requestDailyCashAccess}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                requestDailyCashAccess();
+              }
+            }}
+            className={cn(
+              "rounded-2xl border p-3 space-y-3 cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5",
+              currentCashSession?.status === 'Aberto' ? "bg-emerald-50 border-emerald-200" : currentCashSession?.status === 'Fechado' ? "bg-slate-50 border-slate-200" : "bg-amber-50 border-amber-200"
+            )}
+          >
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Caixa do PDV</p>
@@ -1094,11 +1139,11 @@ const POS = () => {
               </div>
             </div>
             {currentCashSession?.status === 'Aberto' ? (
-              <Button size="sm" className="w-full h-9 bg-slate-900 hover:bg-slate-800 rounded-xl font-black text-[10px] uppercase" onClick={openCloseCashDialog}>Fechar Caixa</Button>
+              <Button size="sm" className="w-full h-9 bg-slate-900 hover:bg-slate-800 rounded-xl font-black text-[10px] uppercase" onClick={(e) => { e.stopPropagation(); openCloseCashDialog(); }}>Fechar Caixa</Button>
             ) : currentCashSession?.status === 'Fechado' ? (
               <Button size="sm" variant="outline" className="w-full h-9 rounded-xl font-black text-[10px] uppercase" disabled>Caixa Fechado</Button>
             ) : (
-              <Button size="sm" className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black text-[10px] uppercase" onClick={openCashDialog}>Abrir Caixa</Button>
+              <Button size="sm" className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black text-[10px] uppercase" onClick={(e) => { e.stopPropagation(); openCashDialog(); }}>Abrir Caixa</Button>
             )}
           </div>
         </div>
@@ -1129,10 +1174,9 @@ const POS = () => {
             <div className="space-y-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
               <div className="grid grid-cols-1 gap-2">
-                <ShortcutItem keyName="F2" label="Caixa Diário" onClick={() => handleShortcut('F2')} icon={<Wallet size={14} />} color="emerald" />
                 <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
                 <ShortcutItem keyName="F6" label="Calculadora" onClick={() => setIsCalculatorOpen(true)} icon={<Calculator size={14} />} color="indigo" />
-                <ShortcutItem keyName="F7" label="Receber Contas" onClick={() => setIsPaymentsOpen(true)} icon={<Wallet size={14} />} color="emerald" />
+                <ShortcutItem keyName="F7" label="Financeiro" onClick={requestPOSFinancialAccess} icon={<Wallet size={14} />} color="emerald" />
                 <ShortcutItem keyName="F8" label="Orçamentos" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} color="amber" />
               </div>
             </div>
@@ -1431,6 +1475,20 @@ const POS = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isPOSFinancialAuthOpen} onOpenChange={setIsPOSFinancialAuthOpen}>
+        <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
+          <DialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><Wallet size={40} /></div>
+            <DialogTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Financeiro</DialogTitle>
+            <p className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">Informe a senha de administrador ou supervisor para pagar/receber contas.</p>
+          </DialogHeader>
+          <form onSubmit={handlePOSFinancialAccess} className="space-y-5 py-4">
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha autorizada</Label><div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><Input type="password" autoFocus value={posFinancialPassword} onChange={(e) => setPOSFinancialPassword(e.target.value)} className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-indigo-500 rounded-2xl shadow-inner" placeholder="••••••" /></div></div>
+            <DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsPOSFinancialAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-14 bg-indigo-600 hover:bg-indigo-700 rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/20">ACESSAR</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isCashMovementOpen} onOpenChange={setIsCashMovementOpen}>
         <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
           <DialogHeader>
@@ -1725,6 +1783,7 @@ const POS = () => {
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
+      <POSFinancialModal isOpen={isPOSFinancialOpen} onClose={() => setIsPOSFinancialOpen(false)} defaultAccountId={cashAccount?.cd_conta} operatorId={selectedSellerId} onSuccess={loadAllData} />
       <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map((i: any) => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, finalPriceInput: Number(i.valor || 0).toFixed(2).replace('.', ','), quantity: i.qtde, quantityInput: Number(i.qtde || 0).toString().replace('.', ','), selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
