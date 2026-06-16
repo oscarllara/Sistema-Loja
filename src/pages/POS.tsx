@@ -1184,6 +1184,7 @@ const POS = () => {
             <div className="space-y-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
               <div className="grid grid-cols-1 gap-2">
+                <ShortcutItem keyName="F2" label="Caixa Loja" onClick={requestDailyCashAccess} icon={<Wallet size={14} />} color="emerald" />
                 <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
                 <ShortcutItem keyName="F6" label="Calculadora" onClick={() => setIsCalculatorOpen(true)} icon={<Calculator size={14} />} color="indigo" />
                 <ShortcutItem keyName="F7" label="Financeiro" onClick={requestPOSFinancialAccess} icon={<Wallet size={14} />} color="emerald" />
