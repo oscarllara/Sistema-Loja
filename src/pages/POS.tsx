@@ -1032,11 +1032,15 @@ const POS = () => {
         const limite = entity?.limite || 0;
         if (limite > 0 && (status.totalPendente + total) > limite) { setBlockBlockReason("LIMITE EXCEDIDO!"); setPendingCheckoutData(payments); setIsSupervisorModalOpen(true); return; }
       }
-      executeFinalize(payments);
-    } catch (err) { showError("Erro ao processar."); }
+      await executeFinalize(payments);
+    } catch (err) {
+      console.error("Erro ao finalizar checkout:", err);
+      showError("Não foi possível finalizar. Verifique os dados e tente novamente.");
+    }
   };
 
   const executeFinalize = async (payments: any[]) => {
+
     const entity = clients.find(e => e.cd_clientes === selectedEntityId);
 
     if (mode === 'LOCACAO') {

@@ -57,7 +57,7 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
-  onConfirm: (payments: CheckoutPayment[]) => void;
+  onConfirm: (payments: CheckoutPayment[]) => void | Promise<void>;
   clientName: string;
   clientId: number | "";
   onClientChange: (id: number | "") => void;
@@ -90,8 +90,10 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [entities, setEntities] = React.useState<Cliente[]>([]);
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isConfirming, setIsConfirming] = React.useState(false);
 
   const totalPaid = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+
   const remaining = Math.max(0, total - totalPaid);
   const titleEntity = isPurchase ? 'Identificar Fornecedor' : 'Identificar Cliente';
   const emptyEntity = isPurchase ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL';
@@ -130,10 +132,12 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       setAccountNumber("");
       setCheckNumber("");
       setIsBlinking(false);
+      setIsConfirming(false);
     }
   }, [isOpen, total, loadData, isPurchase]);
 
   const getSelectableAccounts = (method: string) => {
+
     if (method === 'Dinheiro') return accounts.filter(a => ['Caixa', 'Retaguarda'].includes(a.tipo));
     return accounts;
   };
@@ -260,7 +264,18 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
     setInputValue(formatMoney(newRemaining));
   };
 
+  const handleConfirm = async () => {
+    if (isConfirming || totalPaid < total) return;
+    setIsConfirming(true);
+    try {
+      await onConfirm(payments);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
   const installmentTitle = isPurchase
+
     ? installmentMethod === 'Boleto' ? 'CONFIGURAR BOLETO'
       : installmentMethod === 'Cheque' ? 'CONFIGURAR CHEQUE'
       : 'CONFIGURAR CRÉDITO / PARCELAS'
@@ -461,11 +476,12 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
 
                   <Button
                     className={cn("w-full h-16 text-lg font-black gap-2 shadow-lg", totalPaid >= total ? "bg-emerald-600" : "bg-slate-200 text-slate-400")}
-                    disabled={totalPaid < total}
-                    onClick={() => onConfirm(payments)}
+                    disabled={totalPaid < total || isConfirming}
+                    onClick={handleConfirm}
                   >
-                    <CheckCircle2 size={24} /> {isPurchase ? 'FINALIZAR COMPRA' : 'FINALIZAR (F10)'}
+                    <CheckCircle2 size={24} /> {isConfirming ? (isPurchase ? 'FINALIZANDO COMPRA...' : 'FINALIZANDO...') : (isPurchase ? 'FINALIZAR COMPRA' : 'FINALIZAR (F10)')}
                   </Button>
+
                 </div>
               </div>
             )}
