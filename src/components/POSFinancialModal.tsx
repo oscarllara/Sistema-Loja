@@ -367,7 +367,7 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, paym
                   <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Conta / Caixa</Label>
                   <select value={accountId} onChange={(e) => setAccountId(Number(e.target.value))} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
                     {accounts.map(account => (
-                      <option key={account.cd_conta} value={account.cd_conta}>{account.nome} • {account.tipo} • {Number(account.saldo || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</option>
+                      <option key={account.cd_conta} value={account.cd_conta}>{account.nome}</option>
                     ))}
                   </select>
                 </div>
