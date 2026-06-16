@@ -693,7 +693,10 @@ const POS = () => {
     if (e) e.preventDefault();
     const code = inputCode.trim();
     if (!code) return;
-    if (pendingProduct) { commitToCart(); return; }
+    if (pendingProduct) {
+      if (mode !== 'COMPRA') commitToCart();
+      return;
+    }
     
     let matches = findProductsByCode(products, code);
 
@@ -1803,13 +1806,13 @@ const POS = () => {
             
             <div className="w-24 lg:w-32 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">{mode === 'LOCACAO' ? 'Qtde Equip.' : getBoxSize(pendingProduct) > 0 ? `Metros (${inputUnit})` : `Qtde (${inputUnit})`}</label>
-              <Input ref={qtyRef} value={inputQty} onChange={(e) => handleQtyChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
+              <Input ref={qtyRef} value={inputQty} onChange={(e) => handleQtyChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) { e.preventDefault(); if (mode !== 'COMPRA') commitToCart(); } }} className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-slate-900 text-center shadow-inner" />
             </div>
 
             {getBoxSize(pendingProduct) > 0 && (
               <div className="w-24 lg:w-32 space-y-1.5 animate-in slide-in-from-bottom-2">
                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center block">Caixas (CX)</label>
-                <Input ref={boxesRef} value={inputBoxes} onChange={(e) => handleBoxesChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }} className="h-12 bg-indigo-900 border-none text-xl font-black text-white text-center shadow-inner ring-2 ring-indigo-500/50" />
+                <Input ref={boxesRef} value={inputBoxes} onChange={(e) => handleBoxesChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) { e.preventDefault(); if (mode !== 'COMPRA') commitToCart(); } }} className="h-12 bg-indigo-900 border-none text-xl font-black text-white text-center shadow-inner ring-2 ring-indigo-500/50" />
               </div>
             )}
 
@@ -1835,7 +1838,7 @@ const POS = () => {
                   value={inputUnitPrice}
                   readOnly={mode === 'LOCACAO'}
                   onChange={(e) => mode === 'COMPRA' ? handlePurchaseCostChange(e.target.value) : setInputUnitPrice(formatQtyMask(e.target.value))}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) { e.preventDefault(); if (mode !== 'COMPRA') commitToCart(); } }}
                   className={cn("h-12 border-none text-xl font-black text-emerald-700 text-right pl-8 shadow-inner", mode === 'LOCACAO' ? "bg-amber-50" : "bg-[#E1FFFF]")}
                 />
 
@@ -1852,7 +1855,7 @@ const POS = () => {
                   <Input
                     value={purchaseMarginInput}
                     onChange={(e) => handlePurchaseMarginChange(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                     className="h-12 bg-amber-50 border-none text-lg font-black text-amber-700 text-center shadow-inner"
                   />
                 </div>
@@ -1861,9 +1864,10 @@ const POS = () => {
                   <Input
                     value={purchaseSalePriceInput}
                     onChange={(e) => handlePurchaseSalePriceChange(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) { e.preventDefault(); commitToCart(); } }}
                     className="h-12 bg-blue-50 border-none text-xl font-black text-blue-700 text-right shadow-inner"
                   />
+
                 </div>
               </>
             )}
