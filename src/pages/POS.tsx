@@ -186,10 +186,12 @@ const POS = () => {
   const [cashMovementDescription, setCashMovementDescription] = React.useState("");
   const [cashMovementValue, setCashMovementValue] = React.useState("0,00");
   const [cashMovementMethod, setCashMovementMethod] = React.useState("Dinheiro");
+  const [cashMovementDate, setCashMovementDate] = React.useState("");
   const [isCashTransferOpen, setIsCashTransferOpen] = React.useState(false);
   const [cashTransferSourceId, setCashTransferSourceId] = React.useState<number | "">("");
   const [cashTransferDestinationId, setCashTransferDestinationId] = React.useState<number | "">("");
   const [cashTransferValue, setCashTransferValue] = React.useState("0,00");
+  const [cashTransferDate, setCashTransferDate] = React.useState("");
   const [cashTransferNotes, setCashTransferNotes] = React.useState("");
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
@@ -212,7 +214,8 @@ const POS = () => {
     return parseFloat(val.replace(/\./g, "").replace(",", ".")) || 0;
   };
 
-  const formatMoneyInput = (value: number) => value.toFixed(2).replace('.', ',');
+  const formatMoneyInput = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const normalizeMoneyInput = (value: string) => formatMoneyInput(parseBRNumber(value));
   const today = new Date().toISOString().split('T')[0];
   const cashAccount = React.useMemo(() => contas.find(c => c.tipo === 'Caixa') || contas[0], [contas]);
   const currentCashSession = React.useMemo(() => {
@@ -930,6 +933,7 @@ const POS = () => {
     setCashMovementDescription(type === 'R' ? 'ENTRADA AVULSA' : 'SAÍDA AVULSA');
     setCashMovementValue('0,00');
     setCashMovementMethod('Dinheiro');
+    setCashMovementDate(today);
     setIsCashMovementOpen(true);
   };
 
@@ -943,6 +947,7 @@ const POS = () => {
     setCashTransferSourceId(defaultSourceId);
     setCashTransferDestinationId(defaultDestination?.cd_conta || "");
     setCashTransferValue('0,00');
+    setCashTransferDate(today);
     setCashTransferNotes(`TRANSFERÊNCIA DO ${cashAccount.nome}`);
     setIsCashTransferOpen(true);
   };
@@ -955,14 +960,16 @@ const POS = () => {
     const value = parseBRNumber(cashMovementValue);
     if (value <= 0) { showError("Informe um valor válido."); return; }
     if (!cashMovementDescription.trim()) { showError("Informe a descrição do lançamento."); return; }
+    if (!cashMovementDate) { showError("Informe a data do lançamento."); return; }
+    if (cashMovementDate > today) { showError("Não é permitido lançar com data futura."); return; }
 
     try {
       await db.financeiro.add({
         tipo: cashMovementType,
         descricao: cashMovementDescription.trim().toUpperCase(),
         valor: Number(value.toFixed(2)),
-        data_vencimento: today,
-        data_pagamento: new Date().toISOString(),
+        data_vencimento: cashMovementDate,
+        data_pagamento: `${cashMovementDate}T00:00:00`,
         status: 'Pago',
         categoria: cashMovementType === 'R' ? 'Ajuste' : 'Ajuste',
         meio_pagamento: cashMovementMethod,
@@ -993,13 +1000,15 @@ const POS = () => {
 
     const value = parseBRNumber(cashTransferValue);
     if (value <= 0) { showError("Informe um valor válido."); return; }
+    if (!cashTransferDate) { showError("Informe a data da transferência."); return; }
+    if (cashTransferDate > today) { showError("Não é permitido transferir com data futura."); return; }
 
     try {
       await db.financeiro.transferir({
         cd_conta_origem: Number(cashTransferSourceId),
         cd_conta_destino: Number(cashTransferDestinationId),
         valor: Number(value.toFixed(2)),
-        data: today,
+        data: cashTransferDate,
         obs: cashTransferNotes.trim().toUpperCase()
       });
 
@@ -1428,16 +1437,22 @@ const POS = () => {
           <form onSubmit={handleAddCashMovement} className="space-y-4 py-2">
             <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Caixa</p>
-              <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • {new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')}</p>
+              <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • {new Date(`${cashMovementDate || today}T00:00:00`).toLocaleDateString('pt-BR')}</p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descrição</Label>
-              <Input value={cashMovementDescription} onChange={(e) => setCashMovementDescription(e.target.value)} className="h-12 rounded-2xl font-bold uppercase" autoFocus />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descrição</Label>
+                <Input value={cashMovementDescription} onChange={(e) => setCashMovementDescription(e.target.value)} className="h-12 rounded-2xl font-bold uppercase" autoFocus />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data do lançamento</Label>
+                <Input type="date" value={cashMovementDate} max={today} onChange={(e) => setCashMovementDate(e.target.value)} className="h-12 rounded-2xl font-black" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
-                <Input value={cashMovementValue} onChange={(e) => setCashMovementValue(e.target.value)} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" />
+                <Input value={cashMovementValue} onChange={(e) => setCashMovementValue(e.target.value)} onBlur={() => setCashMovementValue(normalizeMoneyInput(cashMovementValue))} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" />
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pagamento</Label>
@@ -1508,11 +1523,11 @@ const POS = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
-                <Input value={cashTransferValue} onChange={(e) => setCashTransferValue(e.target.value)} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" autoFocus />
+                <Input value={cashTransferValue} onChange={(e) => setCashTransferValue(e.target.value)} onBlur={() => setCashTransferValue(normalizeMoneyInput(cashTransferValue))} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" autoFocus />
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data</Label>
-                <Input value={new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')} className="h-12 rounded-2xl font-black" disabled />
+                <Input type="date" value={cashTransferDate} max={today} onChange={(e) => setCashTransferDate(e.target.value)} className="h-12 rounded-2xl font-black" />
               </div>
             </div>
             <div className="space-y-2">
