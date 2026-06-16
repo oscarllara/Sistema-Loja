@@ -28,9 +28,53 @@ const sanitizeProductPayload = (product: Partial<Produto>) => {
   return payload;
 };
 
+const sanitizeConfigPayload = (config: Partial<Configuracoes>) => {
+  const allowedKeys: (keyof Configuracoes)[] = [
+    'provider_name',
+    'provider_slogan',
+    'provider_cnpj',
+    'provider_tel',
+    'provider_email',
+    'provider_logo',
+    'nome_empresa',
+    'slogan',
+    'cnpj',
+    'inscricao_estadual',
+    'inscricao_municipal',
+    'endereco',
+    'telefone',
+    'tel2',
+    'tel3',
+    'whatsapp_loja',
+    'site_loja',
+    'email_loja',
+    'logo_url',
+    'tipo_impressao',
+    'largura_bobina',
+    'margem_esquerda',
+    'margem_direita',
+    'margem_topo',
+    'margem_rodape',
+    'juros_parcelamento',
+    'juros_atraso',
+    'multa_atraso',
+    'dias_carencia_juros',
+    'payment_account_routes',
+    'whatsapp_suporte'
+  ];
+
+  return allowedKeys.reduce((payload, key) => {
+    if (config[key] !== undefined) {
+      payload[key] = config[key] as never;
+    }
+    return payload;
+  }, {} as Partial<Configuracoes>);
+};
+
 export const db = {
   auth: {
     login: async (usuario: string, senha: string) => {
+
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
@@ -64,7 +108,7 @@ export const db = {
     update: async (data: Partial<Configuracoes>) => {
       const { data: config } = await supabase.from('configuracoes').select('id').single();
       if (config) {
-        const { error } = await supabase.from('configuracoes').update(data).eq('id', config.id);
+        const { error } = await supabase.from('configuracoes').update(sanitizeConfigPayload(data)).eq('id', config.id);
         if (error) throw error;
       }
     }
@@ -72,6 +116,7 @@ export const db = {
   produtos: {
     getAll: async (): Promise<Produto[]> => {
       const pageSize = 1000;
+
       let from = 0;
       let allProducts: Produto[] = [];
 

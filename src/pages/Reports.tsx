@@ -78,15 +78,22 @@ const Reports = () => {
       
       const faturamentoTotal = totalVendas + receitasOperacionais;
 
-      // 2. Custos e Despesas Operacionais
+      // 2. Custos variáveis, custos fixos e despesas operacionais
+      // Fornecedor é compra/custo de mercadoria: não deve pesar como custo fixo.
       const totalCustoProd = filteredVendas.reduce((acc, v) => acc + (v.custo_total || 0), 0);
-      const despesasOperacionais = filteredLancamentos
-        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago')
+      const comprasFornecedorPagas = filteredLancamentos
+        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && l.categoria === 'Fornecedor')
+        .reduce((acc, l) => acc + l.valor, 0);
+      const despesasFixas = filteredLancamentos
+        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && l.categoria !== 'Fornecedor')
         .reduce((acc, l) => acc + l.valor, 0);
 
-      // 3. Lucro Líquido e Margem
-      const lucroLiquido = faturamentoTotal - totalCustoProd - despesasOperacionais;
+      // 3. Lucro bruto, lucro líquido e peso dos custos fixos
+      const lucroBruto = faturamentoTotal - totalCustoProd;
+      const lucroLiquido = lucroBruto - despesasFixas;
+      const margemBruta = faturamentoTotal > 0 ? (lucroBruto / faturamentoTotal) * 100 : 0;
       const margemLucro = faturamentoTotal > 0 ? (lucroLiquido / faturamentoTotal) * 100 : 0;
+      const pesoCustoFixo = faturamentoTotal > 0 ? (despesasFixas / faturamentoTotal) * 100 : 0;
 
       // 4. Ticket Médio
       const ticketMedio = filteredVendas.length > 0 ? totalVendas / filteredVendas.length : 0;
