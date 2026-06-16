@@ -449,15 +449,17 @@ const POS = () => {
     return Math.max(diff, 1);
   };
 
-  const addDaysToDateString = (date: string, days: number) => {
-    const nextDate = new Date(`${date}T00:00:00`);
-    nextDate.setDate(nextDate.getDate() + days);
-    return nextDate.toISOString().split('T')[0];
-  };
+  const toDateOnly = (date: string) => new Date(`${date}T00:00:00`);
 
-  const getMonthDays = (date: string) => {
-    const baseDate = new Date(`${date}T00:00:00`);
-    return new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0).getDate();
+  const toDateString = (date: Date) => date.toISOString().split('T')[0];
+
+  const addOneRentalMonth = (date: string) => {
+    const current = toDateOnly(date);
+    const targetYear = current.getMonth() === 11 ? current.getFullYear() + 1 : current.getFullYear();
+    const targetMonth = (current.getMonth() + 1) % 12;
+    const targetMonthLastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const targetDay = Math.min(current.getDate(), targetMonthLastDay);
+    return toDateString(new Date(targetYear, targetMonth, targetDay));
   };
 
   const addRentalPart = (parts: Partial<Record<PeriodoLocacao, number>>, period: PeriodoLocacao, quantity: number) => ({
@@ -465,23 +467,44 @@ const POS = () => {
     [period]: (parts[period] || 0) + quantity
   });
 
-  const calculateRentalParts = (days: number, startDate: string): Partial<Record<PeriodoLocacao, number>> => {
+  const calculateRemainingRentalParts = (days: number): Partial<Record<PeriodoLocacao, number>> => {
+    if (days <= 0) return {};
     if (days <= 3) return { Diária: days };
     if (days <= 10) return { Semana: 1 };
     if (days <= 18) return { Quinzena: 1 };
+    return { Mês: 1 };
+  };
 
-    const monthDays = getMonthDays(startDate);
-    if (days <= monthDays) return { Mês: 1 };
+  const calculateRentalParts = (startDate: string, endDate: string): Partial<Record<PeriodoLocacao, number>> => {
+    const start = startDate || today;
+    const end = endDate || today;
+    if (end < start) return calculateRemainingRentalParts(1);
 
-    const remainingDays = days - monthDays;
-    const nextStartDate = addDaysToDateString(startDate, monthDays);
-    const remainingParts = calculateRentalParts(remainingDays, nextStartDate);
-    return addRentalPart(remainingParts, 'Mês', 1);
+    let parts: Partial<Record<PeriodoLocacao, number>> = {};
+    let cursor = start;
+    let months = 0;
+
+    while (addOneRentalMonth(cursor) <= end) {
+      cursor = addOneRentalMonth(cursor);
+      months += 1;
+    }
+
+    if (months > 0) parts = addRentalPart(parts, 'Mês', months);
+
+    const remainingDays = months > 0
+      ? Math.max(0, Math.ceil((toDateOnly(end).getTime() - toDateOnly(cursor).getTime()) / 86400000))
+      : calculateRentalDays(start, end);
+
+    const remainingParts = calculateRemainingRentalParts(remainingDays);
+    return (Object.keys(remainingParts) as PeriodoLocacao[]).reduce(
+      (acc, period) => addRentalPart(acc, period, remainingParts[period] || 0),
+      parts
+    );
   };
 
   const calculateRentalCharge = (product: any, startDate: string, endDate: string) => {
     const days = calculateRentalDays(startDate, endDate);
-    const parts = calculateRentalParts(days, startDate);
+    const parts = calculateRentalParts(startDate, endDate);
     const orderedPeriods = ['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[];
     const missingPrice = orderedPeriods.find(period => (parts[period] || 0) > 0 && getProductRentalPrice(product, period) <= 0);
 
