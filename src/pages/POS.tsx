@@ -127,9 +127,10 @@ const POS = () => {
         db.financeiro.getAll()
       ]);
       setProducts(p);
-      setClients(c.filter(item => item.tipo_entidade === 'C' || item.tipo_entidade === 'A'));
+      setClients(c.filter(item => item.tipo_entidade === 'C' || item.tipo_entidade === 'A' || item.tipo_entidade === 'F'));
       setSellers(c.filter(item => item.is_funcionario || item.usuario === 'admin'));
       setConfig(cfg);
+
       setContas(acc);
       setCashSessions(cashData);
       setLancamentos(finData);
@@ -173,9 +174,12 @@ const POS = () => {
   const [inputQty, setInputQty] = React.useState("0,000");
   const [inputBoxes, setInputBoxes] = React.useState("0");
   const [inputUnitPrice, setInputUnitPrice] = React.useState("0,00");
+  const [purchaseMarginInput, setPurchaseMarginInput] = React.useState("0,00");
+  const [purchaseSalePriceInput, setPurchaseSalePriceInput] = React.useState("0,00");
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
   const [rentalStartDate, setRentalStartDate] = React.useState("");
+
   const [rentalEndDate, setRentalEndDate] = React.useState("");
   
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
@@ -375,8 +379,18 @@ const POS = () => {
       showError("Cadastre o valor de locação deste produto: diária, semanal, quinzenal ou mensal.");
     }
     setInputUnitPrice(price.toFixed(2).replace('.', ','));
+    if (mode === 'COMPRA') {
+      const currentSalePrice = Number(product.venda || 0);
+      const margin = price > 0 && currentSalePrice > 0 ? ((currentSalePrice / price) - 1) * 100 : 0;
+      setPurchaseMarginInput(margin.toFixed(2).replace('.', ','));
+      setPurchaseSalePriceInput(currentSalePrice.toFixed(2).replace('.', ','));
+    } else {
+      setPurchaseMarginInput("0,00");
+      setPurchaseSalePriceInput("0,00");
+    }
     
     const boxSize = getBoxSize(product);
+
     if (boxSize > 0) {
       setInputBoxes("1");
       setInputQty(formatBRNumber(boxSize));
@@ -424,7 +438,39 @@ const POS = () => {
     setInputUnitPrice(price.toFixed(2).replace('.', ','));
   };
 
+  const handlePurchaseCostChange = (value: string) => {
+    const formatted = formatQtyMask(value);
+    setInputUnitPrice(formatted);
+    if (mode !== 'COMPRA') return;
+
+    const cost = parseBRNumber(formatted);
+    const margin = parseBRNumber(purchaseMarginInput);
+    const salePrice = cost > 0 ? cost * (1 + margin / 100) : 0;
+    setPurchaseSalePriceInput(salePrice.toFixed(2).replace('.', ','));
+  };
+
+  const handlePurchaseMarginChange = (value: string) => {
+    const formatted = formatQtyMask(value);
+    setPurchaseMarginInput(formatted);
+
+    const cost = parseBRNumber(inputUnitPrice);
+    const margin = parseBRNumber(formatted);
+    const salePrice = cost > 0 ? cost * (1 + margin / 100) : 0;
+    setPurchaseSalePriceInput(salePrice.toFixed(2).replace('.', ','));
+  };
+
+  const handlePurchaseSalePriceChange = (value: string) => {
+    const formatted = formatQtyMask(value);
+    setPurchaseSalePriceInput(formatted);
+
+    const cost = parseBRNumber(inputUnitPrice);
+    const salePrice = parseBRNumber(formatted);
+    const margin = cost > 0 ? ((salePrice / cost) - 1) * 100 : 0;
+    setPurchaseMarginInput(margin.toFixed(2).replace('.', ','));
+  };
+
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
+
     if (mode === 'COMPRA') return product.compra || 0;
     if (mode === 'LOCACAO') return calculateRentalCharge(product, rentalStartDate || today, rentalEndDate || today).total;
     if (product.fracionado && unit === product.un_fracionada) {
@@ -583,7 +629,8 @@ const POS = () => {
     }
 
     const price = mode === 'LOCACAO' ? Number((rentalCharge?.total || 0).toFixed(2)) : parseBRNumber(inputUnitPrice);
-    const margin = pendingProduct.compra > 0 ? ((price / pendingProduct.compra) - 1) * 100 : 40;
+    const purchaseSalePrice = mode === 'COMPRA' ? parseBRNumber(purchaseSalePriceInput) : Number(pendingProduct.venda || 0);
+    const margin = price > 0 ? ((purchaseSalePrice / price) - 1) * 100 : 0;
 
     setCart(prev => [...prev, {
       ...pendingProduct,
@@ -593,8 +640,12 @@ const POS = () => {
       finalPrice: Number(price.toFixed(2)),
       finalPriceInput: price.toFixed(2).replace('.', ','),
       costPrice: pendingProduct.compra || 0,
-      salePrice: pendingProduct.venda || 0,
+      salePrice: mode === 'COMPRA' ? Number(purchaseSalePrice.toFixed(2)) : (pendingProduct.venda || 0),
+      purchaseSalePrice: mode === 'COMPRA' ? Number(purchaseSalePrice.toFixed(2)) : undefined,
+      purchaseSalePriceInput: mode === 'COMPRA' ? purchaseSalePrice.toFixed(2).replace('.', ',') : undefined,
+      purchaseMarginInput: mode === 'COMPRA' ? margin.toFixed(2).replace('.', ',') : undefined,
       margin: margin,
+
       isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
       conversionFactor: pendingProduct.fator_conversao || 1,
       boxSize: boxSize,
@@ -612,6 +663,8 @@ const POS = () => {
     setInputQty("0,000");
     setInputBoxes("0");
     setInputUnitPrice("0,00");
+    setPurchaseMarginInput("0,00");
+    setPurchaseSalePriceInput("0,00");
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
@@ -624,9 +677,11 @@ const POS = () => {
       setInputQty("0,000");
       setInputBoxes("0");
       setInputUnitPrice("0,00");
+      setPurchaseMarginInput("0,00");
+      setPurchaseSalePriceInput("0,00");
       setInputUnit("UN");
     }
-    
+
     const hasLetters = /[a-zA-Z]/.test(val);
     if (hasLetters && val.length >= 2 && (!pendingProduct || isChangingSelectedProduct)) {
       setSearchInitialTerm(val);
@@ -1111,11 +1166,13 @@ const POS = () => {
         if (item.isFractional && item.conversionFactor > 0) entradaEstoque = item.quantity * item.conversionFactor;
         await db.produtos.update(prod.cd_produto, {
           estoque: Number(prod.estoque || 0) + Number(entradaEstoque || 0),
-          compra: Number(item.finalPrice || prod.compra || 0)
+          compra: Number(item.finalPrice || prod.compra || 0),
+          venda: Number(item.purchaseSalePrice || item.salePrice || prod.venda || 0)
         });
       }
 
-      showSuccess("Compra finalizada com entrada no estoque e contas a pagar lançadas.");
+      showSuccess("Compra finalizada com entrada no estoque, contas a pagar e preço de venda atualizados.");
+
       setCart([]);
       setSelectedCartIndex(null);
       setSelectedSellerId("");
@@ -1125,6 +1182,8 @@ const POS = () => {
       setInputQty("0,000");
       setInputBoxes("0");
       setInputUnitPrice("0,00");
+      setPurchaseMarginInput("0,00");
+      setPurchaseSalePriceInput("0,00");
       setIsCheckoutOpen(false);
       await loadAllData();
       setTimeout(() => sellerRef.current?.focus(), 100);
@@ -1608,8 +1667,11 @@ const POS = () => {
               <div className="flex items-center gap-2">
                 <select className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[150px] lg:min-w-[200px] cursor-pointer hover:text-primary transition-colors" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
                   <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
-                  {clients.map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
+                  {clients
+                    .filter(e => mode === 'COMPRA' ? e.tipo_entidade === 'F' : (e.tipo_entidade === 'C' || e.tipo_entidade === 'A'))
+                    .map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
                 </select>
+
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-white/40 hover:text-white" onClick={() => setIsAddEntityOpen(true)}><UserPlus size={16} /></Button>
               </div>
             </div>
@@ -1665,7 +1727,13 @@ const POS = () => {
                             Calculadora: {item.calculationLabel || `calculado ${Number(item.calculatedQuantity || item.requestedQuantity || 0).toFixed(2).replace('.', ',')}`} • Venda: {Number(item.requestedQuantity || item.quantity || 0).toFixed(2).replace('.', ',')} {item.calculatorType === 'piso' ? 'm²' : 'un'}{item.boxSize > 0 ? ` • Arred.: ${item.boxesInput || Math.ceil(Number(item.quantity || 0) / item.boxSize)} caixa(s) = ${Number(item.quantity || 0).toFixed(2).replace('.', ',')} m²` : ''}
                           </div>
                         )}
+                        {mode === 'COMPRA' && item.purchaseSalePrice !== undefined && (
+                          <div className="text-[10px] font-bold text-blue-700 normal-case">
+                            Venda definida: R$ {Number(item.purchaseSalePrice || 0).toFixed(2).replace('.', ',')} • Margem: {item.purchaseMarginInput || Number(item.margin || 0).toFixed(2).replace('.', ',')}%
+                          </div>
+                        )}
                       </TableCell>
+
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">
 
                         {mode === 'LOCACAO' ? item.rentalCalculation : item?.selectedUnit}
@@ -1766,18 +1834,43 @@ const POS = () => {
                   ref={unitPriceRef}
                   value={inputUnitPrice}
                   readOnly={mode === 'LOCACAO'}
-                  onChange={(e) => setInputUnitPrice(formatQtyMask(e.target.value))}
+                  onChange={(e) => mode === 'COMPRA' ? handlePurchaseCostChange(e.target.value) : setInputUnitPrice(formatQtyMask(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
                   className={cn("h-12 border-none text-xl font-black text-emerald-700 text-right pl-8 shadow-inner", mode === 'LOCACAO' ? "bg-amber-50" : "bg-[#E1FFFF]")}
                 />
+
               </div>
               {mode === 'LOCACAO' && pendingRentalCharge && (
                 <p className="text-[9px] font-black text-amber-400 uppercase text-center truncate">{pendingRentalCharge.description}</p>
               )}
             </div>
 
+            {mode === 'COMPRA' && (
+              <>
+                <div className="w-24 lg:w-28 space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Margem %</label>
+                  <Input
+                    value={purchaseMarginInput}
+                    onChange={(e) => handlePurchaseMarginChange(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
+                    className="h-12 bg-amber-50 border-none text-lg font-black text-amber-700 text-center shadow-inner"
+                  />
+                </div>
+                <div className="w-28 lg:w-36 space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Venda (R$)</label>
+                  <Input
+                    value={purchaseSalePriceInput}
+                    onChange={(e) => handlePurchaseSalePriceChange(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
+                    className="h-12 bg-blue-50 border-none text-xl font-black text-blue-700 text-right shadow-inner"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="w-24 lg:w-28 space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Unidade</label>
+
               <Button type="button" onClick={toggleUnit} disabled={!pendingProduct?.fracionado} className={cn("w-full h-12 rounded-xl flex items-center justify-center font-black text-sm uppercase border shadow-inner transition-all", pendingProduct?.fracionado ? "bg-indigo-600 text-white border-indigo-400 hover:bg-indigo-700" : "bg-slate-800 text-indigo-300 border-slate-700")}>
                 {inputUnit || "UN"}
               </Button>
