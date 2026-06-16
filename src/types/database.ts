@@ -177,9 +177,10 @@ export interface Configuracoes {
   margem_rodape: number;
   
   juros_parcelamento: number;
-  juros_atraso: number; 
-  multa_atraso: number; 
-  dias_carencia_juros: number; 
+  juros_atraso: number;
+  multa_atraso: number;
+  dias_carencia_juros: number;
+  payment_account_routes?: Record<string, number>;
   whatsapp_suporte?: string;
 }
 

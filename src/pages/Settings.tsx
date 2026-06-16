@@ -20,20 +20,28 @@ import {
   Clock,
   Zap,
   Globe,
-  MessageCircle
+  MessageCircle,
+  CreditCard,
+  QrCode,
+  Banknote
 } from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
-import { Configuracoes } from '@/types/database';
+import { Configuracoes, ContaBancaria } from '@/types/database';
 
 const Settings = () => {
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const loadConfig = React.useCallback(async () => {
     try {
-      const data = await db.config.get();
-      setConfig(data);
+      const [data, contasData] = await Promise.all([
+        db.config.get(),
+        db.contas.getAll().catch(() => [])
+      ]);
+      setConfig({ ...data, payment_account_routes: data.payment_account_routes || {} });
+      setContas(contasData || []);
     } catch (err) {
       showError("Erro ao carregar configurações.");
     } finally {
@@ -44,6 +52,17 @@ const Settings = () => {
   React.useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  const setPaymentRoute = (method: string, accountId: string) => {
+    if (!config) return;
+    const routes = { ...(config.payment_account_routes || {}) };
+    if (accountId) {
+      routes[method] = Number(accountId);
+    } else {
+      delete routes[method];
+    }
+    setConfig({ ...config, payment_account_routes: routes });
+  };
 
   const handleSave = async () => {
     if (!config) return;
@@ -141,7 +160,43 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* SEÇÃO 3: DADOS DA LOJA (RESTAURADA) */}
+          {/* SEÇÃO 3: DESTINO DOS RECEBIMENTOS */}
+          <Card className="border-none shadow-sm md:col-span-2">
+            <CardHeader className="border-b bg-emerald-700 text-white rounded-t-xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <CreditCard size={18} /> Conta destino por forma de pagamento
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-sm text-slate-500 font-semibold">
+                Configure onde cada recebimento cai de verdade. Exemplo: PIX pode entrar direto na conta Sicoob, enquanto Dinheiro fica no Caixa Loja.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { method: 'Dinheiro', icon: Banknote, label: 'Dinheiro' },
+                  { method: 'PIX', icon: QrCode, label: 'PIX' },
+                  { method: 'Cartão Débito', icon: CreditCard, label: 'Cartão Débito' },
+                  { method: 'Cartão Crédito', icon: CreditCard, label: 'Cartão Crédito' }
+                ].map(({ method, icon: Icon, label }) => (
+                  <div key={method} className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <Label className="flex items-center gap-2 font-black text-slate-700"><Icon size={16} className="text-emerald-700" /> {label}</Label>
+                    <select
+                      value={config.payment_account_routes?.[method] || ""}
+                      onChange={(e) => setPaymentRoute(method, e.target.value)}
+                      className="w-full h-11 rounded-xl border border-input bg-white px-3 text-sm font-bold"
+                    >
+                      <option value="">Usar Caixa Loja padrão</option>
+                      {contas.map(conta => (
+                        <option key={conta.cd_conta} value={conta.cd_conta}>{conta.nome} • {conta.tipo}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* SEÇÃO 4: DADOS DA LOJA (RESTAURADA) */}
           <Card className="border-none shadow-sm md:col-span-2">
             <CardHeader className="border-b bg-indigo-600 text-white rounded-t-xl">
               <CardTitle className="text-sm font-bold flex items-center gap-2">

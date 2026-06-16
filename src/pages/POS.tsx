@@ -692,6 +692,11 @@ const POS = () => {
 
   const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  const getPaymentAccount = React.useCallback((method: string) => {
+    const routedAccountId = config?.payment_account_routes?.[method];
+    return contas.find(conta => conta.cd_conta === routedAccountId) || cashAccount;
+  }, [cashAccount, config?.payment_account_routes, contas]);
+
   const getDailyCashGroup = (movement: LancamentoFinanceiro): DailyCashFilter => {
     if (movement.meio_pagamento === 'PIX') return 'PIX';
     if (movement.meio_pagamento === 'Cartão Crédito' || movement.meio_pagamento === 'Cartão Débito') return 'Cartão';
@@ -839,8 +844,8 @@ const POS = () => {
 
     const savedSale = await db.vendas.add(payload);
     const saleId = savedSale?.cd_venda;
-    const caixaLoja = contas.find(c => c.tipo === 'Caixa') || contas[0];
-    let saldoCaixa = Number(caixaLoja?.saldo || 0);
+    const accountBalances = new Map<number, number>();
+    contas.forEach(conta => accountBalances.set(conta.cd_conta, Number(conta.saldo || 0)));
 
     for (const p of payments) {
       if (p.method === 'Crediário') {
@@ -863,7 +868,10 @@ const POS = () => {
             cd_func: Number(selectedSellerId)
           });
         }
-      } else if (caixaLoja && Number(p.amount || 0) > 0) {
+      } else if (Number(p.amount || 0) > 0) {
+        const destinoPagamento = getPaymentAccount(p.method);
+        if (!destinoPagamento) continue;
+
         await db.financeiro.add({
           tipo: 'R',
           descricao: `VENDA PDV #${saleId || Date.now().toString().slice(-6)} - ${payload.nome_cliente}`,
@@ -875,12 +883,14 @@ const POS = () => {
           nome_entidade: payload.nome_cliente,
           categoria: 'Venda',
           meio_pagamento: p.method,
-          cd_conta: caixaLoja.cd_conta,
+          cd_conta: destinoPagamento.cd_conta,
           cd_venda: saleId,
           cd_func: Number(selectedSellerId)
         });
-        saldoCaixa += Number(p.amount || 0);
-        await db.contas.update(caixaLoja.cd_conta, { saldo: saldoCaixa });
+        const saldoAtual = accountBalances.get(destinoPagamento.cd_conta) ?? Number(destinoPagamento.saldo || 0);
+        const novoSaldo = Number((saldoAtual + Number(p.amount || 0)).toFixed(2));
+        accountBalances.set(destinoPagamento.cd_conta, novoSaldo);
+        await db.contas.update(destinoPagamento.cd_conta, { saldo: novoSaldo });
       }
     }
     
@@ -1898,7 +1908,7 @@ const POS = () => {
 
       <SalesHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onReprint={(v) => { setLastActionData({ ...v, type: 'Venda' }); setIsPrintOpen(true); }} mode={mode} />
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
-      <POSFinancialModal isOpen={isPOSFinancialOpen} onClose={() => setIsPOSFinancialOpen(false)} defaultAccountId={cashAccount?.cd_conta} operatorId={selectedSellerId} onSuccess={loadAllData} />
+      <POSFinancialModal isOpen={isPOSFinancialOpen} onClose={() => setIsPOSFinancialOpen(false)} defaultAccountId={cashAccount?.cd_conta} operatorId={selectedSellerId} paymentAccountRoutes={config?.payment_account_routes || {}} onSuccess={loadAllData} />
       <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map((i: any) => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, finalPriceInput: Number(i.valor || 0).toFixed(2).replace('.', ','), quantity: i.qtde, quantityInput: Number(i.qtde || 0).toString().replace('.', ','), selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
       <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }} onSelect={startInsertion} initialSearch={searchInitialTerm} />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />

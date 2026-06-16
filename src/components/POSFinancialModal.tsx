@@ -38,6 +38,7 @@ interface POSFinancialModalProps {
   onClose: () => void;
   defaultAccountId?: number;
   operatorId?: number | "";
+  paymentAccountRoutes?: Record<string, number>;
   onSuccess?: () => void;
 }
 
@@ -55,7 +56,7 @@ const formatMoneyValue = (value: number) => value.toLocaleString('pt-BR', { mini
 
 const parseInputMoney = (value: string) => Number(value.replace(/\./g, '').replace(',', '.')) || 0;
 
-const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSuccess }: POSFinancialModalProps) => {
+const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, paymentAccountRoutes = {}, onSuccess }: POSFinancialModalProps) => {
   const [entries, setEntries] = React.useState<LancamentoFinanceiro[]>([]);
   const [accounts, setAccounts] = React.useState<ContaBancaria[]>([]);
   const [entities, setEntities] = React.useState<Cliente[]>([]);
@@ -115,6 +116,13 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
       setNewEntryCategory(type === 'R' ? 'Venda' : 'Fornecedor');
     }
   }, [isNewEntryOpen, activeType]);
+
+  React.useEffect(() => {
+    const routedAccount = paymentAccountRoutes[method];
+    if (routedAccount) {
+      setAccountId(routedAccount);
+    }
+  }, [method, paymentAccountRoutes]);
 
   const newEntryEntities = React.useMemo(() => {
     const expectedType = newEntryType === 'R' ? 'C' : 'F';
