@@ -51,6 +51,8 @@ const formatInputMoney = (value: string | number) => {
   return number.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const formatMoneyValue = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const parseInputMoney = (value: string) => Number(value.replace(/\./g, '').replace(',', '.')) || 0;
 
 const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSuccess }: POSFinancialModalProps) => {
@@ -63,6 +65,7 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
   const [selectedEntry, setSelectedEntry] = React.useState<LancamentoFinanceiro | null>(null);
   const [accountId, setAccountId] = React.useState<number | "">(defaultAccountId || "");
   const [method, setMethod] = React.useState<MeioPagamento>('Dinheiro');
+  const [settlementValue, setSettlementValue] = React.useState('0,00');
   const [isNewEntryOpen, setIsNewEntryOpen] = React.useState(false);
   const [newEntryType, setNewEntryType] = React.useState<'R' | 'P'>('R');
   const [newEntryEntityId, setNewEntryEntityId] = React.useState<number | "">("");
@@ -133,6 +136,12 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
 
   const totalPending = filteredEntries.reduce((acc, entry) => acc + Number(entry.valor || 0), 0);
 
+  const selectEntryForSettlement = (entry: LancamentoFinanceiro) => {
+    setSelectedEntry(entry);
+    setSettlementValue(formatMoneyValue(Number(entry.valor || 0)));
+    setMethod(activeType === 'R' ? 'Dinheiro' : 'PIX');
+  };
+
   const handleSettle = async () => {
     if (!selectedEntry) return;
     if (!accountId) {
@@ -140,16 +149,31 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
       return;
     }
 
+    const amount = parseInputMoney(settlementValue);
+    const pendingAmount = Number(selectedEntry.valor || 0);
+    if (amount <= 0) {
+      showError('Informe um valor válido para baixa.');
+      return;
+    }
+    if (amount > pendingAmount) {
+      showError('O valor da baixa não pode ser maior que o saldo da conta.');
+      return;
+    }
+
     try {
       await db.financeiro.baixar(
         selectedEntry.cd_lancamento,
         Number(accountId),
-        Number(selectedEntry.valor || 0),
+        Number(amount.toFixed(2)),
         method,
         operatorId ? Number(operatorId) : undefined
       );
-      showSuccess(activeType === 'R' ? 'Recebimento confirmado.' : 'Pagamento confirmado.');
+      const isPartial = amount < pendingAmount;
+      showSuccess(isPartial
+        ? `${activeType === 'R' ? 'Recebimento' : 'Pagamento'} parcial confirmado. Saldo restante: ${formatMoneyValue(pendingAmount - amount)}.`
+        : `${activeType === 'R' ? 'Recebimento' : 'Pagamento'} confirmado.`);
       setSelectedEntry(null);
+      setSettlementValue('0,00');
       await loadData();
       onSuccess?.();
     } catch {
@@ -281,7 +305,7 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
                       <TableCell className="font-bold text-slate-500 truncate" title={entry.nome_entidade || '-'}>{entry.nome_entidade || '-'}</TableCell>
                       <TableCell className={cn("text-right font-black whitespace-nowrap", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{Number(entry.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                       <TableCell className="text-center">
-                        <Button size="sm" className={cn("h-8 w-24 rounded-xl font-black text-xs", activeType === 'R' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")} onClick={() => { setSelectedEntry(entry); setMethod(activeType === 'R' ? 'Dinheiro' : 'PIX'); }}>
+                        <Button size="sm" className={cn("h-8 w-24 rounded-xl font-black text-xs", activeType === 'R' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")} onClick={() => selectEntryForSettlement(entry)}>
                           <CheckCircle2 size={13} className="mr-1" /> {activeType === 'R' ? 'Receber' : 'Pagar'}
                         </Button>
                       </TableCell>
@@ -311,6 +335,15 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
                 <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
                   <p className="text-xs font-bold text-slate-600 line-clamp-3">{selectedEntry.descricao}</p>
                   <p className={cn("text-3xl font-black mt-2", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{Number(selectedEntry.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Saldo pendente</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor da baixa</Label>
+                  <Input value={settlementValue} onChange={(e) => setSettlementValue(formatInputMoney(e.target.value))} className="h-12 rounded-2xl font-black text-lg" />
+                  {selectedEntry && parseInputMoney(settlementValue) < Number(selectedEntry.valor || 0) && parseInputMoney(settlementValue) > 0 && (
+                    <p className="text-xs font-bold text-amber-600">Baixa parcial: ficará pendente R$ {formatMoneyValue(Number(selectedEntry.valor || 0) - parseInputMoney(settlementValue))}.</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">

@@ -287,22 +287,53 @@ export const db = {
       if (lError) throw lError;
 
       if (lanc) {
-        const updateData: any = {
-          status: 'Pago',
-          data_pagamento: new Date().toISOString(),
-          cd_conta
-        };
-        if (meio) updateData.meio_pagamento = meio;
-        if (cd_func) updateData.cd_func = cd_func;
+        const valorOriginal = Number(lanc.valor || 0);
+        const valorBaixa = Number(valor || valorOriginal);
+        if (valorBaixa <= 0) throw new Error('Valor de baixa inválido.');
+        if (valorBaixa > valorOriginal) throw new Error('Valor de baixa maior que o saldo pendente.');
 
-        const { error: uError } = await supabase.from('financeiro').update(updateData).eq('cd_lancamento', id);
-        if (uError) throw uError;
+        const dataPagamento = new Date().toISOString();
+        const isPartial = valorBaixa < valorOriginal;
+
+        if (isPartial) {
+          const valorRestante = Number((valorOriginal - valorBaixa).toFixed(2));
+          const { error: partialUpdateError } = await supabase
+            .from('financeiro')
+            .update({ valor: valorRestante, status: 'Pendente', data_pagamento: null, cd_conta: null })
+            .eq('cd_lancamento', id);
+          if (partialUpdateError) throw partialUpdateError;
+
+          const { cd_lancamento, ...lancamentoPago } = lanc;
+          const paidPayload: any = {
+            ...lancamentoPago,
+            descricao: `${lanc.descricao} - BAIXA PARCIAL`,
+            valor: Number(valorBaixa.toFixed(2)),
+            status: 'Pago',
+            data_pagamento: dataPagamento,
+            cd_conta
+          };
+          if (meio) paidPayload.meio_pagamento = meio;
+          if (cd_func) paidPayload.cd_func = cd_func;
+
+          const { error: paidInsertError } = await supabase.from('financeiro').insert([paidPayload]);
+          if (paidInsertError) throw paidInsertError;
+        } else {
+          const updateData: any = {
+            status: 'Pago',
+            data_pagamento: dataPagamento,
+            cd_conta
+          };
+          if (meio) updateData.meio_pagamento = meio;
+          if (cd_func) updateData.cd_func = cd_func;
+
+          const { error: uError } = await supabase.from('financeiro').update(updateData).eq('cd_lancamento', id);
+          if (uError) throw uError;
+        }
 
         const { data: conta, error: cError } = await supabase.from('contas').select('saldo').eq('cd_conta', cd_conta).single();
         if (cError) throw cError;
 
         if (conta) {
-          const valorBaixa = valor || lanc.valor;
           const novoSaldo = lanc.tipo === 'R' ? Number(conta.saldo) + Number(valorBaixa) : Number(conta.saldo) - Number(valorBaixa);
           const { error: sError } = await supabase.from('contas').update({ saldo: novoSaldo }).eq('cd_conta', cd_conta);
           if (sError) throw sError;
