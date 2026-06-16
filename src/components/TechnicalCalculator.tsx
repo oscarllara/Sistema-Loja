@@ -63,7 +63,9 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
     const comp = toNumber(piso.comp);
     const largura = toNumber(piso.larg);
     const altura = toNumber(piso.altura);
-    const areaBruta = piso.aplicacao === 'Parede' ? comp * altura : comp * largura;
+    const areaBruta = piso.aplicacao === 'Parede'
+      ? ((comp * altura) * 2) + ((largura * altura) * 2)
+      : comp * largura;
     const areaVaos = piso.aplicacao === 'Parede'
       ? vaos.reduce((acc, vao) => acc + (toNumber(vao.largura) * toNumber(vao.altura)), 0)
       : 0;
@@ -200,25 +202,42 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{piso.aplicacao === 'Parede' ? 'Largura da Parede (m)' : 'Comprimento (m)'}</Label>
-                    <Input type="number" step="0.01" value={piso.comp} onChange={(e) => setPiso({...piso, comp: e.target.value})} placeholder="0,00" />
+                {piso.aplicacao === 'Parede' ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Comprimento (m)</Label>
+                        <Input type="number" step="0.01" value={piso.comp} onChange={(e) => setPiso({...piso, comp: e.target.value})} placeholder="0,00" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Largura (m)</Label>
+                        <Input type="number" step="0.01" value={piso.larg} onChange={(e) => setPiso({...piso, larg: e.target.value})} placeholder="0,00" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Altura (m)</Label>
+                        <Input type="number" step="0.01" value={piso.altura} onChange={(e) => setPiso({...piso, altura: e.target.value})} placeholder="0,00" />
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs font-bold text-slate-600">
+                      Fórmula parede: ((comprimento × altura) × 2) + ((largura × altura) × 2). Depois desconta os vãos e soma +10%.
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>{piso.aplicacao === 'Parede' ? 'Altura da Parede (m)' : 'Largura (m)'}</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={piso.aplicacao === 'Parede' ? piso.altura : piso.larg}
-                      onChange={(e) => setPiso({...piso, [piso.aplicacao === 'Parede' ? 'altura' : 'larg']: e.target.value})}
-                      placeholder="0,00"
-                    />
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Comprimento (m)</Label>
+                      <Input type="number" step="0.01" value={piso.comp} onChange={(e) => setPiso({...piso, comp: e.target.value})} placeholder="0,00" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Largura (m)</Label>
+                      <Input type="number" step="0.01" value={piso.larg} onChange={(e) => setPiso({...piso, larg: e.target.value})} placeholder="0,00" />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {piso.aplicacao === 'Parede' && (
                   <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 space-y-3">
+
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <Label className="font-black text-amber-900">Diminuir vãos de portas/janelas</Label>
