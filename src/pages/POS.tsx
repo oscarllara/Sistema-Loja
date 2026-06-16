@@ -741,6 +741,16 @@ const POS = () => {
     setIsCloseCashOpen(true);
   };
 
+  const handleDailyCashCloseRequest = () => {
+    if (currentCashSession?.status !== 'Aberto') {
+      showError("O caixa precisa estar aberto para ser fechado.");
+      return;
+    }
+
+    setIsDailyCashPanelOpen(false);
+    openCloseCashDialog();
+  };
+
   const handleCloseCash = async () => {
     if (!currentCashSession) return;
 
@@ -1632,6 +1642,9 @@ const POS = () => {
                   </Button>
                   <Button variant="outline" className="bg-sky-500/15 border-sky-400/20 text-sky-100 hover:bg-sky-500/25 rounded-2xl font-black" onClick={openCashTransferDialog}>
                     <ArrowRightLeft size={16} className="mr-2" /> Transferência
+                  </Button>
+                  <Button variant="outline" className="bg-amber-500/15 border-amber-400/20 text-amber-100 hover:bg-amber-500/25 rounded-2xl font-black" onClick={handleDailyCashCloseRequest}>
+                    <LogOut size={16} className="mr-2" /> Fechar Caixa
                   </Button>
                   <Button variant="outline" className="bg-white/10 border-white/10 text-white hover:bg-white/20 rounded-2xl font-black" onClick={loadAllData}>
                     <RefreshCw size={16} className="mr-2" /> Atualizar
