@@ -181,6 +181,9 @@ const POS = () => {
   const [isCloseCashOpen, setIsCloseCashOpen] = React.useState(false);
   const [isDailyCashAuthOpen, setIsDailyCashAuthOpen] = React.useState(false);
   const [isDailyCashPanelOpen, setIsDailyCashPanelOpen] = React.useState(false);
+  const [dailyCashAccountId, setDailyCashAccountId] = React.useState<number | "">("");
+  const [isOtherAccountsAuthOpen, setIsOtherAccountsAuthOpen] = React.useState(false);
+  const [isOtherAccountsOpen, setIsOtherAccountsOpen] = React.useState(false);
   const [dailyCashFilter, setDailyCashFilter] = React.useState<DailyCashFilter>('Todos');
   const [dailyCashTypeFilter, setDailyCashTypeFilter] = React.useState<'Todos' | 'R' | 'P'>('Todos');
   const [isCashMovementOpen, setIsCashMovementOpen] = React.useState(false);
@@ -204,6 +207,7 @@ const POS = () => {
   const [lastActionData, setLastActionData] = React.useState<any>(null);
   const [adminPassword, setAdminPassword] = React.useState("");
   const [dailyCashPassword, setDailyCashPassword] = React.useState("");
+  const [otherAccountsPassword, setOtherAccountsPassword] = React.useState("");
   const [posFinancialPassword, setPOSFinancialPassword] = React.useState("");
   const [openingRealValue, setOpeningRealValue] = React.useState("0,00");
   const [closingRealValue, setClosingRealValue] = React.useState("0,00");
@@ -234,6 +238,11 @@ const POS = () => {
       .sort((a, b) => b.data_caixa.localeCompare(a.data_caixa))[0];
   }, [cashAccount, cashSessions, today]);
   const expectedOpeningBalance = Number(lastClosedCashSession?.saldo_para_dia_seguinte ?? lastClosedCashSession?.saldo_real_fechamento ?? cashAccount?.saldo ?? 0);
+  const dailyCashAccount = React.useMemo(() => {
+    if (!dailyCashAccountId) return cashAccount;
+    return contas.find(c => c.cd_conta === dailyCashAccountId) || cashAccount;
+  }, [cashAccount, contas, dailyCashAccountId]);
+  const isDailyCashMainAccount = Boolean(cashAccount && dailyCashAccount?.cd_conta === cashAccount.cd_conta);
 
   const formatQtyMask = (value: string) => {
     let val = value.replace(/[^\d,]/g, "");
@@ -660,6 +669,18 @@ const POS = () => {
   const cashExitsToday = cashMovementsToday.filter(l => l.tipo === 'P').reduce((acc, l) => acc + Number(l.valor || 0), 0);
   const cashOpeningBalance = Number(currentCashSession?.saldo_real_abertura || 0);
   const cashSystemBalance = cashOpeningBalance + cashEntriesToday - cashExitsToday;
+  const dailyCashMovementsToday = React.useMemo(() => {
+    if (!dailyCashAccount) return [];
+    return lancamentos.filter(l => {
+      if (l.status !== 'Pago' || l.cd_conta !== dailyCashAccount.cd_conta) return false;
+      const date = (l.data_pagamento || l.data_vencimento || '').split('T')[0];
+      return date === today;
+    });
+  }, [dailyCashAccount, lancamentos, today]);
+  const dailyCashEntriesToday = dailyCashMovementsToday.filter(l => l.tipo === 'R').reduce((acc, l) => acc + Number(l.valor || 0), 0);
+  const dailyCashExitsToday = dailyCashMovementsToday.filter(l => l.tipo === 'P').reduce((acc, l) => acc + Number(l.valor || 0), 0);
+  const dailyCashOpeningBalance = isDailyCashMainAccount ? cashOpeningBalance : 0;
+  const dailyCashSystemBalance = dailyCashOpeningBalance + dailyCashEntriesToday - dailyCashExitsToday;
   const selectedCashTransferSource = React.useMemo(
     () => contas.find(conta => conta.cd_conta === Number(cashTransferSourceId)),
     [contas, cashTransferSourceId]
@@ -680,11 +701,11 @@ const POS = () => {
 
   const getDailyCashTotals = (filter: DailyCashFilter) => {
     const movements = filter === 'Todos'
-      ? cashMovementsToday
-      : cashMovementsToday.filter(item => getDailyCashGroup(item) === filter);
+      ? dailyCashMovementsToday
+      : dailyCashMovementsToday.filter(item => getDailyCashGroup(item) === filter);
     const entries = movements.filter(item => item.tipo === 'R').reduce((acc, item) => acc + Number(item.valor || 0), 0);
     const exits = movements.filter(item => item.tipo === 'P').reduce((acc, item) => acc + Number(item.valor || 0), 0);
-    const opening = filter === 'Todos' || filter === 'Dinheiro' ? cashOpeningBalance : 0;
+    const opening = filter === 'Todos' || filter === 'Dinheiro' ? dailyCashOpeningBalance : 0;
     return { entries, exits, total: opening + entries - exits, count: movements.length };
   };
 
@@ -693,15 +714,15 @@ const POS = () => {
     { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Recebido em espécie', icon: Banknote, color: 'emerald', ...getDailyCashTotals('Dinheiro') },
     { filter: 'Cartão' as const, title: 'Cartões', description: 'Débito e crédito', icon: CreditCard, color: 'indigo', ...getDailyCashTotals('Cartão') },
     { filter: 'PIX' as const, title: 'PIX', description: 'Transferências instantâneas', icon: QrCode, color: 'cyan', ...getDailyCashTotals('PIX') },
-  ], [cashMovementsToday, cashOpeningBalance]);
+  ], [dailyCashMovementsToday, dailyCashOpeningBalance]);
 
   const filteredDailyCashMovements = React.useMemo(() => {
-    return cashMovementsToday.filter(item => {
+    return dailyCashMovementsToday.filter(item => {
       const matchesPayment = dailyCashFilter === 'Todos' || getDailyCashGroup(item) === dailyCashFilter;
       const matchesType = dailyCashTypeFilter === 'Todos' || item.tipo === dailyCashTypeFilter;
       return matchesPayment && matchesType;
     });
-  }, [cashMovementsToday, dailyCashFilter, dailyCashTypeFilter]);
+  }, [dailyCashMovementsToday, dailyCashFilter, dailyCashTypeFilter]);
 
   const openCashDialog = () => {
     setOpeningRealValue(formatMoneyInput(expectedOpeningBalance));
@@ -742,6 +763,10 @@ const POS = () => {
   };
 
   const handleDailyCashCloseRequest = () => {
+    if (!isDailyCashMainAccount) {
+      showError("Para fechar o caixa, volte para o Caixa Loja. Outras contas são apenas consulta administrativa.");
+      return;
+    }
     if (currentCashSession?.status !== 'Aberto') {
       showError("O caixa precisa estar aberto para ser fechado.");
       return;
@@ -924,9 +949,42 @@ const POS = () => {
     showSuccess(`Acesso liberado por: ${authorizedUser.nome}`);
     setIsDailyCashAuthOpen(false);
     setDailyCashPassword("");
+    setDailyCashAccountId(cashAccount?.cd_conta || "");
     setDailyCashFilter('Todos');
     setDailyCashTypeFilter('Todos');
     setIsDailyCashPanelOpen(true);
+  };
+
+  const requestOtherAccountsAccess = () => {
+    setOtherAccountsPassword("");
+    setIsOtherAccountsAuthOpen(true);
+  };
+
+  const handleOtherAccountsAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    const authorizedAdmin = otherAccountsPassword === 'admin'
+      ? { nome: 'Administrador' }
+      : sellers.find(s => {
+        const isAdmin = s.usuario === 'admin' || s.permissoes?.settings || s.permissoes?.financial;
+        return s.senha === otherAccountsPassword && isAdmin;
+      });
+
+    if (!authorizedAdmin) {
+      showError("Acesso restrito ao administrador. Senha de supervisor não libera outras contas.");
+      return;
+    }
+
+    showSuccess(`Acesso administrativo liberado por: ${authorizedAdmin.nome}`);
+    setIsOtherAccountsAuthOpen(false);
+    setOtherAccountsPassword("");
+    setIsOtherAccountsOpen(true);
+  };
+
+  const selectDailyCashAccount = (accountId: number) => {
+    setDailyCashAccountId(accountId);
+    setDailyCashFilter('Todos');
+    setDailyCashTypeFilter('Todos');
+    setIsOtherAccountsOpen(false);
   };
 
   const handlePOSFinancialAccess = (e: React.FormEvent) => {
@@ -1486,6 +1544,46 @@ const POS = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isOtherAccountsAuthOpen} onOpenChange={setIsOtherAccountsAuthOpen}>
+        <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
+          <DialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-2 shadow-inner"><CreditCard size={40} /></div>
+            <DialogTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Outras Contas</DialogTitle>
+            <p className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">Acesso exclusivo do administrador. Senha de supervisor não libera contas bancárias.</p>
+          </DialogHeader>
+          <form onSubmit={handleOtherAccountsAccess} className="space-y-5 py-4">
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha admin</Label><div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><Input type="password" autoFocus value={otherAccountsPassword} onChange={(e) => setOtherAccountsPassword(e.target.value)} className="pl-12 h-14 text-2xl font-black border-2 border-slate-200 focus:border-indigo-500 rounded-2xl shadow-inner" placeholder="••••••" /></div></div>
+            <DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl font-bold text-slate-500" onClick={() => setIsOtherAccountsAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-14 bg-indigo-600 hover:bg-indigo-700 rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/20">LIBERAR</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isOtherAccountsOpen} onOpenChange={setIsOtherAccountsOpen}>
+        <DialogContent className="max-w-2xl border-none shadow-2xl rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2"><CreditCard className="text-indigo-600" /> Selecionar Conta/Caixa</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2 max-h-[60vh] overflow-y-auto">
+            {contas.map(conta => (
+              <button key={conta.cd_conta} type="button" onClick={() => selectDailyCashAccount(conta.cd_conta)} className={cn("text-left rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg", dailyCashAccount?.cd_conta === conta.cd_conta ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-100" : "bg-white border-slate-200") }>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-black text-slate-900 uppercase leading-tight">{conta.nome}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{conta.tipo}</p>
+                  </div>
+                  <Wallet size={20} className={dailyCashAccount?.cd_conta === conta.cd_conta ? "text-indigo-600" : "text-slate-300"} />
+                </div>
+                <p className="text-xl font-black text-indigo-700 mt-3">{formatCurrency(Number(conta.saldo || 0))}</p>
+              </button>
+            ))}
+          </div>
+          <DialogFooter className="gap-3">
+            <Button type="button" variant="outline" className="rounded-xl font-bold" onClick={() => selectDailyCashAccount(cashAccount?.cd_conta || 0)} disabled={!cashAccount}>Voltar Caixa Loja</Button>
+            <Button type="button" className="rounded-xl font-black bg-slate-900 hover:bg-slate-800" onClick={() => setIsOtherAccountsOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isPOSFinancialAuthOpen} onOpenChange={setIsPOSFinancialAuthOpen}>
         <DialogContent className="max-w-md border-none shadow-2xl rounded-3xl">
           <DialogHeader className="flex flex-col items-center text-center space-y-3">
@@ -1630,21 +1728,24 @@ const POS = () => {
                   <div>
                     <DialogTitle className="text-3xl font-black uppercase tracking-tighter">Caixa Diário do PDV</DialogTitle>
                     <p className="text-sm text-slate-400 font-bold mt-1">
-                      {cashAccount?.nome || 'Sem caixa'} • {new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')} • {currentCashSession?.status || 'Fechado'}
+                      {dailyCashAccount?.nome || 'Sem conta'} • {dailyCashAccount?.tipo || 'Conta'} • {new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')} • {isDailyCashMainAccount ? (currentCashSession?.status || 'Fechado') : 'Consulta Admin'}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" className="bg-emerald-500/15 border-emerald-400/20 text-emerald-100 hover:bg-emerald-500/25 rounded-2xl font-black" onClick={() => openCashMovementDialog('R')}>
+                  <Button variant="outline" disabled={!isDailyCashMainAccount} className="bg-emerald-500/15 border-emerald-400/20 text-emerald-100 hover:bg-emerald-500/25 rounded-2xl font-black disabled:opacity-40" onClick={() => openCashMovementDialog('R')}>
                     <ArrowDownCircle size={16} className="mr-2" /> Nova Entrada
                   </Button>
-                  <Button variant="outline" className="bg-rose-500/15 border-rose-400/20 text-rose-100 hover:bg-rose-500/25 rounded-2xl font-black" onClick={() => openCashMovementDialog('P')}>
+                  <Button variant="outline" disabled={!isDailyCashMainAccount} className="bg-rose-500/15 border-rose-400/20 text-rose-100 hover:bg-rose-500/25 rounded-2xl font-black disabled:opacity-40" onClick={() => openCashMovementDialog('P')}>
                     <ArrowUpCircle size={16} className="mr-2" /> Nova Saída
                   </Button>
-                  <Button variant="outline" className="bg-sky-500/15 border-sky-400/20 text-sky-100 hover:bg-sky-500/25 rounded-2xl font-black" onClick={openCashTransferDialog}>
+                  <Button variant="outline" disabled={!isDailyCashMainAccount} className="bg-sky-500/15 border-sky-400/20 text-sky-100 hover:bg-sky-500/25 rounded-2xl font-black disabled:opacity-40" onClick={openCashTransferDialog}>
                     <ArrowRightLeft size={16} className="mr-2" /> Transferência
                   </Button>
-                  <Button variant="outline" className="bg-amber-500/15 border-amber-400/20 text-amber-100 hover:bg-amber-500/25 rounded-2xl font-black" onClick={handleDailyCashCloseRequest}>
+                  <Button variant="outline" className="bg-indigo-500/15 border-indigo-400/20 text-indigo-100 hover:bg-indigo-500/25 rounded-2xl font-black" onClick={requestOtherAccountsAccess}>
+                    <CreditCard size={16} className="mr-2" /> Outras Contas
+                  </Button>
+                  <Button variant="outline" disabled={!isDailyCashMainAccount} className="bg-amber-500/15 border-amber-400/20 text-amber-100 hover:bg-amber-500/25 rounded-2xl font-black disabled:opacity-40" onClick={handleDailyCashCloseRequest}>
                     <LogOut size={16} className="mr-2" /> Fechar Caixa
                   </Button>
                   <Button variant="outline" className="bg-white/10 border-white/10 text-white hover:bg-white/20 rounded-2xl font-black" onClick={loadAllData}>
@@ -1657,19 +1758,19 @@ const POS = () => {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
               <button type="button" className={cn("text-left rounded-2xl bg-white/10 border border-white/10 p-4 transition-all hover:bg-white/15", dailyCashFilter === 'Todos' && dailyCashTypeFilter === 'Todos' && "ring-2 ring-white/30")} onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('Todos'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abertura</p>
-                <p className="text-2xl font-black mt-1">{formatCurrency(cashOpeningBalance)}</p>
+                <p className="text-2xl font-black mt-1">{formatCurrency(dailyCashOpeningBalance)}</p>
               </button>
               <button type="button" className={cn("text-left rounded-2xl bg-emerald-500/10 border border-emerald-400/20 p-4 transition-all hover:bg-emerald-500/15", dailyCashTypeFilter === 'R' && "ring-2 ring-emerald-300/60")} onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('R'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 flex items-center gap-1"><ArrowDownCircle size={13} /> Entradas</p>
-                <p className="text-2xl font-black mt-1 text-emerald-200">{formatCurrency(cashEntriesToday)}</p>
+                <p className="text-2xl font-black mt-1 text-emerald-200">{formatCurrency(dailyCashEntriesToday)}</p>
               </button>
               <button type="button" className={cn("text-left rounded-2xl bg-rose-500/10 border border-rose-400/20 p-4 transition-all hover:bg-rose-500/15", dailyCashTypeFilter === 'P' && "ring-2 ring-rose-300/60")} onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('P'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-1"><ArrowUpCircle size={13} /> Saídas</p>
-                <p className="text-2xl font-black mt-1 text-rose-200">{formatCurrency(cashExitsToday)}</p>
+                <p className="text-2xl font-black mt-1 text-rose-200">{formatCurrency(dailyCashExitsToday)}</p>
               </button>
               <button type="button" className="text-left rounded-2xl bg-indigo-500/10 border border-indigo-400/20 p-4 transition-all hover:bg-indigo-500/15" onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('Todos'); }}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Saldo Conferência</p>
-                <p className="text-2xl font-black mt-1 text-indigo-100">{formatCurrency(cashSystemBalance)}</p>
+                <p className="text-2xl font-black mt-1 text-indigo-100">{formatCurrency(dailyCashSystemBalance)}</p>
               </button>
             </div>
           </div>
