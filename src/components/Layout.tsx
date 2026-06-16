@@ -89,8 +89,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     items: group.items.filter(item => !user?.permissoes || (user.permissoes as any)[item.perm])
   })).filter(group => group.items.length > 0);
 
-  const companyName = (config?.provider_name || config?.nome_empresa || 'KEY OF INNOV DEV').toUpperCase();
-  const companyPhone = formatPhoneBR(config?.provider_tel || config?.telefone || '');
+  const companyName = (config?.provider_name || 'KEY OF INNOV').toUpperCase();
+  const companyPhone = formatPhoneBR(config?.provider_tel || '');
 
   return (
 

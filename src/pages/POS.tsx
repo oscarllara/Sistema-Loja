@@ -1366,12 +1366,13 @@ const POS = () => {
             </div>
           )}
           <div className="min-w-0 text-left">
-            <h2 className={cn("text-lg font-black tracking-tighter italic uppercase leading-none truncate", theme.text)}>{config?.nome_empresa || 'DyadERP'}</h2>
+            <h2 className={cn("text-lg font-black tracking-tighter italic uppercase leading-none truncate", theme.text)}>{(config?.nome_empresa || 'CONSTRULARA').toUpperCase()}</h2>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 line-clamp-2">{config?.slogan}</p>
           </div>
         </div>
 
         <div className={cn("p-4 text-white space-y-3", theme.header)}>
+
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Operador Logado *</label>
             <select
