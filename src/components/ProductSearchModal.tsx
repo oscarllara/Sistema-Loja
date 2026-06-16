@@ -153,6 +153,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
             <TableHeader className="sticky top-0 z-10">
               <TableRow className="bg-[#F39C12] hover:bg-[#F39C12] border-b border-slate-400">
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">CÓD. INTERNO</TableHead>
+                <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">CÓD. ANTIGO</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">CÓD. BARRAS</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20">DESCRIÇÃO DO PRODUTO</TableHead>
                 <TableHead className="text-white font-bold text-[10px] h-8 border-r border-white/20 text-right">PREÇO VISTA</TableHead>
@@ -164,7 +165,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
             <TableBody>
               {isLoading && products.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-20">
+                  <TableCell colSpan={8} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2 text-slate-500">
                       <Loader2 className="animate-spin" />
                       <p className="font-bold">CARREGANDO LISTA DE PRODUTOS...</p>
@@ -173,7 +174,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
+                  <TableCell colSpan={8} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
                 </TableRow>
               ) : (
                 filtered.map((p, idx) => (
@@ -186,6 +187,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
                     onClick={() => { onSelect(p); onClose(); }}
                   >
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold">{p.id_manual?.padStart(5, '0') || "-"}</TableCell>
+                    <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold text-indigo-700">{p.id_importado || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200">{p.cod_barras || "-"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 font-bold uppercase">{p.nome || "SEM NOME"}</TableCell>
                     <TableCell className="py-0 text-[11px] border-r border-slate-200 text-right font-bold">
