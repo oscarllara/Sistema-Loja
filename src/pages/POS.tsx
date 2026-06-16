@@ -880,6 +880,32 @@ const POS = () => {
     setIsDailyCashPanelOpen(true);
   };
 
+  const getDailyCashSaleNumber = (item: LancamentoFinanceiro) => {
+    if (item.cd_venda) return item.cd_venda;
+    const match = item.descricao?.match(/VENDA\s+PDV\s+#(\d+)/i);
+    return match ? Number(match[1]) : null;
+  };
+
+  const handleDailyCashReprintSale = async (item: LancamentoFinanceiro) => {
+    const saleNumber = getDailyCashSaleNumber(item);
+    if (!saleNumber) return;
+
+    try {
+      const sales = await db.vendas.getAll();
+      const sale = sales.find(v => v.cd_venda === saleNumber);
+
+      if (!sale) {
+        showError("Venda não encontrada para reimpressão.");
+        return;
+      }
+
+      setLastActionData({ ...sale, type: 'Venda' });
+      setIsPrintOpen(true);
+    } catch {
+      showError("Não foi possível carregar a venda para reimpressão.");
+    }
+  };
+
   const theme = {
     VENDA: { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-900', header: 'bg-slate-900', border: 'border-slate-800' },
     COMPRA: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', text: 'text-emerald-900', header: 'bg-emerald-900', border: 'border-emerald-800' },
@@ -1397,17 +1423,38 @@ const POS = () => {
                       <TableRow>
                         <TableCell colSpan={5} className="h-36 text-center text-slate-400 font-bold">Nenhum lançamento encontrado para este filtro.</TableCell>
                       </TableRow>
-                    ) : filteredDailyCashMovements.map(item => (
-                      <TableRow key={item.cd_lancamento} className="hover:bg-slate-50">
-                        <TableCell>
-                          <span className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", item.tipo === 'R' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{item.tipo === 'R' ? 'Entrada' : 'Saída'}</span>
-                        </TableCell>
-                        <TableCell className="font-bold text-slate-700 max-w-[320px] truncate">{item.descricao}</TableCell>
-                        <TableCell className="font-black text-slate-900">{item.meio_pagamento || 'Não informado'}</TableCell>
-                        <TableCell className="font-bold text-slate-500">{item.nome_entidade || '-'}</TableCell>
-                        <TableCell className={cn("text-right font-black", item.tipo === 'R' ? "text-emerald-700" : "text-rose-700")}>{item.tipo === 'R' ? '+' : '-'} {formatCurrency(Number(item.valor || 0))}</TableCell>
-                      </TableRow>
-                    ))}
+                    ) : filteredDailyCashMovements.map(item => {
+                      const saleNumber = getDailyCashSaleNumber(item);
+                      const descriptionWithoutSale = saleNumber
+                        ? item.descricao.replace(/VENDA\s+PDV\s+#\d+\s*-\s*/i, '')
+                        : item.descricao;
+
+                      return (
+                        <TableRow key={item.cd_lancamento} className="hover:bg-slate-50">
+                          <TableCell>
+                            <span className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", item.tipo === 'R' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{item.tipo === 'R' ? 'Entrada' : 'Saída'}</span>
+                          </TableCell>
+                          <TableCell className="font-bold text-slate-700 max-w-[320px]">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {saleNumber && (
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-lg bg-indigo-50 px-2 py-1 font-black text-indigo-700 hover:bg-indigo-100 hover:underline"
+                                  title="Clique para reimprimir esta venda"
+                                  onClick={() => handleDailyCashReprintSale(item)}
+                                >
+                                  #{saleNumber}
+                                </button>
+                              )}
+                              <span className="truncate">{descriptionWithoutSale}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-black text-slate-900">{item.meio_pagamento || 'Não informado'}</TableCell>
+                          <TableCell className="font-bold text-slate-500">{item.nome_entidade || '-'}</TableCell>
+                          <TableCell className={cn("text-right font-black", item.tipo === 'R' ? "text-emerald-700" : "text-rose-700")}>{item.tipo === 'R' ? '+' : '-'} {formatCurrency(Number(item.valor || 0))}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </ScrollArea>
