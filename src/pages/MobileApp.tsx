@@ -28,9 +28,11 @@ const titleCase = (value: string) => value
   .toLowerCase()
   .replace(/\s+/g, ' ')
   .replace(/(^|\s)(\S)/g, letter => letter.toUpperCase());
+const normalizeText = (value?: string) => (value || '').trim().toLowerCase();
 const today = () => new Date().toISOString().split('T')[0];
 
 const vehicleActions = [
+
   { type: 'Abastecimento', label: 'Abastecer', icon: Fuel, color: 'bg-emerald-500' },
   { type: 'Manutenção', label: 'Mecânica', icon: Wrench, color: 'bg-slate-700', subtype: 'Mecânica' },
   { type: 'Manutenção', label: 'Elétrica', icon: Wrench, color: 'bg-amber-500', subtype: 'Elétrica' },
@@ -88,17 +90,44 @@ const MobileApp = () => {
   const loadData = React.useCallback(async () => {
 
     try {
-      const [vData, eData, gData, cData] = await Promise.all([
+      const [vData, eData, gData, cData, fData] = await Promise.all([
         db.mobile.veiculos.getAll(),
         db.mobile.veiculoEventos.getAll(),
         db.mobile.gastosPessoais.getAll(),
-        db.contas.getAll()
+        db.contas.getAll(),
+        db.financeiro.getAll()
       ]);
+      const financePersonalExpenses: GastoPessoal[] = fData
+        .filter(l => l.tipo === 'P' && normalizeText(l.categoria) === 'despesa pessoal')
+        .map(l => {
+          const parts = (l.descricao || '').split(' - ').map(part => part.trim());
+          return {
+            id: `financeiro-${l.cd_lancamento}`,
+            cd_usuario: l.cd_entidade,
+            pessoa: l.nome_entidade || parts[1] || 'Pessoal',
+            categoria: parts[2] || 'Despesa Pessoal',
+            descricao: parts.length > 3 ? parts.slice(3).join(' - ') : undefined,
+            valor: Number(l.valor || 0),
+            data_gasto: (l.data_vencimento || l.data_pagamento || today()).split('T')[0],
+            cd_conta: l.cd_conta,
+            meio_pagamento: l.meio_pagamento,
+            cd_lancamento: l.cd_lancamento
+
+          };
+        })
+        .filter(financeExpense => !gData.some(expense =>
+          normalizeText(expense.pessoa) === normalizeText(financeExpense.pessoa)
+          && normalizeText(expense.categoria) === normalizeText(financeExpense.categoria)
+          && Number(expense.valor || 0) === Number(financeExpense.valor || 0)
+          && (expense.data_gasto || '').split('T')[0] === financeExpense.data_gasto
+        ));
+
       setVehicles(vData.filter(v => !user?.cd_clientes || !v.cd_usuario || v.cd_usuario === user.cd_clientes));
       setEvents(eData.filter(e => !user?.cd_clientes || !e.cd_usuario || e.cd_usuario === user.cd_clientes));
-      setExpenses(gData);
+      setExpenses([...gData, ...financePersonalExpenses]);
       setAccounts(cData);
     } catch (err) {
+
       showError('Erro ao carregar app mobile.');
     }
   }, [user?.cd_clientes]);
@@ -290,8 +319,21 @@ const MobileApp = () => {
   const alerts = getDueAlerts();
 
   const totalPersonal = expenses.reduce((acc, item) => acc + Number(item.valor || 0), 0);
+  const getAccountLabel = (accountId?: number) => {
+    if (!accountId) return '';
+    const account = accounts.find(item => item.cd_conta === Number(accountId));
+    return account ? `${account.nome} / ${account.tipo}` : `Conta #${accountId}`;
+  };
+  const getPaymentLabel = (method?: string, accountId?: number) => {
+    const accountLabel = getAccountLabel(accountId);
+    return [method, accountLabel].filter(Boolean).join(' • ');
+  };
+  const getPersonalTotalByMember = (member: string) => expenses
+    .filter(expense => normalizeText(expense.pessoa) === normalizeText(member))
+    .reduce((acc, expense) => acc + Number(expense.valor || 0), 0);
 
   return (
+
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto min-h-screen max-w-md bg-slate-50 text-slate-900 shadow-2xl">
         <header className="sticky top-0 z-10 bg-slate-950 px-5 py-5 text-white">
@@ -392,8 +434,12 @@ const MobileApp = () => {
                       <div>
                         <p className="text-sm font-black">{event.tipo}{event.subtipo ? ` • ${event.subtipo}` : ''}</p>
                         <p className="text-xs font-bold text-slate-500">Km {Number(event.km_atual || 0).toLocaleString('pt-BR')} {event.combustivel ? `• ${event.combustivel}` : ''}</p>
+                        {getPaymentLabel(event.meio_pagamento, event.cd_conta) && (
+                          <p className="mt-1 text-[10px] font-bold text-slate-400">{getPaymentLabel(event.meio_pagamento, event.cd_conta)}</p>
+                        )}
                       </div>
                       <p className="font-black text-rose-600">R$ {money(Number(event.valor_total || 0))}</p>
+
                     </div>
                   </div>
                 ))}
@@ -430,9 +476,10 @@ const MobileApp = () => {
                     ) : (
                       <p className="text-[10px] font-black uppercase text-slate-500">{member}</p>
                     )}
-                    <p className="mt-1 text-xs font-black">R$ {money(expenses.filter(e => e.pessoa === member).reduce((acc, e) => acc + Number(e.valor || 0), 0))}</p>
+                    <p className="mt-1 text-xs font-black">R$ {money(getPersonalTotalByMember(member))}</p>
                   </div>
                 ))}
+
               </div>
               {editingFamilyNames && <p className="text-center text-[10px] font-bold text-slate-400">Edite os nomes e toque no botão de confirmar.</p>}
               {expenses.slice(0, 20).map(expense => (
@@ -440,10 +487,14 @@ const MobileApp = () => {
                 <div key={expense.id} className="rounded-2xl bg-white p-3 shadow-sm">
                   <div className="flex justify-between gap-3">
                     <div>
-                      <p className="text-sm font-black">{expense.categoria} • {expense.pessoa}</p>
+                      <p className="text-sm font-black">{expense.categoria} • {titleCase(expense.pessoa)}</p>
                       <p className="text-xs font-bold text-slate-500">{new Date(`${expense.data_gasto}T00:00:00`).toLocaleDateString('pt-BR')} {expense.descricao ? `• ${expense.descricao}` : ''}</p>
+                      {getPaymentLabel(expense.meio_pagamento, expense.cd_conta) && (
+                        <p className="mt-1 text-[10px] font-bold text-slate-400">{getPaymentLabel(expense.meio_pagamento, expense.cd_conta)}</p>
+                      )}
                     </div>
                     <p className="font-black text-rose-600">R$ {money(Number(expense.valor || 0))}</p>
+
                   </div>
                 </div>
               ))}
