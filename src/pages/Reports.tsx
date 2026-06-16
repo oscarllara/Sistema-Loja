@@ -35,9 +35,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+const brl = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const toISODate = (date: Date) => date.toISOString().split('T')[0];
 
 const getDateDaysAgo = (days: number) => {
+
   const date = new Date();
   date.setDate(date.getDate() - days);
   return toISODate(date);
@@ -70,33 +72,33 @@ const Reports = () => {
       const filteredVendas = vendas.filter(v => isInPeriod(v.data));
       const filteredLancamentos = lancamentos.filter(l => isInPeriod(l.data_pagamento || l.data_vencimento));
 
-      // 1. Faturamento Real
-      const totalVendas = filteredVendas.reduce((acc, v) => acc + v.total, 0);
+      // 1. Faturamento operacional: vendas realizadas + receitas operacionais avulsas pagas.
+      const totalVendasValor = filteredVendas.reduce((acc, v) => acc + Number(v.total || 0), 0);
       const receitasOperacionais = filteredLancamentos
         .filter(l => l.tipo === 'R' && !l.is_non_operational && l.status === 'Pago' && !l.cd_venda)
-        .reduce((acc, l) => acc + l.valor, 0);
+        .reduce((acc, l) => acc + Number(l.valor || 0), 0);
       
-      const faturamentoTotal = totalVendas + receitasOperacionais;
+      const faturamentoTotal = totalVendasValor + receitasOperacionais;
 
-      // 2. Custos variáveis, custos fixos e despesas operacionais
-      // Fornecedor é compra/custo de mercadoria: não deve pesar como custo fixo.
-      const totalCustoProd = filteredVendas.reduce((acc, v) => acc + (v.custo_total || 0), 0);
+      // 2. DRE operacional: CMV vem da venda; pagamento de fornecedor fica no fluxo de caixa para não duplicar custo.
+      const totalCustoProd = filteredVendas.reduce((acc, v) => acc + Number(v.custo_total || 0), 0);
+      const isFornecedor = (categoria?: string) => (categoria || '').trim().toLowerCase() === 'fornecedor';
       const comprasFornecedorPagas = filteredLancamentos
-        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && l.categoria === 'Fornecedor')
-        .reduce((acc, l) => acc + l.valor, 0);
-      const despesasFixas = filteredLancamentos
-        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && l.categoria !== 'Fornecedor')
-        .reduce((acc, l) => acc + l.valor, 0);
+        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && isFornecedor(l.categoria))
+        .reduce((acc, l) => acc + Number(l.valor || 0), 0);
+      const despesasOperacionais = filteredLancamentos
+        .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && !isFornecedor(l.categoria))
+        .reduce((acc, l) => acc + Number(l.valor || 0), 0);
 
-      // 3. Lucro bruto, lucro líquido e peso dos custos fixos
+      // 3. Resultado operacional
       const lucroBruto = faturamentoTotal - totalCustoProd;
-      const lucroLiquido = lucroBruto - despesasFixas;
+      const lucroLiquido = lucroBruto - despesasOperacionais;
       const margemBruta = faturamentoTotal > 0 ? (lucroBruto / faturamentoTotal) * 100 : 0;
       const margemLucro = faturamentoTotal > 0 ? (lucroLiquido / faturamentoTotal) * 100 : 0;
-      const pesoCustoFixo = faturamentoTotal > 0 ? (despesasFixas / faturamentoTotal) * 100 : 0;
+      const pesoDespesaOperacional = faturamentoTotal > 0 ? (despesasOperacionais / faturamentoTotal) * 100 : 0;
 
       // 4. Ticket Médio
-      const ticketMedio = filteredVendas.length > 0 ? totalVendas / filteredVendas.length : 0;
+      const ticketMedio = filteredVendas.length > 0 ? totalVendasValor / filteredVendas.length : 0;
 
       // 5. Vendas por Meio de Pagamento
       const methodsMap = filteredVendas.reduce((acc: any, v) => {
@@ -164,13 +166,22 @@ const Reports = () => {
       setBirthdays(bdays.sort((a, b) => a.dia - b.dia));
       setData({
         faturamentoTotal,
+        totalVendasValor,
+        receitasOperacionais,
+        totalCustoProd,
+        comprasFornecedorPagas,
+        despesasOperacionais,
+        lucroBruto,
         lucroLiquido,
+        margemBruta,
         margemLucro,
+        pesoDespesaOperacional,
         ticketMedio,
         salesByMethod,
         cashFlowData,
         totalVendas: filteredVendas.length
       });
+
     } catch (err) {
       console.error("Erro ao carregar relatórios:", err);
     } finally {
@@ -256,37 +267,60 @@ const Reports = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-4">
-          <ReportStatCard 
-            title="Margem de Lucro Real"
+          <ReportStatCard
+            title="Margem Líquida Operacional"
             value={`${data.margemLucro.toFixed(1)}%`}
-            subtitle="Faturamento - (Custo + Desp. Operacionais)"
-            color="text-indigo-600"
+            subtitle="Lucro operacional ÷ faturamento"
+            color={data.margemLucro >= 0 ? "text-emerald-600" : "text-rose-600"}
             onClick={() => navigate('/financial')}
           />
-          <ReportStatCard 
-            title="Lucro Líquido Operacional"
-            value={`R$ ${data.lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            subtitle="Resultado das atividades principais"
-            color="text-emerald-600"
+          <ReportStatCard
+            title="Lucro Operacional"
+            value={`R$ ${brl(data.lucroLiquido)}`}
+            subtitle="Faturamento - CMV - despesas operacionais"
+            color={data.lucroLiquido >= 0 ? "text-emerald-600" : "text-rose-600"}
             onClick={() => navigate('/financial')}
           />
-          <ReportStatCard 
+          <ReportStatCard
             title="Ticket Médio"
-            value={`R$ ${data.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            value={`R$ ${brl(data.ticketMedio)}`}
             subtitle="Média por venda realizada"
             color="text-slate-900"
             onClick={() => navigate('/pos')}
           />
-          <ReportStatCard 
-            title="Faturamento Real"
-            value={`R$ ${data.faturamentoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            subtitle="Vendas + Receitas Operacionais"
+          <ReportStatCard
+            title="Faturamento Operacional"
+            value={`R$ ${brl(data.faturamentoTotal)}`}
+            subtitle="Vendas realizadas + receitas operacionais"
             color="text-blue-600"
             onClick={() => navigate('/financial')}
           />
         </div>
 
+        <Card className="border-none shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold">Como o lucro operacional foi calculado</CardTitle>
+            <p className="text-xs text-slate-500 font-bold">
+              Compra paga para fornecedor aparece no fluxo de caixa, mas não entra novamente como despesa aqui, porque o custo da mercadoria vendida já vem salvo em cada venda.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-5">
+            <BreakdownItem label="Vendas" value={data.totalVendasValor} color="text-blue-600" />
+            <BreakdownItem label="Receitas operacionais" value={data.receitasOperacionais} color="text-blue-600" />
+            <BreakdownItem label="CMV / custo vendido" value={-data.totalCustoProd} color="text-amber-600" />
+            <BreakdownItem label="Despesas operacionais" value={-data.despesasOperacionais} color="text-rose-600" />
+            <BreakdownItem label="Lucro operacional" value={data.lucroLiquido} color={data.lucroLiquido >= 0 ? "text-emerald-600" : "text-rose-600"} strong />
+          </CardContent>
+          <div className="px-6 pb-5 text-[11px] font-bold text-slate-500">
+            Fornecedor pago no período: <span className="text-slate-900">R$ {brl(data.comprasFornecedorPagas)}</span> — usado para caixa, não para duplicar custo na lucratividade.
+            {data.faturamentoTotal > 0 && (
+              <span> Despesas operacionais representam <span className="text-slate-900">{data.pesoDespesaOperacional.toFixed(1)}%</span> do faturamento.</span>
+            )}
+          </div>
+        </Card>
+
         <div className="grid gap-6 lg:grid-cols-3">
+
           <Card className="lg:col-span-2 border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-bold">Fluxo de Caixa ({periodLabel})</CardTitle>
@@ -355,8 +389,17 @@ const Reports = () => {
   );
 };
 
+const BreakdownItem = ({ label, value, color, strong = false }: any) => (
+  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+    <p className={cn("mt-1 font-black", strong ? "text-xl" : "text-lg", color)}>
+      {value < 0 ? '- ' : ''}R$ {brl(Math.abs(value || 0))}
+    </p>
+  </div>
+);
+
 const ReportStatCard = ({ title, value, subtitle, color, onClick }: any) => (
-  <Card 
+  <Card
     className="border-none shadow-sm cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md active:scale-95 group"
     onClick={onClick}
   >
