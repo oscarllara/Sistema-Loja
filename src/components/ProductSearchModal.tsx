@@ -27,9 +27,10 @@ interface ProductSearchModalProps {
   onSelect: (product: Produto) => void;
   initialSearch?: string;
   filterIntegratedOnly?: boolean;
+  filterRentalsOnly?: boolean;
 }
 
-const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", filterIntegratedOnly = false }: ProductSearchModalProps) => {
+const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", filterIntegratedOnly = false, filterRentalsOnly = false }: ProductSearchModalProps) => {
   const [search, setSearch] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [products, setProducts] = React.useState<Produto[]>([]);
@@ -70,6 +71,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
     let matches = products.filter(p => {
       if (!p) return false;
       if (filterIntegratedOnly && !p.integrar_calculadora) return false;
+      if (filterRentalsOnly && !p.is_locacao) return false;
       
       if (!term) return true;
 
@@ -107,7 +109,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
       return nameA.localeCompare(nameB);
     }).slice(0, 100);
-  }, [products, search, filterIntegratedOnly]);
+  }, [products, search, filterIntegratedOnly, filterRentalsOnly]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -130,7 +132,7 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
         <div className="bg-[#FFFFE1] p-4 border-b border-slate-300">
           <p className="text-[10px] text-slate-600 mb-1 font-bold uppercase">
-            {filterIntegratedOnly ? "Pesquisa de Produtos Integrados (Calculadora)" : "Pesquisa de Produtos"}
+            {filterRentalsOnly ? "Pesquisa de Itens de Locação" : filterIntegratedOnly ? "Pesquisa de Produtos Integrados (Calculadora)" : "Pesquisa de Produtos"}
           </p>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -184,7 +186,9 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-slate-500 font-bold">NENHUM PRODUTO ENCONTRADO.</TableCell>
+                  <TableCell colSpan={8} className="text-center py-10 text-slate-500 font-bold">
+                    {filterRentalsOnly ? 'NENHUM ITEM DE LOCAÇÃO ENCONTRADO.' : 'NENHUM PRODUTO ENCONTRADO.'}
+                  </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((p, idx) => (

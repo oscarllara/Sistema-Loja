@@ -2129,7 +2129,13 @@ const POS = () => {
       <PaymentsModal isOpen={isPaymentsOpen} onClose={() => setIsPaymentsOpen(false)} operatorId={selectedSellerId} />
       <POSFinancialModal isOpen={isPOSFinancialOpen} onClose={() => setIsPOSFinancialOpen(false)} defaultAccountId={cashAccount?.cd_conta} operatorId={selectedSellerId} paymentAccountRoutes={config?.payment_account_routes || {}} onSuccess={loadAllData} />
       <QuotesModal isOpen={isQuotesOpen} onClose={() => setIsQuotesOpen(false)} onLoadQuote={(q) => { setCart(q.itens.map((i: any) => ({ ...i, nome: i.nome_produto, finalPrice: i.valor, finalPriceInput: Number(i.valor || 0).toFixed(2).replace('.', ','), quantity: i.qtde, quantityInput: Number(i.qtde || 0).toString().replace('.', ','), selectedUnit: i.un }))); setIsQuotesOpen(false); }} />
-      <ProductSearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }} onSelect={startInsertion} initialSearch={searchInitialTerm} />
+      <ProductSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => { setIsSearchOpen(false); codeRef.current?.focus(); }}
+        onSelect={startInsertion}
+        initialSearch={searchInitialTerm}
+        filterRentalsOnly={mode === 'LOCACAO'}
+      />
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl"><DialogHeader><DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cadastrar Novo Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
