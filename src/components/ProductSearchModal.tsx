@@ -58,14 +58,14 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
 
   const filtered = React.useMemo(() => {
     const term = search.toLowerCase().trim();
-    const normalizeCode = (value: unknown) => {
-      const raw = String(value ?? '').trim().toLowerCase();
-      const decimal = raw.replace(',', '.').replace(/\s+/g, '');
-      const digits = raw.replace(/\D/g, '');
-      const numericValue = decimal && /^\d+(\.\d+)?$/.test(decimal) ? Number(decimal) : null;
-      return { raw, decimal, digits, noLeadingZeros: digits.replace(/^0+/, '') || digits, numericValue };
+    const getCodeBase = (value: unknown) => {
+      const raw = String(value ?? '').trim().toLowerCase().replace(',', '.').replace(/\s+/g, '');
+      if (!raw) return '';
+      const beforeDot = raw.split('.')[0];
+      const digits = beforeDot.replace(/\D/g, '');
+      return digits.replace(/^0+/, '') || digits;
     };
-    const typedCode = normalizeCode(term);
+    const typedBase = getCodeBase(term);
     
     let matches = products.filter(p => {
       if (!p) return false;
@@ -73,15 +73,12 @@ const ProductSearchModal = ({ isOpen, onClose, onSelect, initialSearch = "", fil
       
       if (!term) return true;
 
-      const codeMatches = [p.id_manual, p.id_importado, p.cod_barras, p.cd_produto].some(code => {
-        const current = normalizeCode(code);
-        if (!current.raw) return false;
+      const codeMatches = [p.id_manual, p.id_importado, p.cod_barras].some(code => {
+        const rawCode = String(code ?? '').trim().toLowerCase();
+        const currentBase = getCodeBase(code);
         return (
-          current.raw.includes(term) ||
-          current.decimal.includes(typedCode.decimal) ||
-          current.digits === typedCode.digits ||
-          current.noLeadingZeros === typedCode.noLeadingZeros ||
-          (typedCode.numericValue !== null && current.numericValue !== null && current.numericValue === typedCode.numericValue)
+          rawCode.includes(term) ||
+          (!!typedBase && currentBase === typedBase)
         );
       });
 

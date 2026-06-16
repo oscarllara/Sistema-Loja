@@ -225,49 +225,35 @@ const POS = () => {
 
   const getBoxSize = (product: any) => Number(product?.tamanho_caixa || 0) || 0;
 
-  const normalizeProductCode = (value: unknown) => {
-    const raw = String(value ?? '').trim().toLowerCase();
-    const normalizedDecimal = raw.replace(',', '.').replace(/\s+/g, '');
-    const onlyDigits = raw.replace(/\D/g, '');
-    const numericValue = normalizedDecimal && /^\d+(\.\d+)?$/.test(normalizedDecimal)
-      ? Number(normalizedDecimal)
-      : null;
+  const getProductCodeBase = (value: unknown) => {
+    const raw = String(value ?? '').trim().toLowerCase().replace(',', '.').replace(/\s+/g, '');
+    if (!raw) return '';
 
-    return {
-      raw,
-      decimal: normalizedDecimal,
-      digits: onlyDigits,
-      noLeadingZeros: onlyDigits.replace(/^0+/, '') || onlyDigits,
-      numericValue
-    };
+    const beforeDot = raw.split('.')[0];
+    const digits = beforeDot.replace(/\D/g, '');
+    return digits.replace(/^0+/, '') || digits;
+  };
+
+  const getProductCodeBases = (product: Produto) => {
+    return [product.id_manual, product.id_importado, product.cod_barras]
+      .map(getProductCodeBase)
+      .filter(Boolean);
   };
 
   const productMatchesCode = (product: Produto, typedCode: string) => {
-    const typed = normalizeProductCode(typedCode);
-    const productCodes = [
-      product.id_manual,
-      product.id_importado,
-      product.cod_barras,
-      product.cd_produto
-    ];
+    const typedBase = getProductCodeBase(typedCode);
+    if (!typedBase) return false;
+    return getProductCodeBases(product).includes(typedBase);
+  };
 
-    return productCodes.some(code => {
-      const current = normalizeProductCode(code);
-      if (!current.raw) return false;
+  const findProductsByCode = (productList: Produto[], typedCode: string) => {
+    const typedBase = getProductCodeBase(typedCode);
+    if (!typedBase) return [];
 
-      const decimalNumberMatches = typed.numericValue !== null
-        && current.numericValue !== null
-        && current.numericValue === typed.numericValue;
-
-      return (
-        current.raw === typed.raw ||
-        current.decimal === typed.decimal ||
-        current.digits === typed.digits ||
-        current.noLeadingZeros === typed.noLeadingZeros ||
-        current.decimal === typed.digits.padStart(5, '0') ||
-        decimalNumberMatches
-      );
-    });
+    const matched = productList.filter(product => productMatchesCode(product, typedCode));
+    return matched.filter((product, index, array) =>
+      array.findIndex(item => item.cd_produto === product.cd_produto) === index
+    );
   };
 
   const formatBRNumber = (value: number, decimals = 3) => {
@@ -476,20 +462,24 @@ const POS = () => {
     if (!code) return;
     if (pendingProduct) { commitToCart(); return; }
     
-    let product = products.find(p => productMatchesCode(p, code));
+    let matches = findProductsByCode(products, code);
 
-    if (!product) {
+    if (matches.length === 0) {
       try {
         const latestProducts = await db.produtos.getAll();
         setProducts(latestProducts);
-        product = latestProducts.find(p => productMatchesCode(p, code));
+        matches = findProductsByCode(latestProducts, code);
       } catch {
-        product = undefined;
+        matches = [];
       }
     }
 
-    if (product) startInsertion(product);
-    else { setSearchInitialTerm(code); setIsSearchOpen(true); }
+    if (matches.length === 1) {
+      startInsertion(matches[0]);
+    } else {
+      setSearchInitialTerm(code);
+      setIsSearchOpen(true);
+    }
   };
 
   const addCalculatedItemToCart = React.useCallback((pendingItem: CalculatorPendingItem) => {
