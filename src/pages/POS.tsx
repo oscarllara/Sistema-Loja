@@ -187,6 +187,7 @@ const POS = () => {
   const [cashMovementValue, setCashMovementValue] = React.useState("0,00");
   const [cashMovementMethod, setCashMovementMethod] = React.useState("Dinheiro");
   const [isCashTransferOpen, setIsCashTransferOpen] = React.useState(false);
+  const [cashTransferSourceId, setCashTransferSourceId] = React.useState<number | "">("");
   const [cashTransferDestinationId, setCashTransferDestinationId] = React.useState<number | "">("");
   const [cashTransferValue, setCashTransferValue] = React.useState("0,00");
   const [cashTransferNotes, setCashTransferNotes] = React.useState("");
@@ -644,9 +645,13 @@ const POS = () => {
   const cashExitsToday = cashMovementsToday.filter(l => l.tipo === 'P').reduce((acc, l) => acc + Number(l.valor || 0), 0);
   const cashOpeningBalance = Number(currentCashSession?.saldo_real_abertura || 0);
   const cashSystemBalance = cashOpeningBalance + cashEntriesToday - cashExitsToday;
+  const selectedCashTransferSource = React.useMemo(
+    () => contas.find(conta => conta.cd_conta === Number(cashTransferSourceId)),
+    [contas, cashTransferSourceId]
+  );
   const transferDestinationAccounts = React.useMemo(
-    () => contas.filter(conta => conta.cd_conta !== cashAccount?.cd_conta),
-    [contas, cashAccount]
+    () => contas.filter(conta => conta.cd_conta !== Number(cashTransferSourceId)),
+    [contas, cashTransferSourceId]
   );
 
   const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -931,9 +936,12 @@ const POS = () => {
   const openCashTransferDialog = () => {
     if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
     if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de transferir recursos."); return; }
-    if (transferDestinationAccounts.length === 0) { showError("Cadastre outra conta para receber a transferência."); return; }
+    if (contas.length < 2) { showError("Cadastre outra conta para receber a transferência."); return; }
 
-    setCashTransferDestinationId(transferDestinationAccounts[0].cd_conta);
+    const defaultSourceId = cashAccount.cd_conta;
+    const defaultDestination = contas.find(conta => conta.cd_conta !== defaultSourceId);
+    setCashTransferSourceId(defaultSourceId);
+    setCashTransferDestinationId(defaultDestination?.cd_conta || "");
     setCashTransferValue('0,00');
     setCashTransferNotes(`TRANSFERÊNCIA DO ${cashAccount.nome}`);
     setIsCashTransferOpen(true);
@@ -979,15 +987,16 @@ const POS = () => {
     e.preventDefault();
     if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
     if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de transferir recursos."); return; }
+    if (!cashTransferSourceId) { showError("Selecione a conta de origem."); return; }
     if (!cashTransferDestinationId) { showError("Selecione a conta de destino."); return; }
-    if (cashTransferDestinationId === cashAccount.cd_conta) { showError("A conta de destino precisa ser diferente do caixa atual."); return; }
+    if (cashTransferDestinationId === cashTransferSourceId) { showError("A conta de destino precisa ser diferente da origem."); return; }
 
     const value = parseBRNumber(cashTransferValue);
     if (value <= 0) { showError("Informe um valor válido."); return; }
 
     try {
       await db.financeiro.transferir({
-        cd_conta_origem: cashAccount.cd_conta,
+        cd_conta_origem: Number(cashTransferSourceId),
         cd_conta_destino: Number(cashTransferDestinationId),
         valor: Number(value.toFixed(2)),
         data: today,
@@ -1459,20 +1468,43 @@ const POS = () => {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCashTransfer} className="space-y-4 py-2">
-            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origem</p>
-              <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • Saldo {formatCurrency(Number(cashAccount?.saldo || 0))}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Origem</Label>
+                <select
+                  value={cashTransferSourceId}
+                  onChange={(e) => {
+                    const nextSourceId = Number(e.target.value);
+                    setCashTransferSourceId(nextSourceId);
+                    if (cashTransferDestinationId === nextSourceId) {
+                      setCashTransferDestinationId(contas.find(conta => conta.cd_conta !== nextSourceId)?.cd_conta || "");
+                    }
+                  }}
+                  className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold"
+                >
+                  {contas.map(conta => (
+                    <option key={conta.cd_conta} value={conta.cd_conta}>
+                      {conta.nome} • {conta.tipo} • Saldo {formatCurrency(Number(conta.saldo || 0))}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Destino</Label>
+                <select value={cashTransferDestinationId} onChange={(e) => setCashTransferDestinationId(Number(e.target.value))} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
+                  {transferDestinationAccounts.map(conta => (
+                    <option key={conta.cd_conta} value={conta.cd_conta}>
+                      {conta.nome} • {conta.tipo} • Saldo {formatCurrency(Number(conta.saldo || 0))}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Destino</Label>
-              <select value={cashTransferDestinationId} onChange={(e) => setCashTransferDestinationId(Number(e.target.value))} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
-                {transferDestinationAccounts.map(conta => (
-                  <option key={conta.cd_conta} value={conta.cd_conta}>
-                    {conta.nome} • {conta.tipo} • Saldo {formatCurrency(Number(conta.saldo || 0))}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {selectedCashTransferSource && (
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3 text-xs font-bold text-slate-500">
+                Origem selecionada: <span className="text-slate-900">{selectedCashTransferSource.nome}</span> • Saldo atual {formatCurrency(Number(selectedCashTransferSource.saldo || 0))}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
