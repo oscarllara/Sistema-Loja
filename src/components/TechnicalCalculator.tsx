@@ -53,13 +53,19 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
     label: string;
   } | null>(null);
 
-  const [piso, setPiso] = React.useState({ aplicacao: 'Piso' as PisoAplicacao, comp: "", larg: "", altura: "" });
+  const [piso, setPiso] = React.useState({ aplicacao: 'Piso' as PisoAplicacao, comp: "0", larg: "0", altura: "0" });
   const [vaos, setVaos] = React.useState<Vao[]>([]);
 
-  const [arg, setArg] = React.useState({ area: "", consumo: "5", pesoSaco: "20" });
-  const [forro, setForro] = React.useState({ comp: "", larg: "", compLamina: "6", largLamina: "0.20" });
+  const [arg, setArg] = React.useState({ area: "0", consumo: "5", pesoSaco: "20" });
+  const [forro, setForro] = React.useState({ comp: "0", larg: "0", compLamina: "6", largLamina: "0.20" });
+
+  const resetPisoAplicacao = (aplicacao: PisoAplicacao) => {
+    setPiso({ aplicacao, comp: "0", larg: "0", altura: "0" });
+    setVaos([]);
+  };
 
   const resPiso = React.useMemo(() => {
+
     const comp = toNumber(piso.comp);
     const largura = toNumber(piso.larg);
     const altura = toNumber(piso.altura);
@@ -99,10 +105,11 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
   }, [forro]);
 
   const addVao = () => {
-    setVaos(prev => [...prev, { id: Date.now(), descricao: `Vão ${prev.length + 1}`, largura: "", altura: "" }]);
+    setVaos(prev => [...prev, { id: Date.now(), descricao: `Vão ${prev.length + 1}`, largura: "0", altura: "0" }]);
   };
 
   const updateVao = (id: number, field: keyof Omit<Vao, 'id'>, value: string) => {
+
     setVaos(prev => prev.map(vao => vao.id === id ? { ...vao, [field]: value } : vao));
   };
 
@@ -194,10 +201,11 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
                         type="button"
                         variant={piso.aplicacao === tipo ? 'default' : 'outline'}
                         className={cn("h-11 rounded-xl font-black", piso.aplicacao === tipo && "bg-indigo-600 hover:bg-indigo-700")}
-                        onClick={() => setPiso(prev => ({ ...prev, aplicacao: tipo }))}
+                        onClick={() => resetPisoAplicacao(tipo)}
                       >
                         {tipo}
                       </Button>
+
                     ))}
                   </div>
                 </div>
