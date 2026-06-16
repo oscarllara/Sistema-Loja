@@ -122,9 +122,9 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-hidden border-none shadow-2xl rounded-3xl flex flex-col">
-        <DialogHeader className="p-5 border-b bg-slate-950 text-white shrink-0">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] h-[86vh] p-0 overflow-hidden border-none shadow-2xl rounded-3xl flex flex-col">
+        <DialogHeader className="px-5 py-4 border-b bg-slate-950 text-white shrink-0">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
                 <Wallet className="text-emerald-300" size={26} /> Financeiro no POS
@@ -145,20 +145,20 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
           </div>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] min-h-0 flex-1">
-          <div className="p-5 overflow-hidden flex flex-col bg-slate-50">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] min-h-0 flex-1">
+          <div className="p-4 overflow-hidden flex flex-col bg-slate-50">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0">
-              <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+              <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo</p>
-                <p className={cn("text-xl font-black", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{activeType === 'R' ? 'Contas a Receber' : 'Contas a Pagar'}</p>
+                <p className={cn("text-lg font-black", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{activeType === 'R' ? 'Contas a Receber' : 'Contas a Pagar'}</p>
               </div>
-              <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+              <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pendentes filtrados</p>
-                <p className="text-xl font-black text-slate-900">{filteredEntries.length}</p>
+                <p className="text-lg font-black text-slate-900">{filteredEntries.length}</p>
               </div>
-              <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+              <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total pendente</p>
-                <p className="text-xl font-black text-indigo-700">{totalPending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                <p className="text-lg font-black text-indigo-700">{totalPending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
               </div>
             </div>
 
@@ -171,11 +171,11 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
               <Table className="table-fixed w-full">
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
-                    <TableHead className="w-[92px] text-[10px] font-black uppercase">Vencimento</TableHead>
-                    <TableHead className="w-[250px] text-[10px] font-black uppercase">Descrição</TableHead>
-                    <TableHead className="w-[150px] text-[10px] font-black uppercase">Cliente/Fornecedor</TableHead>
+                    <TableHead className="w-[88px] text-[10px] font-black uppercase">Vencimento</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase">Descrição</TableHead>
+                    <TableHead className="w-[145px] text-[10px] font-black uppercase">Cliente/Fornecedor</TableHead>
                     <TableHead className="w-[105px] text-[10px] font-black uppercase text-right">Valor</TableHead>
-                    <TableHead className="w-[116px] text-[10px] font-black uppercase text-center">Ação</TableHead>
+                    <TableHead className="w-[112px] text-[10px] font-black uppercase text-center">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -201,14 +201,14 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
             </div>
           </div>
 
-          <div className="border-l bg-white p-5 overflow-y-auto">
+          <div className="border-l bg-white p-4 overflow-y-auto">
             {!selectedEntry ? (
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 gap-3">
                 <CheckCircle2 size={46} className="opacity-20" />
                 <p className="font-bold text-sm">Selecione uma conta para {activeType === 'R' ? 'receber' : 'pagar'}.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Confirmar baixa</p>
@@ -217,8 +217,8 @@ const POSFinancialModal = ({ isOpen, onClose, defaultAccountId, operatorId, onSu
                   <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setSelectedEntry(null)}><X size={18} /></button>
                 </div>
 
-                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                  <p className="text-xs font-bold text-slate-600">{selectedEntry.descricao}</p>
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                  <p className="text-xs font-bold text-slate-600 line-clamp-3">{selectedEntry.descricao}</p>
                   <p className={cn("text-3xl font-black mt-2", activeType === 'R' ? "text-emerald-700" : "text-rose-700")}>{Number(selectedEntry.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                 </div>
 
