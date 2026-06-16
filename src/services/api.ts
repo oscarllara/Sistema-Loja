@@ -2,8 +2,10 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel, CaixaSessao } from '../types/database';
+import { formatAddressTitleCase, formatCnpj, formatCpfCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const AUTH_KEY = 'dyaderp_auth';
+
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
 
 const sanitizeProductPayload = (product: Partial<Produto>) => {
@@ -63,15 +65,43 @@ const sanitizeConfigPayload = (config: Partial<Configuracoes>) => {
     'whatsapp_suporte'
   ];
 
-  return allowedKeys.reduce((payload, key) => {
+  const payload = allowedKeys.reduce((acc, key) => {
     if (config[key] !== undefined) {
-      payload[key] = config[key] as never;
+      acc[key] = config[key] as never;
     }
-    return payload;
+    return acc;
   }, {} as Partial<Configuracoes>);
+
+  if (payload.provider_cnpj) payload.provider_cnpj = formatCpfCnpj(payload.provider_cnpj);
+  if (payload.cnpj) payload.cnpj = formatCnpj(payload.cnpj);
+  if (payload.provider_tel) payload.provider_tel = formatPhoneBR(payload.provider_tel);
+  if (payload.telefone) payload.telefone = formatPhoneBR(payload.telefone);
+  if (payload.tel2) payload.tel2 = formatPhoneBR(payload.tel2);
+  if (payload.tel3) payload.tel3 = formatPhoneBR(payload.tel3);
+  if (payload.whatsapp_loja) payload.whatsapp_loja = formatPhoneBR(payload.whatsapp_loja);
+  if (payload.whatsapp_suporte) payload.whatsapp_suporte = formatPhoneBR(payload.whatsapp_suporte);
+  if (payload.endereco) payload.endereco = formatAddressTitleCase(payload.endereco);
+
+  return payload;
 };
 
+const sanitizeClientPayload = (client: any) => ({
+  ...client,
+  cpf_cnpj: client.cpf_cnpj ? formatCpfCnpj(client.cpf_cnpj) : client.cpf_cnpj,
+  conjuge_cpf: client.conjuge_cpf ? formatCpfCnpj(client.conjuge_cpf) : client.conjuge_cpf,
+  tel1: client.tel1 ? formatPhoneBR(client.tel1) : client.tel1,
+  tel2: client.tel2 ? formatPhoneBR(client.tel2) : client.tel2,
+  cel: client.cel ? formatPhoneBR(client.cel) : client.cel,
+  conjuge_telefone: client.conjuge_telefone ? formatPhoneBR(client.conjuge_telefone) : client.conjuge_telefone,
+  endereco: client.endereco ? formatAddressTitleCase(client.endereco) : client.endereco,
+  bairro: client.bairro ? formatAddressTitleCase(client.bairro) : client.bairro,
+  cidade: client.cidade ? formatAddressTitleCase(client.cidade) : client.cidade,
+  referencia: client.referencia ? formatAddressTitleCase(client.referencia) : client.referencia,
+  complemento: client.complemento ? formatAddressTitleCase(client.complemento) : client.complemento,
+});
+
 export const db = {
+
   auth: {
     login: async (usuario: string, senha: string) => {
 
@@ -205,12 +235,18 @@ export const db = {
       if (error) throw error;
       return updated;
     },
+    bulkAdd: async (products: Partial<Produto>[]) => {
+      const payload = products.map(product => sanitizeProductPayload(product));
+      const { error } = await supabase.from('produtos').insert(payload);
+      return { error };
+    },
     delete: async (id: number) => {
       const { error } = await supabase.from('produtos').delete().eq('cd_produto', id);
       if (error) throw error;
     }
   },
   clientes: {
+
     getAll: async (): Promise<Cliente[]> => {
       const { data, error } = await supabase.from('clientes').select('*').order('nome');
       if (error) throw error;
@@ -231,19 +267,20 @@ export const db = {
       return { atrasado, totalPendente };
     },
     add: async (c: any) => {
-      const { error } = await supabase.from('clientes').insert([c]);
+      const { error } = await supabase.from('clientes').insert([sanitizeClientPayload(c)]);
       if (error) throw error;
     },
     bulkAdd: async (clients: any[]) => {
-      const { error } = await supabase.from('clientes').insert(clients);
+      const { error } = await supabase.from('clientes').insert(clients.map(sanitizeClientPayload));
       return { error };
     },
     update: async (id: number, data: any) => {
-      const { error } = await supabase.from('clientes').update(data).eq('cd_clientes', id);
+      const { error } = await supabase.from('clientes').update(sanitizeClientPayload(data)).eq('cd_clientes', id);
       if (error) throw error;
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('clientes').delete().eq('cd_clientes', id);
+
       if (error) throw error;
     }
   },

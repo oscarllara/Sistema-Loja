@@ -10,8 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Printer, FileText, X } from 'lucide-react';
 import { db } from '@/services/api';
+import { formatAddressTitleCase, formatCnpj, formatPhoneBR } from '@/utils/formatters';
 
 interface PrintPreviewProps {
+
   isOpen: boolean;
   onClose: () => void;
   data: any;
@@ -115,11 +117,12 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
           {currentConfig.logo_url && <img src={currentConfig.logo_url} alt="Logo" className="h-12 mx-auto mb-2 object-contain" />}
           <h1 className="text-xl font-black uppercase">{currentConfig.nome_empresa}</h1>
           <p className="text-[10px]">{currentConfig.slogan}</p>
-          <p className="text-[10px]">{currentConfig.endereco}</p>
-          <p className="text-[10px]">CNPJ: {currentConfig.cnpj} | Tel: {currentConfig.telefone}</p>
+          <p className="text-[10px]">{formatAddressTitleCase(currentConfig.endereco)}</p>
+          <p className="text-[10px]">CNPJ: {formatCnpj(currentConfig.cnpj)} | Tel: {formatPhoneBR(currentConfig.telefone)}</p>
         </div>
 
         <div className="flex justify-between text-[10px] font-bold mb-4">
+
           <span>{type.toUpperCase()}: {data.cd_venda || data.cd_orcamento}</span>
           <span>DATA: {new Date(data.data).toLocaleString()}</span>
         </div>

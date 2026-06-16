@@ -35,8 +35,10 @@ import { Cliente, Permissoes } from '@/types/database';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import { formatAddressTitleCase, formatCpfCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const clientSchema = z.object({
+
   tipo_entidade: z.enum(['C', 'F', 'A', 'T']),
   is_funcionario: z.boolean(),
   nome: z.string().min(3, "Nome/Razão Social obrigatório"),
@@ -127,6 +129,17 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
     resolver: zodResolver(clientSchema),
     defaultValues: client ? {
       ...client,
+      cpf_cnpj: formatCpfCnpj(client.cpf_cnpj),
+      conjuge_cpf: formatCpfCnpj(client.conjuge_cpf),
+      tel1: formatPhoneBR(client.tel1),
+      tel2: formatPhoneBR(client.tel2),
+      cel: formatPhoneBR(client.cel),
+      conjuge_telefone: formatPhoneBR(client.conjuge_telefone),
+      endereco: formatAddressTitleCase(client.endereco),
+      bairro: formatAddressTitleCase(client.bairro),
+      cidade: formatAddressTitleCase(client.cidade),
+      referencia: formatAddressTitleCase(client.referencia),
+      complemento: formatAddressTitleCase(client.complemento),
       salario: formatAsCurrency(client.salario || 0),
       limite: formatAsCurrency(client.limite || 0),
       despesa_fixa: formatAsCurrency(client.despesa_fixa || 0),
@@ -137,6 +150,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
       usuario: client.usuario || "",
       senha: client.senha || "",
       permissoes: client.permissoes || {
+
         dashboard: true,
         pos: true,
         registrations: false,
@@ -177,12 +191,35 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
   const permissoes = watch("permissoes");
   const estadoCivil = watch("estado_civil");
 
+  const registerFormatted = (field: keyof ClientFormValues & string, formatter: (value: string) => string) => {
+    const registration = register(field);
+    return {
+      ...registration,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+        e.target.value = formatter(e.target.value);
+        registration.onChange(e);
+      }
+    };
+  };
+
   const onSubmit = async (data: ClientFormValues) => {
+
     setIsSaving(true);
     try {
       const payload = {
         ...data,
         nome: data.nome.toUpperCase(),
+        cpf_cnpj: data.cpf_cnpj ? formatCpfCnpj(data.cpf_cnpj) : null,
+        conjuge_cpf: data.conjuge_cpf ? formatCpfCnpj(data.conjuge_cpf) : null,
+        tel1: data.tel1 ? formatPhoneBR(data.tel1) : null,
+        tel2: data.tel2 ? formatPhoneBR(data.tel2) : null,
+        cel: data.cel ? formatPhoneBR(data.cel) : null,
+        conjuge_telefone: data.conjuge_telefone ? formatPhoneBR(data.conjuge_telefone) : null,
+        endereco: data.endereco ? formatAddressTitleCase(data.endereco) : null,
+        bairro: data.bairro ? formatAddressTitleCase(data.bairro) : null,
+        cidade: data.cidade ? formatAddressTitleCase(data.cidade) : null,
+        referencia: data.referencia ? formatAddressTitleCase(data.referencia) : null,
+        complemento: data.complemento ? formatAddressTitleCase(data.complemento) : null,
         salario: parseToNumber(data.salario || "0"),
         limite: parseToNumber(data.limite || "0"),
         despesa_fixa: parseToNumber(data.despesa_fixa || "0"),
@@ -264,18 +301,19 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
             <div className="space-y-2"><Label>Apelido / Nome Fantasia</Label><Input {...register("apelido_fantasia")} className="uppercase" /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>CPF / CNPJ</Label><Input {...register("cpf_cnpj")} /></div>
+            <div className="space-y-2"><Label>CPF / CNPJ</Label><Input {...registerFormatted("cpf_cnpj", formatCpfCnpj)} /></div>
             <div className="space-y-2"><Label>RG / Inscrição Estadual</Label><Input {...register("rg_ie")} /></div>
             <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...register("inscricao_municipal")} /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2"><Label className="flex items-center gap-2"><Mail size={14} /> E-mail Principal</Label><Input type="email" {...register("email")} /></div>
-            <div className="space-y-2"><Label className="flex items-center gap-2"><Smartphone size={14} /> Celular / WhatsApp</Label><Input {...register("cel")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Smartphone size={14} /> Celular / WhatsApp</Label><Input {...registerFormatted("cel", formatPhoneBR)} /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 1</Label><Input {...register("tel1")} /></div>
-            <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 2</Label><Input {...register("tel2")} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 1</Label><Input {...registerFormatted("tel1", formatPhoneBR)} /></div>
+            <div className="space-y-2"><Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo 2</Label><Input {...registerFormatted("tel2", formatPhoneBR)} /></div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2"><Label className="flex items-center gap-2"><Globe size={14} /> Site</Label><Input {...register("site")} /></div>
             <div className="space-y-2"><Label className="flex items-center gap-2"><Facebook size={14} /> Facebook</Label><Input {...register("facebook")} /></div>
@@ -287,12 +325,12 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
         <TabsContent value="endereco" className="mt-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>CEP</Label><Input {...register("cep")} /></div>
-            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...register("endereco")} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Endereço</Label><Input {...registerFormatted("endereco", formatAddressTitleCase)} /></div>
             <div className="space-y-2"><Label>Número</Label><Input {...register("numero")} /></div>
-            <div className="space-y-2"><Label>Bairro</Label><Input {...register("bairro")} /></div>
-            <div className="space-y-2"><Label>Cidade</Label><Input {...register("cidade")} /></div>
+            <div className="space-y-2"><Label>Bairro</Label><Input {...registerFormatted("bairro", formatAddressTitleCase)} /></div>
+            <div className="space-y-2"><Label>Cidade</Label><Input {...registerFormatted("cidade", formatAddressTitleCase)} /></div>
             <div className="space-y-2"><Label>UF</Label><Input {...register("uf")} maxLength={2} /></div>
-            <div className="md:col-span-2 space-y-2"><Label>Referência / Complemento</Label><Input {...register("referencia")} /></div>
+            <div className="md:col-span-2 space-y-2"><Label>Referência / Complemento</Label><Input {...registerFormatted("referencia", formatAddressTitleCase)} /></div>
           </div>
         </TabsContent>
 
@@ -340,7 +378,7 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-rose-700 font-bold">CPF do Cônjuge</Label>
-                  <Input {...register("conjuge_cpf")} className="bg-white border-rose-200" />
+                  <Input {...registerFormatted("conjuge_cpf", formatCpfCnpj)} className="bg-white border-rose-200" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-rose-700 font-bold">Data de Nascimento</Label>
@@ -349,9 +387,10 @@ const ClientForm = ({ client, onSuccess }: ClientFormProps) => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2"><Label className="text-rose-700 font-bold">Empresa</Label><Input {...register("conjuge_empresa")} className="bg-white border-rose-200" /></div>
-                <div className="space-y-2"><Label className="text-rose-700 font-bold">Telefone</Label><Input {...register("conjuge_telefone")} className="bg-white border-rose-200" /></div>
+                <div className="space-y-2"><Label className="text-rose-700 font-bold">Telefone</Label><Input {...registerFormatted("conjuge_telefone", formatPhoneBR)} className="bg-white border-rose-200" /></div>
                 <div className="space-y-2"><Label className="text-rose-700 font-bold">Salário</Label><Input {...register("conjuge_salario")} className="bg-white border-rose-200" /></div>
               </div>
+
             </div>
           )}
         </TabsContent>

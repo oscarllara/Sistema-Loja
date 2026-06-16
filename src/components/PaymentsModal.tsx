@@ -23,8 +23,10 @@ import { db } from '@/services/api';
 import { LancamentoFinanceiro, Cliente, MeioPagamento } from '@/types/database';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import { formatCpfCnpj } from '@/utils/formatters';
 
 interface PaymentsModalProps {
+
   isOpen: boolean;
   onClose: () => void;
   operatorId?: number | "";
@@ -143,9 +145,10 @@ const PaymentsModal = ({ isOpen, onClose, operatorId }: PaymentsModalProps) => {
                       </div>
                       <div className="text-left">
                         <p className="font-black text-sm uppercase text-slate-900">{c.nome}</p>
-                        <p className="text-[10px] text-slate-500 font-bold">{c.cpf_cnpj || 'SEM CPF/CNPJ'}</p>
+                        <p className="text-[10px] text-slate-500 font-bold">{c.cpf_cnpj ? formatCpfCnpj(c.cpf_cnpj) : 'SEM CPF/CNPJ'}</p>
                       </div>
                     </Button>
+
                   ))
                 )}
               </div>

@@ -42,8 +42,10 @@ import ClientForm from '@/components/ClientForm';
 import ClientDetails from '@/components/ClientDetails';
 import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
+import { formatCpfCnpj, formatPhoneBR, onlyDigits } from '@/utils/formatters';
 
 const Registrations = () => {
+
   const [entities, setEntities] = React.useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
@@ -74,12 +76,15 @@ const Registrations = () => {
   const filteredEntities = (Array.isArray(entities) ? entities : []).filter(e => {
     if (!e || !e.nome) return false;
     
+    const normalizedSearch = onlyDigits(searchTerm);
     const matchesSearch = e.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (e.cpf_cnpj && e.cpf_cnpj.includes(searchTerm));
+                         (e.cpf_cnpj && e.cpf_cnpj.includes(searchTerm)) ||
+                         (!!normalizedSearch && onlyDigits(e.cpf_cnpj).includes(normalizedSearch));
     
     if (!matchesSearch) return false;
 
     switch (activeTab) {
+
       case 'clients':
         return e.tipo_entidade === 'C' || e.tipo_entidade === 'A';
       case 'suppliers':
@@ -234,9 +239,10 @@ const Registrations = () => {
                           {entity.apelido_fantasia && <p className="text-xs text-slate-500">{entity.apelido_fantasia}</p>}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-500 font-mono text-xs">{entity.cpf_cnpj || "-"}</TableCell>
-                      <TableCell className="text-slate-500 text-xs">{entity.cel || entity.tel1 || "-"}</TableCell>
+                      <TableCell className="text-slate-500 font-mono text-xs">{entity.cpf_cnpj ? formatCpfCnpj(entity.cpf_cnpj) : "-"}</TableCell>
+                      <TableCell className="text-slate-500 text-xs">{entity.cel || entity.tel1 ? formatPhoneBR(entity.cel || entity.tel1) : "-"}</TableCell>
                       <TableCell className="text-right">
+
                         <div className="flex justify-end gap-2">
                           <Button 
                             variant="outline" 

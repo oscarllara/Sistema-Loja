@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import * as XLSX from 'xlsx';
 import { showSuccess, showError, showLoading, dismissToast } from '@/utils/toast';
 import { db } from '@/services/api';
+import { formatCpfCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const ImportData = () => {
+
   const [isFinished, setIsFinished] = React.useState(false);
   const [logs, setLogs] = React.useState<string[]>([]);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -137,8 +139,8 @@ const ImportData = () => {
 
     const mapped = data.map((item) => ({
       nome: (item[kNome] || "").toString().trim().toUpperCase(),
-      cpf_cnpj: kDoc ? (item[kDoc] || "").toString() : "",
-      cel: kTel ? (item[kTel] || "").toString() : "",
+      cpf_cnpj: kDoc ? formatCpfCnpj((item[kDoc] || "").toString()) : "",
+      cel: kTel ? formatPhoneBR((item[kTel] || "").toString()) : "",
       tipo_entidade: 'C',
       is_funcionario: false,
       data: new Date().toISOString()

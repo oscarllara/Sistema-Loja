@@ -28,8 +28,10 @@ import {
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { Configuracoes, ContaBancaria } from '@/types/database';
+import { formatAddressTitleCase, formatCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const Settings = () => {
+
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -40,9 +42,19 @@ const Settings = () => {
         db.config.get(),
         db.contas.getAll().catch(() => [])
       ]);
-      setConfig({ ...data, payment_account_routes: data.payment_account_routes || {} });
+      setConfig({
+        ...data,
+        provider_cnpj: formatCnpj(data.provider_cnpj),
+        provider_tel: formatPhoneBR(data.provider_tel),
+        cnpj: formatCnpj(data.cnpj),
+        telefone: formatPhoneBR(data.telefone),
+        whatsapp_loja: formatPhoneBR(data.whatsapp_loja),
+        endereco: formatAddressTitleCase(data.endereco),
+        payment_account_routes: data.payment_account_routes || {}
+      });
       setContas(contasData || []);
     } catch (err) {
+
       showError("Erro ao carregar configurações.");
     } finally {
       setIsLoading(false);
@@ -112,12 +124,13 @@ const Settings = () => {
               </div>
               <div className="space-y-2">
                 <Label>CNPJ do Provedor</Label>
-                <Input value={config.provider_cnpj || ""} onChange={(e) => setConfig({ ...config, provider_cnpj: e.target.value })} />
+                <Input value={config.provider_cnpj || ""} onChange={(e) => setConfig({ ...config, provider_cnpj: formatCnpj(e.target.value) })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Telefone</Label><Input value={config.provider_tel || ""} onChange={(e) => setConfig({ ...config, provider_tel: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Telefone</Label><Input value={config.provider_tel || ""} onChange={(e) => setConfig({ ...config, provider_tel: formatPhoneBR(e.target.value) })} /></div>
                 <div className="space-y-2"><Label>E-mail</Label><Input value={config.provider_email || ""} onChange={(e) => setConfig({ ...config, provider_email: e.target.value })} /></div>
               </div>
+
               <div className="space-y-2">
                 <Label className="flex items-center gap-2"><ImageIcon size={14} /> URL da Logo do Provedor (Pequena)</Label>
                 <Input value={config.provider_logo || ""} onChange={(e) => setConfig({ ...config, provider_logo: e.target.value })} placeholder="https://..." />
@@ -218,12 +231,13 @@ const Settings = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>CNPJ</Label>
-                  <Input value={config.cnpj || ""} onChange={(e) => setConfig({ ...config, cnpj: e.target.value })} />
+                  <Input value={config.cnpj || ""} onChange={(e) => setConfig({ ...config, cnpj: formatCnpj(e.target.value) })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Inscrição Estadual</Label>
                   <Input value={config.inscricao_estadual || ""} onChange={(e) => setConfig({ ...config, inscricao_estadual: e.target.value })} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Inscrição Municipal</Label>
                   <Input value={config.inscricao_municipal || ""} onChange={(e) => setConfig({ ...config, inscricao_municipal: e.target.value })} />
@@ -232,18 +246,19 @@ const Settings = () => {
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2"><MapPin size={14} /> Endereço Completo</Label>
-                <Input value={config.endereco || ""} onChange={(e) => setConfig({ ...config, endereco: e.target.value })} />
+                <Input value={config.endereco || ""} onChange={(e) => setConfig({ ...config, endereco: formatAddressTitleCase(e.target.value) })} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2"><Phone size={14} /> Telefone Fixo</Label>
-                  <Input value={config.telefone || ""} onChange={(e) => setConfig({ ...config, telefone: e.target.value })} />
+                  <Input value={config.telefone || ""} onChange={(e) => setConfig({ ...config, telefone: formatPhoneBR(e.target.value) })} />
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2"><MessageCircle size={14} /> WhatsApp Loja</Label>
-                  <Input value={config.whatsapp_loja || ""} onChange={(e) => setConfig({ ...config, whatsapp_loja: e.target.value })} />
+                  <Input value={config.whatsapp_loja || ""} onChange={(e) => setConfig({ ...config, whatsapp_loja: formatPhoneBR(e.target.value) })} />
                 </div>
+
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2"><Mail size={14} /> E-mail</Label>
                   <Input value={config.email_loja || ""} onChange={(e) => setConfig({ ...config, email_loja: e.target.value })} />
