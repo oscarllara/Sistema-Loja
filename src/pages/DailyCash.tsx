@@ -538,14 +538,24 @@ const DailyCash = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               {dailyCashCards.map(card => {
                 const Icon = card.icon;
-                const active = paymentFilter === card.filter;
+                const active = paymentFilter === card.filter && filterType === 'All';
+                const entriesActive = paymentFilter === card.filter && filterType === 'R';
+                const exitsActive = paymentFilter === card.filter && filterType === 'P';
                 return (
-                  <button
+                  <div
                     key={card.filter}
-                    type="button"
-                    onClick={() => setPaymentFilter(card.filter)}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { setPaymentFilter(card.filter); setFilterType('All'); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setPaymentFilter(card.filter);
+                        setFilterType('All');
+                      }
+                    }}
                     className={cn(
-                      "text-left rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+                      "text-left rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer",
                       active && "ring-4 ring-offset-2 scale-[1.02]",
                       card.color === 'slate' && (active ? "border-slate-900 ring-slate-200" : "border-slate-200"),
                       card.color === 'emerald' && (active ? "border-emerald-600 ring-emerald-100" : "border-emerald-100"),
@@ -570,11 +580,11 @@ const DailyCash = () => {
                     </div>
                     <p className="text-2xl font-black text-slate-900 mt-3">{formatCurrency(card.total)}</p>
                     <div className="grid grid-cols-2 gap-2 mt-3 text-xs font-bold">
-                      <div className="rounded-xl bg-emerald-50 text-emerald-700 p-2">Entradas<br /><span className="font-black">{formatCurrency(card.entries)}</span></div>
-                      <div className="rounded-xl bg-rose-50 text-rose-700 p-2">Saídas<br /><span className="font-black">{formatCurrency(card.exits)}</span></div>
+                      <button type="button" className={cn("rounded-xl bg-emerald-50 text-emerald-700 p-2 text-left transition-all hover:bg-emerald-100", entriesActive && "ring-2 ring-emerald-500")} onClick={(e) => { e.stopPropagation(); setPaymentFilter(card.filter); setFilterType('R'); }}>Entradas<br /><span className="font-black">{formatCurrency(card.entries)}</span></button>
+                      <button type="button" className={cn("rounded-xl bg-rose-50 text-rose-700 p-2 text-left transition-all hover:bg-rose-100", exitsActive && "ring-2 ring-rose-500")} onClick={(e) => { e.stopPropagation(); setPaymentFilter(card.filter); setFilterType('P'); }}>Saídas<br /><span className="font-black">{formatCurrency(card.exits)}</span></button>
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">{card.count} lançamento(s)</p>
-                  </button>
+                  </div>
                 );
               })}
             </div>

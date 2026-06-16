@@ -181,6 +181,7 @@ const POS = () => {
   const [isDailyCashAuthOpen, setIsDailyCashAuthOpen] = React.useState(false);
   const [isDailyCashPanelOpen, setIsDailyCashPanelOpen] = React.useState(false);
   const [dailyCashFilter, setDailyCashFilter] = React.useState<DailyCashFilter>('Todos');
+  const [dailyCashTypeFilter, setDailyCashTypeFilter] = React.useState<'Todos' | 'R' | 'P'>('Todos');
   const [isCashMovementOpen, setIsCashMovementOpen] = React.useState(false);
   const [cashMovementType, setCashMovementType] = React.useState<'R' | 'P'>('R');
   const [cashMovementDescription, setCashMovementDescription] = React.useState("");
@@ -684,9 +685,12 @@ const POS = () => {
   ], [cashMovementsToday, cashOpeningBalance]);
 
   const filteredDailyCashMovements = React.useMemo(() => {
-    if (dailyCashFilter === 'Todos') return cashMovementsToday;
-    return cashMovementsToday.filter(item => getDailyCashGroup(item) === dailyCashFilter);
-  }, [cashMovementsToday, dailyCashFilter]);
+    return cashMovementsToday.filter(item => {
+      const matchesPayment = dailyCashFilter === 'Todos' || getDailyCashGroup(item) === dailyCashFilter;
+      const matchesType = dailyCashTypeFilter === 'Todos' || item.tipo === dailyCashTypeFilter;
+      return matchesPayment && matchesType;
+    });
+  }, [cashMovementsToday, dailyCashFilter, dailyCashTypeFilter]);
 
   const openCashDialog = () => {
     setOpeningRealValue(formatMoneyInput(expectedOpeningBalance));
@@ -1602,14 +1606,24 @@ const POS = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               {dailyCashCards.map(card => {
                 const Icon = card.icon;
-                const active = dailyCashFilter === card.filter;
+                const active = dailyCashFilter === card.filter && dailyCashTypeFilter === 'Todos';
+                const entriesActive = dailyCashFilter === card.filter && dailyCashTypeFilter === 'R';
+                const exitsActive = dailyCashFilter === card.filter && dailyCashTypeFilter === 'P';
                 return (
-                  <button
+                  <div
                     key={card.filter}
-                    type="button"
-                    onClick={() => setDailyCashFilter(card.filter)}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { setDailyCashFilter(card.filter); setDailyCashTypeFilter('Todos'); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setDailyCashFilter(card.filter);
+                        setDailyCashTypeFilter('Todos');
+                      }
+                    }}
                     className={cn(
-                      "text-left rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+                      "text-left rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer",
                       active && "ring-4 ring-offset-2 scale-[1.02]",
                       card.color === 'slate' && (active ? "border-slate-900 ring-slate-200" : "border-slate-200"),
                       card.color === 'emerald' && (active ? "border-emerald-600 ring-emerald-100" : "border-emerald-100"),
@@ -1634,11 +1648,11 @@ const POS = () => {
                     </div>
                     <p className="text-2xl font-black text-slate-900 mt-3">{formatCurrency(card.total)}</p>
                     <div className="grid grid-cols-2 gap-2 mt-3 text-xs font-bold">
-                      <div className="rounded-xl bg-emerald-50 text-emerald-700 p-2">Entradas<br /><span className="font-black">{formatCurrency(card.entries)}</span></div>
-                      <div className="rounded-xl bg-rose-50 text-rose-700 p-2">Saídas<br /><span className="font-black">{formatCurrency(card.exits)}</span></div>
+                      <button type="button" className={cn("rounded-xl bg-emerald-50 text-emerald-700 p-2 text-left transition-all hover:bg-emerald-100", entriesActive && "ring-2 ring-emerald-500")} onClick={(e) => { e.stopPropagation(); setDailyCashFilter(card.filter); setDailyCashTypeFilter('R'); }}>Entradas<br /><span className="font-black">{formatCurrency(card.entries)}</span></button>
+                      <button type="button" className={cn("rounded-xl bg-rose-50 text-rose-700 p-2 text-left transition-all hover:bg-rose-100", exitsActive && "ring-2 ring-rose-500")} onClick={(e) => { e.stopPropagation(); setDailyCashFilter(card.filter); setDailyCashTypeFilter('P'); }}>Saídas<br /><span className="font-black">{formatCurrency(card.exits)}</span></button>
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">{card.count} lançamento(s)</p>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1647,9 +1661,11 @@ const POS = () => {
               <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Conferência de lançamentos</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Filtro ativo: {dailyCashFilter}</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    Filtro ativo: {dailyCashFilter}{dailyCashTypeFilter !== 'Todos' ? ` • ${dailyCashTypeFilter === 'R' ? 'Entradas' : 'Saídas'}` : ''}
+                  </p>
                 </div>
-                <Button variant="outline" className="rounded-xl font-black text-xs uppercase" onClick={() => setDailyCashFilter('Todos')}>Limpar filtro</Button>
+                <Button variant="outline" className="rounded-xl font-black text-xs uppercase" onClick={() => { setDailyCashFilter('Todos'); setDailyCashTypeFilter('Todos'); }}>Limpar filtro</Button>
               </div>
               <ScrollArea className="h-[300px]">
                 <Table>
