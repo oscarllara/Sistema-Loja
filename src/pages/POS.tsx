@@ -60,10 +60,17 @@ import PaymentsModal from '@/components/PaymentsModal';
 import POSFinancialModal from '@/components/POSFinancialModal';
 import SyncStatus from '@/components/SyncStatus';
 import TechnicalCalculator, { CalculatorPendingItem } from '@/components/TechnicalCalculator';
-import { Produto, Cliente, Configuracoes, ContaBancaria, CaixaSessao, LancamentoFinanceiro } from '@/types/database';
+import { Produto, Cliente, Configuracoes, ContaBancaria, CaixaSessao, LancamentoFinanceiro, PeriodoLocacao } from '@/types/database';
 
 type POSMode = 'VENDA' | 'COMPRA' | 'LOCACAO';
 type DailyCashFilter = 'Todos' | 'Dinheiro' | 'Cartão' | 'PIX';
+
+const rentalPeriodDays: Record<PeriodoLocacao, number> = {
+  Diária: 1,
+  Semana: 7,
+  Quinzena: 15,
+  Mês: 30
+};
 
 const POS = () => {
   const navigate = useNavigate();
@@ -168,6 +175,8 @@ const POS = () => {
   const [inputUnitPrice, setInputUnitPrice] = React.useState("0,00");
   const [inputUnit, setInputUnit] = React.useState("UN");
   const [pendingProduct, setPendingProduct] = React.useState<any>(null);
+  const [rentalStartDate, setRentalStartDate] = React.useState("");
+  const [rentalEndDate, setRentalEndDate] = React.useState("");
   
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchInitialTerm, setSearchInitialTerm] = React.useState("");
@@ -226,6 +235,10 @@ const POS = () => {
   const formatMoneyInput = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const normalizeMoneyInput = (value: string) => formatMoneyInput(parseBRNumber(value));
   const today = new Date().toISOString().split('T')[0];
+  React.useEffect(() => {
+    if (!rentalStartDate) setRentalStartDate(today);
+    if (!rentalEndDate) setRentalEndDate(today);
+  }, [rentalEndDate, rentalStartDate, today]);
   const cashAccount = React.useMemo(() => contas.find(c => c.tipo === 'Caixa') || contas[0], [contas]);
   const currentCashSession = React.useMemo(() => {
     if (!cashAccount) return undefined;
@@ -347,12 +360,20 @@ const POS = () => {
   }, [handleShortcut]);
 
   const startInsertion = (product: any) => {
+    if (mode === 'LOCACAO' && !product.is_locacao) {
+      showError("Este produto não está marcado como item de locação.");
+      return;
+    }
+
     setPendingProduct(product);
     setInputCode(product.nome);
     setInputUnit(product.un);
     setInputQty("1");
     
     const price = getProductPrice(product, product.un, priceMode);
+    if (mode === 'LOCACAO' && price <= 0) {
+      showError("Cadastre o valor de locação deste produto: diária, semanal, quinzenal ou mensal.");
+    }
     setInputUnitPrice(price.toFixed(2).replace('.', ','));
     
     const boxSize = getBoxSize(product);
@@ -405,11 +426,84 @@ const POS = () => {
 
   const getProductPrice = (product: any, unit: string, currentPriceMode: 'PRAZO' | 'VISTA') => {
     if (mode === 'COMPRA') return product.compra || 0;
+    if (mode === 'LOCACAO') return calculateRentalCharge(product, rentalDays).total;
     if (product.fracionado && unit === product.un_fracionada) {
       return product.venda_fracionada || (product.venda * (product.fator_conversao || 1));
     }
     const precoVista = typeof product.venda_vista === 'number' ? product.venda_vista : (product.venda || 0);
     return currentPriceMode === 'VISTA' ? precoVista : (product.venda || 0);
+  };
+
+  const getProductRentalPrice = (product: any, period: PeriodoLocacao) => {
+    if (period === 'Semana') return Number(product?.valor_semana || 0);
+    if (period === 'Quinzena') return Number(product?.valor_quinzena || 0);
+    if (period === 'Mês') return Number(product?.valor_mes || 0);
+    return Number(product?.valor_diaria || 0);
+  };
+
+  const calculateRentalDays = (start: string, end: string) => {
+    if (!start || !end) return 1;
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate = new Date(`${end}T00:00:00`);
+    const diff = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+    return Math.max(diff, 1);
+  };
+
+  const calculateRentalCharge = (product: any, days: number) => {
+    const availablePeriods = (['Diária', 'Semana', 'Quinzena', 'Mês'] as PeriodoLocacao[])
+      .map(period => ({ period, days: rentalPeriodDays[period], price: getProductRentalPrice(product, period) }))
+      .filter(option => option.price > 0);
+
+    if (availablePeriods.length === 0) {
+      return { total: 0, mainPeriod: 'Diária' as PeriodoLocacao, description: 'Sem preço de locação' };
+    }
+
+    const dp: Array<{ total: number; parts: Partial<Record<PeriodoLocacao, number>> }> = [{ total: 0, parts: {} }];
+
+    for (let currentDay = 1; currentDay <= days; currentDay++) {
+      let best: { total: number; parts: Partial<Record<PeriodoLocacao, number>> } | null = null;
+
+      for (const option of availablePeriods) {
+        const previous = dp[Math.max(0, currentDay - option.days)];
+        const candidate = {
+          total: previous.total + option.price,
+          parts: {
+            ...previous.parts,
+            [option.period]: (previous.parts[option.period] || 0) + 1
+          }
+        };
+
+        if (!best || candidate.total < best.total) best = candidate;
+      }
+
+      dp[currentDay] = best || { total: 0, parts: {} };
+    }
+
+    const result = dp[days];
+    const description = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[])
+      .filter(period => result.parts[period])
+      .map(period => `${result.parts[period]}x ${period}`)
+      .join(' + ');
+    const mainPeriod = (['Mês', 'Quinzena', 'Semana', 'Diária'] as PeriodoLocacao[]).find(period => result.parts[period]) || 'Diária';
+
+    return { total: result.total, mainPeriod, description };
+  };
+
+  const rentalDays = React.useMemo(() => calculateRentalDays(rentalStartDate || today, rentalEndDate || today), [rentalEndDate, rentalStartDate, today]);
+  const pendingRentalCharge = React.useMemo(() => pendingProduct ? calculateRentalCharge(pendingProduct, rentalDays) : null, [pendingProduct, rentalDays]);
+
+  const handleRentalDateChange = (field: 'start' | 'end', value: string) => {
+    const nextStart = field === 'start' ? value : rentalStartDate;
+    const nextEnd = field === 'end' ? value : rentalEndDate;
+
+    if (field === 'start') setRentalStartDate(value);
+    if (field === 'end') setRentalEndDate(value);
+
+    if (pendingProduct && mode === 'LOCACAO') {
+      const days = calculateRentalDays(nextStart || today, nextEnd || today);
+      const charge = calculateRentalCharge(pendingProduct, days);
+      setInputUnitPrice(charge.total.toFixed(2).replace('.', ','));
+    }
   };
 
   const handlePriceModeChange = (nextMode: 'PRAZO' | 'VISTA') => {
@@ -445,7 +539,18 @@ const POS = () => {
       qty = getRoundedBoxInfo(qty, boxSize).quantity;
     }
 
-    const price = parseBRNumber(inputUnitPrice);
+    if (mode === 'LOCACAO' && (rentalEndDate || today) < (rentalStartDate || today)) {
+      showError("A data prevista de devolução não pode ser menor que a data de retirada.");
+      return;
+    }
+
+    const rentalCharge = mode === 'LOCACAO' ? calculateRentalCharge(pendingProduct, rentalDays) : null;
+    if (mode === 'LOCACAO' && (!rentalCharge || rentalCharge.total <= 0)) {
+      showError("Cadastre o valor de locação deste produto: diária, semanal, quinzenal ou mensal.");
+      return;
+    }
+
+    const price = mode === 'LOCACAO' ? Number((rentalCharge?.total || 0).toFixed(2)) : parseBRNumber(inputUnitPrice);
     const margin = pendingProduct.compra > 0 ? ((price / pendingProduct.compra) - 1) * 100 : 40;
 
     setCart(prev => [...prev, {
@@ -461,7 +566,12 @@ const POS = () => {
       isFractional: pendingProduct.fracionado && inputUnit === pendingProduct.un_fracionada,
       conversionFactor: pendingProduct.fator_conversao || 1,
       boxSize: boxSize,
-      boxesInput: boxSize > 0 ? Math.ceil(qty / boxSize).toString() : undefined
+      boxesInput: boxSize > 0 ? Math.ceil(qty / boxSize).toString() : undefined,
+      rentalStartDate: mode === 'LOCACAO' ? (rentalStartDate || today) : undefined,
+      rentalEndDate: mode === 'LOCACAO' ? (rentalEndDate || today) : undefined,
+      rentalDays: mode === 'LOCACAO' ? rentalDays : undefined,
+      rentalPeriodType: mode === 'LOCACAO' ? rentalCharge?.mainPeriod : undefined,
+      rentalCalculation: mode === 'LOCACAO' ? rentalCharge?.description : undefined
     }]);
     
     setPendingProduct(null);
@@ -834,6 +944,62 @@ const POS = () => {
 
   const executeFinalize = async (payments: any[]) => {
     const entity = clients.find(e => e.cd_clientes === selectedEntityId);
+
+    if (mode === 'LOCACAO') {
+      if (!selectedEntityId || !entity) {
+        showError("Locação exige cliente identificado.");
+        return;
+      }
+
+      const contractStartDate = cart.reduce((earliest, item) => {
+        const itemDate = item.rentalStartDate || today;
+        return itemDate < earliest ? itemDate : earliest;
+      }, cart[0]?.rentalStartDate || today);
+
+      const contractEndDate = cart.reduce((latest, item) => {
+        const itemDate = item.rentalEndDate || today;
+        return itemDate > latest ? itemDate : latest;
+      }, cart[0]?.rentalEndDate || today);
+
+      await db.alugueis.create({
+        cd_clientes: Number(selectedEntityId),
+        nome_cliente: entity.nome,
+        cd_func: Number(selectedSellerId),
+        data_inicio: contractStartDate,
+        data_fim_prevista: contractEndDate,
+        periodo_tipo: 'Diária',
+        dias: calculateRentalDays(contractStartDate, contractEndDate),
+        total: Number(total.toFixed(2)),
+        itens: cart.map(item => ({
+          cd_produto: item.cd_produto,
+          nome_produto: item.nome || 'Produto sem nome',
+          quantidade: Number(item.quantity || 0),
+          valor_unitario: Number(item.finalPrice || 0),
+          periodo_tipo: item.rentalPeriodType || 'Diária',
+          subtotal: Number(((item.finalPrice || 0) * (item.quantity || 0)).toFixed(2)),
+          data_retirada: item.rentalStartDate || today,
+          data_devolucao_prevista: item.rentalEndDate || today,
+          dias: item.rentalDays || 1,
+          calculo_descricao: item.rentalCalculation || item.rentalPeriodType || 'Diária'
+        }))
+      });
+
+      showSuccess("Contrato de locação criado com datas, cálculo, baixa de estoque e financeiro.");
+      setCart([]);
+      setSelectedCartIndex(null);
+      setSelectedSellerId("");
+      setSelectedEntityId("");
+      setInputCode("");
+      setPendingProduct(null);
+      setInputQty("0,000");
+      setInputBoxes("0");
+      setInputUnitPrice("0,00");
+      setIsCheckoutOpen(false);
+      await loadAllData();
+      setTimeout(() => sellerRef.current?.focus(), 100);
+      return;
+    }
+
     const payload = {
       total: Number(total.toFixed(2)),
       custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
@@ -1353,7 +1519,14 @@ const POS = () => {
                       )}
                     >
                       <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
-                      <TableCell className="py-0 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">{item?.nome}</TableCell>
+                      <TableCell className="py-1 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">
+                        <div>{item?.nome}</div>
+                        {mode === 'LOCACAO' && item.rentalStartDate && (
+                          <div className="text-[10px] font-bold text-amber-700 normal-case">
+                            Retirada: {new Date(`${item.rentalStartDate}T00:00:00`).toLocaleDateString('pt-BR')} • Prev. devolução: {new Date(`${item.rentalEndDate}T00:00:00`).toLocaleDateString('pt-BR')} • {item.rentalDays} dia(s) • {item.rentalCalculation}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">{item?.selectedUnit}</TableCell>
                       <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
                         <input
@@ -1379,6 +1552,7 @@ const POS = () => {
                           <input
                             className="w-full bg-transparent text-right text-sm font-bold text-slate-700 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
                             value={item.finalPriceInput ?? item.finalPrice.toFixed(2).replace('.', ',')}
+                            readOnly={mode === 'LOCACAO'}
                             onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
                             onBlur={() => normalizeCartItemInput(idx, 'finalPrice')}
                           />
@@ -1394,7 +1568,7 @@ const POS = () => {
           </div>
         </div>
 
-        <footer className="h-auto lg:h-24 border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10">
+        <footer className={cn("h-auto border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10", mode === 'LOCACAO' ? "lg:h-32" : "lg:h-24")}>
           <form onSubmit={handleCodeSubmit} className="flex flex-wrap lg:flex-nowrap items-end gap-4 h-full max-w-7xl mx-auto">
             <div className="flex-1 min-w-[200px] space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} className="text-amber-500" /> Entrada de Produto (F1)</label>
@@ -1429,18 +1603,35 @@ const POS = () => {
               </div>
             )}
 
+            {mode === 'LOCACAO' && (
+              <>
+                <div className="w-36 lg:w-40 space-y-1.5">
+                  <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest text-center block">Retirada / Aluguel</label>
+                  <Input type="date" value={rentalStartDate || today} onChange={(e) => handleRentalDateChange('start', e.target.value)} className="h-12 bg-amber-50 border-none text-sm font-black text-slate-900 text-center shadow-inner" />
+                </div>
+                <div className="w-36 lg:w-40 space-y-1.5">
+                  <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest text-center block">Devolução Prevista</label>
+                  <Input type="date" value={rentalEndDate || today} onChange={(e) => handleRentalDateChange('end', e.target.value)} className="h-12 bg-amber-50 border-none text-sm font-black text-slate-900 text-center shadow-inner" />
+                </div>
+              </>
+            )}
+
             <div className="w-28 lg:w-36 space-y-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">Valor Unit. (R$)</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center block">{mode === 'LOCACAO' ? `Valor ${rentalDays} dia(s)` : 'Valor Unit. (R$)'}</label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" size={14} />
-                <Input 
+                <Input
                   ref={unitPriceRef}
-                  value={inputUnitPrice} 
-                  onChange={(e) => setInputUnitPrice(formatQtyMask(e.target.value))} 
+                  value={inputUnitPrice}
+                  readOnly={mode === 'LOCACAO'}
+                  onChange={(e) => setInputUnitPrice(formatQtyMask(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter' && pendingProduct) commitToCart(); }}
-                  className="h-12 bg-[#E1FFFF] border-none text-xl font-black text-emerald-700 text-right pl-8 shadow-inner" 
+                  className={cn("h-12 border-none text-xl font-black text-emerald-700 text-right pl-8 shadow-inner", mode === 'LOCACAO' ? "bg-amber-50" : "bg-[#E1FFFF]")}
                 />
               </div>
+              {mode === 'LOCACAO' && pendingRentalCharge && (
+                <p className="text-[9px] font-black text-amber-400 uppercase text-center truncate">{pendingRentalCharge.description}</p>
+              )}
             </div>
 
             <div className="w-24 lg:w-28 space-y-1.5">
