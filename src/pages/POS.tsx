@@ -710,15 +710,16 @@ const POS = () => {
       : dailyCashMovementsToday.filter(item => getDailyCashGroup(item) === filter);
     const entries = movements.filter(item => item.tipo === 'R').reduce((acc, item) => acc + Number(item.valor || 0), 0);
     const exits = movements.filter(item => item.tipo === 'P').reduce((acc, item) => acc + Number(item.valor || 0), 0);
-    return { entries, exits, total: entries - exits, count: movements.length };
+    const opening = filter === 'Todos' || filter === 'Dinheiro' ? dailyCashOpeningBalance : 0;
+    return { entries, exits, total: opening + entries - exits, count: movements.length };
   };
 
   const dailyCashCards = React.useMemo(() => [
-    { filter: 'Todos' as const, title: 'Todos', description: 'Movimentação do dia', icon: Wallet, color: 'slate', ...getDailyCashTotals('Todos') },
-    { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Movimento em espécie', icon: Banknote, color: 'emerald', ...getDailyCashTotals('Dinheiro') },
+    { filter: 'Todos' as const, title: 'Todos', description: 'Tudo do dia', icon: Wallet, color: 'slate', ...getDailyCashTotals('Todos') },
+    { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Saldo em espécie', icon: Banknote, color: 'emerald', ...getDailyCashTotals('Dinheiro') },
     { filter: 'Cartão' as const, title: 'Cartões', description: 'Débito e crédito', icon: CreditCard, color: 'indigo', ...getDailyCashTotals('Cartão') },
     { filter: 'PIX' as const, title: 'PIX', description: 'Transferências instantâneas', icon: QrCode, color: 'cyan', ...getDailyCashTotals('PIX') },
-  ], [dailyCashMovementsToday]);
+  ], [dailyCashMovementsToday, dailyCashOpeningBalance]);
 
   const filteredDailyCashMovements = React.useMemo(() => {
     return dailyCashMovementsToday.filter(item => {
