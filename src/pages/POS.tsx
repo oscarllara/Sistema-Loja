@@ -180,6 +180,11 @@ const POS = () => {
   const [isDailyCashAuthOpen, setIsDailyCashAuthOpen] = React.useState(false);
   const [isDailyCashPanelOpen, setIsDailyCashPanelOpen] = React.useState(false);
   const [dailyCashFilter, setDailyCashFilter] = React.useState<DailyCashFilter>('Todos');
+  const [isCashMovementOpen, setIsCashMovementOpen] = React.useState(false);
+  const [cashMovementType, setCashMovementType] = React.useState<'R' | 'P'>('R');
+  const [cashMovementDescription, setCashMovementDescription] = React.useState("");
+  const [cashMovementValue, setCashMovementValue] = React.useState("0,00");
+  const [cashMovementMethod, setCashMovementMethod] = React.useState("Dinheiro");
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
@@ -906,6 +911,50 @@ const POS = () => {
     }
   };
 
+  const openCashMovementDialog = (type: 'R' | 'P') => {
+    setCashMovementType(type);
+    setCashMovementDescription(type === 'R' ? 'ENTRADA AVULSA' : 'SAÍDA AVULSA');
+    setCashMovementValue('0,00');
+    setCashMovementMethod('Dinheiro');
+    setIsCashMovementOpen(true);
+  };
+
+  const handleAddCashMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de lançar entradas ou saídas."); return; }
+
+    const value = parseBRNumber(cashMovementValue);
+    if (value <= 0) { showError("Informe um valor válido."); return; }
+    if (!cashMovementDescription.trim()) { showError("Informe a descrição do lançamento."); return; }
+
+    try {
+      await db.financeiro.add({
+        tipo: cashMovementType,
+        descricao: cashMovementDescription.trim().toUpperCase(),
+        valor: Number(value.toFixed(2)),
+        data_vencimento: today,
+        data_pagamento: new Date().toISOString(),
+        status: 'Pago',
+        categoria: cashMovementType === 'R' ? 'Ajuste' : 'Ajuste',
+        meio_pagamento: cashMovementMethod,
+        cd_conta: cashAccount.cd_conta,
+        cd_func: selectedSellerId ? Number(selectedSellerId) : null
+      });
+
+      const nextBalance = cashMovementType === 'R'
+        ? Number(cashAccount.saldo || 0) + value
+        : Number(cashAccount.saldo || 0) - value;
+      await db.contas.update(cashAccount.cd_conta, { saldo: Number(nextBalance.toFixed(2)) });
+
+      showSuccess(cashMovementType === 'R' ? "Entrada registrada." : "Saída registrada.");
+      setIsCashMovementOpen(false);
+      await loadAllData();
+    } catch {
+      showError("Não foi possível registrar o lançamento.");
+    }
+  };
+
   const theme = {
     VENDA: { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-900', header: 'bg-slate-900', border: 'border-slate-800' },
     COMPRA: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', text: 'text-emerald-900', header: 'bg-emerald-900', border: 'border-emerald-800' },
@@ -1312,6 +1361,49 @@ const POS = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isCashMovementOpen} onOpenChange={setIsCashMovementOpen}>
+        <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className={cn("text-2xl font-black uppercase tracking-tighter flex items-center gap-2", cashMovementType === 'R' ? "text-emerald-700" : "text-rose-700")}>
+              {cashMovementType === 'R' ? <ArrowDownCircle size={24} /> : <ArrowUpCircle size={24} />}
+              {cashMovementType === 'R' ? 'Nova Entrada' : 'Nova Saída'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddCashMovement} className="space-y-4 py-2">
+            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Caixa</p>
+              <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • {new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')}</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descrição</Label>
+              <Input value={cashMovementDescription} onChange={(e) => setCashMovementDescription(e.target.value)} className="h-12 rounded-2xl font-bold uppercase" autoFocus />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
+                <Input value={cashMovementValue} onChange={(e) => setCashMovementValue(e.target.value)} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pagamento</Label>
+                <select value={cashMovementMethod} onChange={(e) => setCashMovementMethod(e.target.value)} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="PIX">PIX</option>
+                  <option value="Cartão Débito">Cartão Débito</option>
+                  <option value="Cartão Crédito">Cartão Crédito</option>
+                  <option value="Transferência">Transferência</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="gap-3">
+              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsCashMovementOpen(false)}>Cancelar</Button>
+              <Button type="submit" className={cn("flex-1 h-12 rounded-xl font-black", cashMovementType === 'R' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")}>
+                Salvar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isDailyCashPanelOpen} onOpenChange={setIsDailyCashPanelOpen}>
         <DialogContent className="max-w-6xl h-[92vh] overflow-hidden rounded-3xl border-none shadow-2xl p-0 flex flex-col">
           <div className="bg-slate-950 text-white p-6 shrink-0">
@@ -1328,9 +1420,17 @@ const POS = () => {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" className="bg-white/10 border-white/10 text-white hover:bg-white/20 rounded-2xl font-black" onClick={loadAllData}>
-                  <RefreshCw size={16} className="mr-2" /> Atualizar
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="bg-emerald-500/15 border-emerald-400/20 text-emerald-100 hover:bg-emerald-500/25 rounded-2xl font-black" onClick={() => openCashMovementDialog('R')}>
+                    <ArrowDownCircle size={16} className="mr-2" /> Nova Entrada
+                  </Button>
+                  <Button variant="outline" className="bg-rose-500/15 border-rose-400/20 text-rose-100 hover:bg-rose-500/25 rounded-2xl font-black" onClick={() => openCashMovementDialog('P')}>
+                    <ArrowUpCircle size={16} className="mr-2" /> Nova Saída
+                  </Button>
+                  <Button variant="outline" className="bg-white/10 border-white/10 text-white hover:bg-white/20 rounded-2xl font-black" onClick={loadAllData}>
+                    <RefreshCw size={16} className="mr-2" /> Atualizar
+                  </Button>
+                </div>
               </div>
             </DialogHeader>
 
