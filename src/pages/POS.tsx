@@ -836,8 +836,15 @@ const POS = () => {
     setIsPrintOpen(true);
     setCart([]);
     setSelectedCartIndex(null);
+    setSelectedSellerId("");
+    setInputCode("");
+    setPendingProduct(null);
+    setInputQty("0,000");
+    setInputBoxes("0");
+    setInputUnitPrice("0,00");
     setIsCheckoutOpen(false);
     await loadAllData();
+    setTimeout(() => sellerRef.current?.focus(), 100);
   };
 
   const handleSupervisorRelease = async (e: React.FormEvent) => {
