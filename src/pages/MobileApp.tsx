@@ -71,11 +71,12 @@ const MobileApp = () => {
   });
   const [editingFamilyNames, setEditingFamilyNames] = React.useState(false);
 
-  const [vehicleForm, setVehicleForm] = React.useState({ marca: '', modelo: '', ano: '', placa: '' });
+  const [vehicleForm, setVehicleForm] = React.useState({ marca: '', modelo: '', ano: '', placa: '', tipoUso: 'Particular' as 'Particular' | 'Empresa' });
   const [eventForm, setEventForm] = React.useState({
     combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false,
     meioPagamento: 'Dinheiro', cdConta: '', isOperational: false
   });
+
   const [personalForm, setPersonalForm] = React.useState({ pessoa: familyLabels[0], categoria: 'Almoço', descricao: '', valor: '0,00', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
 
   const saveFamilyLabels = () => {
@@ -208,18 +209,31 @@ const MobileApp = () => {
       modelo: titleCase(vehicleForm.modelo),
       ano: vehicleForm.ano ? Number(vehicleForm.ano) : undefined,
       placa: vehicleForm.placa.trim().toUpperCase() || undefined,
+      tipo_uso: vehicleForm.tipoUso,
     });
 
     showSuccess('Veículo cadastrado.');
-    setVehicleForm({ marca: '', modelo: '', ano: '', placa: '' });
+    setVehicleForm({ marca: '', modelo: '', ano: '', placa: '', tipoUso: 'Particular' });
     setIsVehicleOpen(false);
     loadData();
   };
 
+  const toggleSelectedVehicleType = async () => {
+    if (!selectedVehicle) return;
+    const nextType: 'Particular' | 'Empresa' = selectedVehicle.tipo_uso === 'Empresa' ? 'Particular' : 'Empresa';
+    await db.mobile.veiculos.update(selectedVehicle.id, { tipo_uso: nextType });
+    const updatedVehicle: Veiculo = { ...selectedVehicle, tipo_uso: nextType };
+    setSelectedVehicle(updatedVehicle);
+    setVehicles(prev => prev.map(vehicle => vehicle.id === selectedVehicle.id ? updatedVehicle : vehicle));
+    showSuccess(nextType === 'Empresa' ? 'Veículo marcado como empresa.' : 'Veículo marcado como particular.');
+  };
+
   const openEvent = (type: string, subtype = '') => {
+
     setEventType(type);
     setEventSubtype(subtype);
-    setEventForm({ combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false, meioPagamento: 'Dinheiro', cdConta: '', isOperational: false });
+    const isCompanyVehicle = selectedVehicle?.tipo_uso === 'Empresa';
+    setEventForm({ combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false, meioPagamento: 'Dinheiro', cdConta: '', isOperational: isCompanyVehicle });
     setIsEventOpen(true);
   };
 
@@ -396,10 +410,12 @@ const MobileApp = () => {
                         <div className="min-w-0 flex-1">
                           <h3 className="font-black">{titleCase(vehicle.marca)} {titleCase(vehicle.modelo)}</h3>
                           <p className="text-xs font-bold text-slate-500">{vehicle.placa?.toUpperCase() || 'Sem placa'} • {vehicle.ano || 'Ano não informado'}</p>
+                          <p className={cn("mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase", vehicle.tipo_uso === 'Empresa' ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")}>{vehicle.tipo_uso === 'Empresa' ? 'Empresa / operacional' : 'Particular / pessoal'}</p>
                           <p className="mt-1 text-xs font-bold text-slate-600">Gasto: R$ {money(total)} {avg ? `• Média ${avg.toFixed(1).replace('.', ',')} km/l` : ''}</p>
                         </div>
 
                       </div>
+
                     </CardContent>
                   </Card>
                 );
@@ -415,9 +431,16 @@ const MobileApp = () => {
                 <p className="text-xs font-bold uppercase text-slate-400">Veículo selecionado</p>
                 <h2 className="text-2xl font-black">{titleCase(selectedVehicle.marca)} {titleCase(selectedVehicle.modelo)}</h2>
                 <p className="text-sm font-bold text-slate-300">{selectedVehicle.placa?.toUpperCase() || 'Sem placa'} • {selectedVehicle.ano || 'Ano não informado'}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <p className={cn("inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase", selectedVehicle.tipo_uso === 'Empresa' ? "bg-emerald-500/20 text-emerald-200" : "bg-white/10 text-slate-200")}>{selectedVehicle.tipo_uso === 'Empresa' ? 'Empresa / operacional' : 'Particular / pessoal'}</p>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 rounded-full bg-white/10 px-3 text-[10px] font-black text-white hover:bg-white/20" onClick={toggleSelectedVehicleType}>
+                    Mudar para {selectedVehicle.tipo_uso === 'Empresa' ? 'particular' : 'empresa'}
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
+
                 {vehicleActions.map(action => (
                   <button key={`${action.type}-${action.label}`} onClick={() => openEvent(action.type, 'subtype' in action ? action.subtype : '')} className="rounded-3xl bg-white p-3 text-center shadow-sm active:scale-95">
                     <span className={cn('mx-auto flex h-11 w-11 items-center justify-center rounded-2xl text-white', action.color)}><action.icon size={21} /></span>
@@ -514,8 +537,18 @@ const MobileApp = () => {
               <Input placeholder="Ano" value={vehicleForm.ano} onChange={e => setVehicleForm({ ...vehicleForm, ano: e.target.value })} />
               <Input placeholder="Placa" value={vehicleForm.placa} onChange={e => setVehicleForm({ ...vehicleForm, placa: e.target.value.toUpperCase() })} />
             </div>
+            <div className={cn("rounded-2xl border p-3", vehicleForm.tipoUso === 'Empresa' ? "border-emerald-200 bg-emerald-50" : "border-slate-100 bg-slate-50")}>
+              <label className="flex items-start gap-3">
+                <Checkbox checked={vehicleForm.tipoUso === 'Empresa'} onCheckedChange={checked => setVehicleForm(prev => ({ ...prev, tipoUso: checked ? 'Empresa' : 'Particular' }))} />
+                <span>
+                  <span className="block text-xs font-black text-slate-700">Veículo da empresa</span>
+                  <span className="block text-[10px] font-bold text-slate-500">Marcado: gastos vão para despesas operacionais. Desmarcado: gastos ficam pessoais/não operacionais.</span>
+                </span>
+              </label>
+            </div>
 
             <Button className="h-12 w-full rounded-2xl font-black" onClick={saveVehicle}>Salvar veículo</Button>
+
           </div>
         </DialogContent>
       </Dialog>
@@ -536,13 +569,12 @@ const MobileApp = () => {
             <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor total" value={eventForm.valorTotal} onFocus={e => e.currentTarget.select()} onChange={e => setEventForm({ ...eventForm, valorTotal: e.target.value })} onBlur={e => setEventForm(prev => ({ ...prev, valorTotal: formatMoneyInput(e.target.value) }))} /><Input placeholder="Km atual" value={eventForm.kmAtual} onChange={e => setEventForm({ ...eventForm, kmAtual: e.target.value })} /></div>
             {eventType !== 'Abastecimento' && <Input placeholder="Km para próxima troca/serviço" value={eventForm.kmProxima} onChange={e => setEventForm({ ...eventForm, kmProxima: e.target.value })} />}
             <div className={cn("rounded-2xl border p-3", eventForm.isOperational ? "border-emerald-200 bg-emerald-50" : "border-slate-100 bg-slate-50")}>
-              <label className="flex items-start gap-3">
-                <Checkbox checked={eventForm.isOperational} onCheckedChange={checked => setEventForm(prev => ({ ...prev, isOperational: Boolean(checked) }))} />
-                <span>
-                  <span className="block text-xs font-black text-slate-700">Veículo da empresa / operacional</span>
-                  <span className="block text-[10px] font-bold text-slate-500">Marque para lançar como despesa operacional da empresa. Desmarcado fica como gasto pessoal/não operacional.</span>
-                </span>
-              </label>
+              <p className="text-xs font-black text-slate-700">Destino do gasto</p>
+              <p className="mt-1 text-[10px] font-bold text-slate-500">
+                {eventForm.isOperational
+                  ? 'Veículo da empresa: vai para despesas operacionais da empresa.'
+                  : 'Veículo particular: fica como gasto pessoal/não operacional.'}
+              </p>
             </div>
             <PaymentFields accounts={accounts} method={eventForm.meioPagamento} accountId={eventForm.cdConta} onMethod={meioPagamento => setEventForm(prev => ({ ...prev, meioPagamento, cdConta: '' }))} onAccount={cdConta => setEventForm(prev => ({ ...prev, cdConta }))} />
 

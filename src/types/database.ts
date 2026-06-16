@@ -310,10 +310,12 @@ export interface Veiculo {
   modelo: string;
   ano?: number;
   placa?: string;
+  tipo_uso?: 'Particular' | 'Empresa';
   created_at?: string;
 }
 
 export interface VeiculoEvento {
+
   id: string;
   veiculo_id: string;
   cd_usuario?: number;
