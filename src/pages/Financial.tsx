@@ -115,7 +115,7 @@ const Financial = () => {
   }, [activeTab]);
 
   const normalizeCategory = (categoria?: string) => (categoria || '').trim().toLowerCase();
-  const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'outros']);
+  const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'veículo', 'veiculo', 'outros']);
   const isOperationalExpense = (l: LancamentoFinanceiro) => !l.is_non_operational && operationalExpenseCategories.has(normalizeCategory(l.categoria));
 
   const handleBaixa = async (id: number) => {

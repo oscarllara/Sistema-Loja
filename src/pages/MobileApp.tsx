@@ -72,11 +72,12 @@ const MobileApp = () => {
   const [vehicleForm, setVehicleForm] = React.useState({ marca: '', modelo: '', ano: '', placa: '' });
   const [eventForm, setEventForm] = React.useState({
     combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false,
-    meioPagamento: 'Dinheiro', cdConta: ''
+    meioPagamento: 'Dinheiro', cdConta: '', isOperational: false
   });
   const [personalForm, setPersonalForm] = React.useState({ pessoa: familyLabels[0], categoria: 'Almoço', descricao: '', valor: '0,00', data: today(), meioPagamento: 'Dinheiro', cdConta: '' });
 
   const saveFamilyLabels = () => {
+
     const cleaned = familyLabels.map((label, index) => titleCase(label) || familyMembers[index]);
     setFamilyLabels(cleaned);
     localStorage.setItem('dyaderp_mobile_family_labels', JSON.stringify(cleaned));
@@ -189,7 +190,7 @@ const MobileApp = () => {
   const openEvent = (type: string, subtype = '') => {
     setEventType(type);
     setEventSubtype(subtype);
-    setEventForm({ combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false, meioPagamento: 'Dinheiro', cdConta: '' });
+    setEventForm({ combustivel: 'Gasolina', litros: '', valorLitro: '0,00', valorTotal: '0,00', kmAtual: '', kmProxima: '', descricao: '', tanqueCheio: false, meioPagamento: 'Dinheiro', cdConta: '', isOperational: false });
     setIsEventOpen(true);
   };
 
@@ -218,10 +219,11 @@ const MobileApp = () => {
       categoria: 'Veículo',
       meio_pagamento: eventForm.meioPagamento as any,
       cd_conta: Number(eventForm.cdConta),
-      is_non_operational: true
+      is_non_operational: !eventForm.isOperational
     });
 
     await db.mobile.veiculoEventos.add({
+
       veiculo_id: selectedVehicle.id,
       cd_usuario: user?.cd_clientes,
       tipo: eventType as VeiculoEvento['tipo'],
@@ -482,6 +484,15 @@ const MobileApp = () => {
             )}
             <div className="grid grid-cols-2 gap-2"><Input placeholder="Valor total" value={eventForm.valorTotal} onFocus={e => e.currentTarget.select()} onChange={e => setEventForm({ ...eventForm, valorTotal: e.target.value })} onBlur={e => setEventForm(prev => ({ ...prev, valorTotal: formatMoneyInput(e.target.value) }))} /><Input placeholder="Km atual" value={eventForm.kmAtual} onChange={e => setEventForm({ ...eventForm, kmAtual: e.target.value })} /></div>
             {eventType !== 'Abastecimento' && <Input placeholder="Km para próxima troca/serviço" value={eventForm.kmProxima} onChange={e => setEventForm({ ...eventForm, kmProxima: e.target.value })} />}
+            <div className={cn("rounded-2xl border p-3", eventForm.isOperational ? "border-emerald-200 bg-emerald-50" : "border-slate-100 bg-slate-50")}>
+              <label className="flex items-start gap-3">
+                <Checkbox checked={eventForm.isOperational} onCheckedChange={checked => setEventForm(prev => ({ ...prev, isOperational: Boolean(checked) }))} />
+                <span>
+                  <span className="block text-xs font-black text-slate-700">Veículo da empresa / operacional</span>
+                  <span className="block text-[10px] font-bold text-slate-500">Marque para lançar como despesa operacional da empresa. Desmarcado fica como gasto pessoal/não operacional.</span>
+                </span>
+              </label>
+            </div>
             <PaymentFields accounts={accounts} method={eventForm.meioPagamento} accountId={eventForm.cdConta} onMethod={meioPagamento => setEventForm(prev => ({ ...prev, meioPagamento, cdConta: '' }))} onAccount={cdConta => setEventForm(prev => ({ ...prev, cdConta }))} />
 
             <Button className="h-12 w-full rounded-2xl font-black" onClick={saveEvent}>Lançar gasto</Button>

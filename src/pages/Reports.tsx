@@ -85,11 +85,12 @@ const Reports = () => {
       const totalCustoProd = filteredVendas.reduce((acc, v) => acc + Number(v.custo_total || 0), 0);
       const normalizeCategory = (categoria?: string) => (categoria || '').trim().toLowerCase();
       const isFornecedor = (categoria?: string) => normalizeCategory(categoria) === 'fornecedor';
-      const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'outros']);
+      const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'veículo', 'veiculo', 'outros']);
       const isDespesaOperacional = (categoria?: string) => {
         const normalized = normalizeCategory(categoria);
         return !isFornecedor(categoria) && operationalExpenseCategories.has(normalized);
       };
+
       const comprasFornecedorPagas = filteredLancamentos
         .filter(l => l.tipo === 'P' && !l.is_non_operational && l.status === 'Pago' && isFornecedor(l.categoria))
         .reduce((acc, l) => acc + Number(l.valor || 0), 0);
