@@ -606,12 +606,47 @@ export const db = {
       return data || [];
     },
     add: async (p: any) => {
-      const { error } = await supabase.from('patrimonio').insert([p]);
+      let payload = p;
+
+      if (!payload.cd_patrimonio) {
+        const { data: lastItem, error: lastError } = await supabase
+          .from('patrimonio')
+          .select('cd_patrimonio')
+          .order('cd_patrimonio', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastError) throw lastError;
+        payload = { ...payload, cd_patrimonio: Number(lastItem?.cd_patrimonio || 0) + 1 };
+      }
+
+      const { error } = await supabase.from('patrimonio').insert([payload]);
       if (error) throw error;
     },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('patrimonio').update(data).eq('cd_patrimonio', id);
       if (error) throw error;
+    },
+    syncProdutoLocacao: async (productId: number, data: Omit<Partial<Patrimonio>, 'cd_patrimonio' | 'cd_produto_vinculado'>) => {
+      const payload = {
+        ...data,
+        cd_produto_vinculado: productId
+      };
+
+      const { data: linked, error: linkedError } = await supabase
+        .from('patrimonio')
+        .select('*')
+        .eq('cd_produto_vinculado', productId)
+        .maybeSingle();
+
+      if (linkedError) throw linkedError;
+
+      if (linked) {
+        await db.patrimonio.update(linked.cd_patrimonio, payload);
+        return;
+      }
+
+      await db.patrimonio.add(payload);
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('patrimonio').delete().eq('cd_patrimonio', id);

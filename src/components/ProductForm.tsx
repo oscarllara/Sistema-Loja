@@ -363,6 +363,15 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         showSuccess("Produto cadastrado!");
       }
 
+      if (data.is_locacao && savedProduct?.cd_produto) {
+        await db.patrimonio.syncProdutoLocacao(savedProduct.cd_produto, {
+          descricao: `EQUIPAMENTO PARA LOCAÇÃO - ${normalizedName}`,
+          valor: parseToNumber(data.compra),
+          tipo: 'Equipamento',
+          proprietário: 'Empresa'
+        });
+      }
+
       onSuccess(savedProduct);
     } catch (err: any) {
       console.error("ERRO AO SALVAR:", err);
@@ -588,6 +597,19 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
 
           <TabsContent value="locacao" className="space-y-6 m-0">
+            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-4">
+              <h4 className="font-black text-amber-900 flex items-center gap-2 uppercase text-xs tracking-widest"><DollarSign size={16} /> Valor Patrimonial do Item</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-amber-700">Valor do Item / Patrimônio (R$)</Label>
+                  <Input value={costValue} onChange={(e) => handleCostChange(e.target.value)} className="h-12 text-lg font-black bg-white border-amber-200 text-amber-800" placeholder="0,00" />
+                </div>
+                <p className="text-xs font-bold text-amber-700 leading-relaxed">
+                  Ao salvar como item de locação, este valor será enviado automaticamente para o patrimônio da empresa como equipamento.
+                </p>
+              </div>
+            </div>
+
             <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-6">
               <h4 className="font-black text-indigo-900 flex items-center gap-2 uppercase text-xs tracking-widest"><CalendarClock size={16} /> Tabela de Preços de Locação</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
