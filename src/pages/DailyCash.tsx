@@ -366,13 +366,12 @@ const DailyCash = () => {
     const movements = filter === 'Todos' ? movDia : movDia.filter(item => getPaymentGroup(item) === filter);
     const entries = movements.filter(item => item.tipo === 'R').reduce((acc, item) => acc + Number(item.valor || 0), 0);
     const exits = movements.filter(item => item.tipo === 'P').reduce((acc, item) => acc + Number(item.valor || 0), 0);
-    const opening = !showAllTime && selectedAccountId !== "all" && (filter === 'Todos' || filter === 'Dinheiro') ? saldoAnterior : 0;
-    return { entries, exits, total: opening + entries - exits, count: movements.length };
+    return { entries, exits, total: entries - exits, count: movements.length };
   };
 
   const dailyCashCards = [
-    { filter: 'Todos' as const, title: 'Todos', description: 'Tudo do período', icon: Wallet, color: 'slate', ...getPaymentTotals('Todos') },
-    { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Recebido em espécie', icon: Banknote, color: 'emerald', ...getPaymentTotals('Dinheiro') },
+    { filter: 'Todos' as const, title: 'Todos', description: 'Movimentação do período', icon: Wallet, color: 'slate', ...getPaymentTotals('Todos') },
+    { filter: 'Dinheiro' as const, title: 'Dinheiro', description: 'Movimento em espécie', icon: Banknote, color: 'emerald', ...getPaymentTotals('Dinheiro') },
     { filter: 'Cartão' as const, title: 'Cartões', description: 'Débito e crédito', icon: CreditCard, color: 'indigo', ...getPaymentTotals('Cartão') },
     { filter: 'PIX' as const, title: 'PIX', description: 'Transferências instantâneas', icon: QrCode, color: 'cyan', ...getPaymentTotals('PIX') },
   ];
