@@ -7,6 +7,8 @@ import {
   Container,
   Grid3X3,
   ShoppingCart,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,8 +24,11 @@ export type CalculatorPendingItem = {
   product: Produto;
   quantity: number;
   requestedQuantity: number;
+  calculatedQuantity?: number;
+  plusTenQuantity?: number;
   boxes?: number;
   calculatorType: 'piso' | 'argamassa' | 'forro';
+  calculationLabel?: string;
 };
 
 interface TechnicalCalculatorProps {
@@ -32,52 +37,78 @@ interface TechnicalCalculatorProps {
   compact?: boolean;
 }
 
+type PisoAplicacao = 'Piso' | 'Parede';
+type Vao = { id: number; descricao: string; largura: string; altura: string };
+
+const toNumber = (value: string) => parseFloat(value.replace(',', '.')) || 0;
+const formatQty = (value: number) => value.toFixed(2).replace('.', ',');
+const plusTen = (value: number) => value * 1.1;
+
 const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: TechnicalCalculatorProps) => {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [currentCalculation, setCurrentCalculation] = React.useState<{
     type: 'piso' | 'argamassa' | 'forro';
     quantity: number;
+    calculatedQuantity: number;
+    label: string;
   } | null>(null);
 
-  const [piso, setPiso] = React.useState({ comp: "", larg: "", perda: "10" });
-  const [resPiso, setResPiso] = React.useState({ area: 0, areaTotal: 0 });
+  const [piso, setPiso] = React.useState({ aplicacao: 'Piso' as PisoAplicacao, comp: "", larg: "", altura: "" });
+  const [vaos, setVaos] = React.useState<Vao[]>([]);
 
   const [arg, setArg] = React.useState({ area: "", consumo: "5", pesoSaco: "20" });
-  const [resArg, setResArg] = React.useState({ totalKg: 0, sacos: 0 });
-
   const [forro, setForro] = React.useState({ comp: "", larg: "", compLamina: "6", largLamina: "0.20" });
-  const [resForro, setResForro] = React.useState({ area: 0, laminas: 0 });
 
-  React.useEffect(() => {
-    const c = parseFloat(piso.comp) || 0;
-    const l = parseFloat(piso.larg) || 0;
-    const p = parseFloat(piso.perda) || 0;
-    const area = c * l;
-    const areaTotal = area * (1 + p / 100);
-    setResPiso({ area, areaTotal });
-  }, [piso]);
+  const resPiso = React.useMemo(() => {
+    const comp = toNumber(piso.comp);
+    const largura = toNumber(piso.larg);
+    const altura = toNumber(piso.altura);
+    const areaBruta = piso.aplicacao === 'Parede' ? comp * altura : comp * largura;
+    const areaVaos = piso.aplicacao === 'Parede'
+      ? vaos.reduce((acc, vao) => acc + (toNumber(vao.largura) * toNumber(vao.altura)), 0)
+      : 0;
+    const areaCalculada = Math.max(areaBruta - areaVaos, 0);
+    const areaCom10 = plusTen(areaCalculada);
+    return { areaBruta, areaVaos, areaCalculada, areaCom10 };
+  }, [piso, vaos]);
 
-  React.useEffect(() => {
-    const a = parseFloat(arg.area) || 0;
-    const c = parseFloat(arg.consumo) || 0;
-    const ps = parseFloat(arg.pesoSaco) || 0;
-    const totalKg = a * c;
-    const sacos = ps > 0 ? Math.ceil(totalKg / ps) : 0;
-    setResArg({ totalKg, sacos });
+  const resArg = React.useMemo(() => {
+    const area = toNumber(arg.area);
+    const consumo = toNumber(arg.consumo);
+    const pesoSaco = toNumber(arg.pesoSaco);
+    const totalKg = area * consumo;
+    const totalKgCom10 = plusTen(totalKg);
+    const sacos = pesoSaco > 0 ? Math.ceil(totalKg / pesoSaco) : 0;
+    const sacosCom10 = pesoSaco > 0 ? Math.ceil(totalKgCom10 / pesoSaco) : 0;
+    return { area, totalKg, totalKgCom10, sacos, sacosCom10 };
   }, [arg]);
 
-  React.useEffect(() => {
-    const c = parseFloat(forro.comp) || 0;
-    const l = parseFloat(forro.larg) || 0;
-    const cl = parseFloat(forro.compLamina) || 0;
-    const ll = parseFloat(forro.largLamina) || 0;
-    const area = c * l;
-    const areaLamina = cl * ll;
+  const resForro = React.useMemo(() => {
+    const comp = toNumber(forro.comp);
+    const larg = toNumber(forro.larg);
+    const compLamina = toNumber(forro.compLamina);
+    const largLamina = toNumber(forro.largLamina);
+    const area = comp * larg;
+    const areaCom10 = plusTen(area);
+    const areaLamina = compLamina * largLamina;
     const laminas = areaLamina > 0 ? Math.ceil(area / areaLamina) : 0;
-    setResForro({ area, laminas });
+    const laminasCom10 = areaLamina > 0 ? Math.ceil(areaCom10 / areaLamina) : 0;
+    return { area, areaCom10, laminas, laminasCom10 };
   }, [forro]);
 
-  const handleAddToSale = (calculation: { type: 'piso' | 'argamassa' | 'forro'; quantity: number }) => {
+  const addVao = () => {
+    setVaos(prev => [...prev, { id: Date.now(), descricao: `Vão ${prev.length + 1}`, largura: "", altura: "" }]);
+  };
+
+  const updateVao = (id: number, field: keyof Omit<Vao, 'id'>, value: string) => {
+    setVaos(prev => prev.map(vao => vao.id === id ? { ...vao, [field]: value } : vao));
+  };
+
+  const removeVao = (id: number) => {
+    setVaos(prev => prev.filter(vao => vao.id !== id));
+  };
+
+  const handleAddToSale = (calculation: { type: 'piso' | 'argamassa' | 'forro'; quantity: number; calculatedQuantity: number; label: string }) => {
     setCurrentCalculation(calculation);
     setIsSearchOpen(true);
   };
@@ -95,8 +126,11 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
       product,
       quantity,
       requestedQuantity: currentCalculation.quantity,
+      calculatedQuantity: currentCalculation.calculatedQuantity,
+      plusTenQuantity: currentCalculation.quantity,
       boxes,
-      calculatorType: currentCalculation.type
+      calculatorType: currentCalculation.type,
+      calculationLabel: currentCalculation.label
     };
 
     if (onAddToSale) {
@@ -108,9 +142,9 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
     }
 
     const detail = boxes
-      ? `${quantity.toFixed(2).replace('.', ',')} m² (${boxes} caixas)`
+      ? `${formatQty(currentCalculation.quantity)} m² calculados +10% → ${formatQty(quantity)} m² (${boxes} caixa${boxes > 1 ? 's' : ''})`
       : currentCalculation.type === 'piso'
-        ? `${quantity.toFixed(2).replace('.', ',')} m²`
+        ? `${formatQty(quantity)} m²`
         : `${quantity.toString().replace('.', ',')} unidades`;
     showSuccess(`${product.nome} vinculado com ${detail}!`);
   };
@@ -125,7 +159,7 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Calculadora Técnica</h1>
-              <p className="text-slate-500">Calcule e adicione direto ao carrinho de vendas.</p>
+              <p className="text-slate-500">Calcule, veja o +10% e envie para a venda com arredondamento por caixa.</p>
             </div>
           </div>
         </div>
@@ -147,22 +181,81 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
         <TabsContent value="piso" className="animate-in fade-in-50 duration-300">
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="border-none shadow-sm">
-              <CardHeader><CardTitle className="text-lg">Dimensões do Ambiente</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Pisos e Revestimentos</CardTitle></CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Aplicação</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['Piso', 'Parede'] as PisoAplicacao[]).map(tipo => (
+                      <Button
+                        key={tipo}
+                        type="button"
+                        variant={piso.aplicacao === tipo ? 'default' : 'outline'}
+                        className={cn("h-11 rounded-xl font-black", piso.aplicacao === tipo && "bg-indigo-600 hover:bg-indigo-700")}
+                        onClick={() => setPiso(prev => ({ ...prev, aplicacao: tipo }))}
+                      >
+                        {tipo}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Comprimento (m)</Label>
-                    <Input type="number" value={piso.comp} onChange={(e) => setPiso({...piso, comp: e.target.value})} placeholder="0.00" />
+                    <Label>{piso.aplicacao === 'Parede' ? 'Largura da Parede (m)' : 'Comprimento (m)'}</Label>
+                    <Input type="number" step="0.01" value={piso.comp} onChange={(e) => setPiso({...piso, comp: e.target.value})} placeholder="0,00" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Largura (m)</Label>
-                    <Input type="number" value={piso.larg} onChange={(e) => setPiso({...piso, larg: e.target.value})} placeholder="0.00" />
+                    <Label>{piso.aplicacao === 'Parede' ? 'Altura da Parede (m)' : 'Largura (m)'}</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={piso.aplicacao === 'Parede' ? piso.altura : piso.larg}
+                      onChange={(e) => setPiso({...piso, [piso.aplicacao === 'Parede' ? 'altura' : 'larg']: e.target.value})}
+                      placeholder="0,00"
+                    />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Perda Estimada (%)</Label>
-                  <Input type="number" value={piso.perda} onChange={(e) => setPiso({...piso, perda: e.target.value})} />
-                </div>
+
+                {piso.aplicacao === 'Parede' && (
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Label className="font-black text-amber-900">Diminuir vãos de portas/janelas</Label>
+                        <p className="text-[10px] font-bold text-amber-700">Adicione cada vão que será descontado da parede.</p>
+                      </div>
+                      <Button type="button" size="sm" className="bg-amber-600 hover:bg-amber-700 gap-2" onClick={addVao}>
+                        <Plus size={14} /> Adicionar vão
+                      </Button>
+                    </div>
+                    {vaos.length === 0 ? (
+                      <p className="text-xs font-bold text-amber-700">Nenhum vão adicionado.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {vaos.map((vao, index) => (
+                          <div key={vao.id} className="grid grid-cols-[1fr_80px_80px_32px] gap-2 items-end">
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Descrição</Label>
+                              <Input value={vao.descricao} onChange={(e) => updateVao(vao.id, 'descricao', e.target.value)} placeholder={`Vão ${index + 1}`} className="h-9" />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Larg.</Label>
+                              <Input type="number" step="0.01" value={vao.largura} onChange={(e) => updateVao(vao.id, 'largura', e.target.value)} className="h-9" />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Alt.</Label>
+                              <Input type="number" step="0.01" value={vao.altura} onChange={(e) => updateVao(vao.id, 'altura', e.target.value)} className="h-9" />
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-rose-600 hover:bg-rose-50" onClick={() => removeVao(vao.id)}>
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-xs font-bold text-indigo-700">
                   O m² por caixa será puxado automaticamente do produto escolhido no próximo passo.
                 </div>
@@ -170,16 +263,23 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
             </Card>
 
             <div className="space-y-4">
-              <ResultCard title="Área Líquida" value={`${resPiso.area.toFixed(2)} m²`} />
-              <ResultCard title="Área com Perda" value={`${resPiso.areaTotal.toFixed(2)} m²`} color="text-indigo-600" />
+              <ResultCard title="Área Bruta" value={`${formatQty(resPiso.areaBruta)} m²`} />
+              {piso.aplicacao === 'Parede' && <ResultCard title="Vãos Descontados" value={`- ${formatQty(resPiso.areaVaos)} m²`} color="text-amber-600" />}
+              <ResultCard title="Valor Calculado" value={`${formatQty(resPiso.areaCalculada)} m²`} color="text-slate-900" />
+              <ResultCard title="Valor Calculado +10%" value={`${formatQty(resPiso.areaCom10)} m²`} color="text-indigo-600" />
               <ResultCard
                 title="Quantidade para venda"
-                value={`${resPiso.areaTotal.toFixed(2)} m²`}
+                value={`${formatQty(resPiso.areaCom10)} m²`}
                 isHighlight
                 action={
                   <Button
-                    onClick={() => handleAddToSale({ type: 'piso', quantity: resPiso.areaTotal })}
-                    disabled={resPiso.areaTotal <= 0}
+                    onClick={() => handleAddToSale({
+                      type: 'piso',
+                      quantity: resPiso.areaCom10,
+                      calculatedQuantity: resPiso.areaCalculada,
+                      label: `${piso.aplicacao}: ${formatQty(resPiso.areaCalculada)} m² +10% = ${formatQty(resPiso.areaCom10)} m²`
+                    })}
+                    disabled={resPiso.areaCom10 <= 0}
                     className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                   >
                     <ShoppingCart size={16} /> Escolher Produto
@@ -197,16 +297,12 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Área Total (m²)</Label>
-                  <Input type="number" value={arg.area} onChange={(e) => setArg({...arg, area: e.target.value})} placeholder="0.00" />
+                  <Input type="number" step="0.01" value={arg.area} onChange={(e) => setArg({...arg, area: e.target.value})} placeholder="0,00" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Consumo (kg/m²)</Label>
-                    <select
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={arg.consumo}
-                      onChange={(e) => setArg({...arg, consumo: e.target.value})}
-                    >
+                    <select className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" value={arg.consumo} onChange={(e) => setArg({...arg, consumo: e.target.value})}>
                       <option value="5">Camada Simples (5kg)</option>
                       <option value="8">Camada Dupla (8kg)</option>
                       <option value="10">Pisos Grandes (10kg)</option>
@@ -221,18 +317,15 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
             </Card>
 
             <div className="space-y-4">
-              <ResultCard title="Total de Massa" value={`${resArg.totalKg.toFixed(0)} kg`} />
+              <ResultCard title="Valor Calculado" value={`${resArg.totalKg.toFixed(0)} kg / ${resArg.sacos} saco(s)`} />
+              <ResultCard title="Valor Calculado +10%" value={`${resArg.totalKgCom10.toFixed(0)} kg / ${resArg.sacosCom10} saco(s)`} color="text-indigo-600" />
               <ResultCard
-                title="Total de Sacos"
-                value={`${resArg.sacos} UN`}
+                title="Quantidade para venda"
+                value={`${resArg.sacosCom10} UN`}
                 isHighlight
                 color="text-emerald-600"
                 action={
-                  <Button
-                    onClick={() => handleAddToSale({ type: 'argamassa', quantity: resArg.sacos })}
-                    disabled={resArg.sacos <= 0}
-                    className="bg-emerald-600 hover:bg-emerald-700 gap-2"
-                  >
+                  <Button onClick={() => handleAddToSale({ type: 'argamassa', quantity: resArg.sacosCom10, calculatedQuantity: resArg.sacos, label: `Argamassa: ${resArg.sacos} saco(s) +10% = ${resArg.sacosCom10} saco(s)` })} disabled={resArg.sacosCom10 <= 0} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
                     <ShoppingCart size={16} /> Escolher Produto
                   </Button>
                 }
@@ -249,11 +342,11 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Comprimento (m)</Label>
-                    <Input type="number" value={forro.comp} onChange={(e) => setForro({...forro, comp: e.target.value})} placeholder="0.00" />
+                    <Input type="number" step="0.01" value={forro.comp} onChange={(e) => setForro({...forro, comp: e.target.value})} placeholder="0,00" />
                   </div>
                   <div className="space-y-2">
                     <Label>Largura (m)</Label>
-                    <Input type="number" value={forro.larg} onChange={(e) => setForro({...forro, larg: e.target.value})} placeholder="0.00" />
+                    <Input type="number" step="0.01" value={forro.larg} onChange={(e) => setForro({...forro, larg: e.target.value})} placeholder="0,00" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -270,18 +363,15 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
             </Card>
 
             <div className="space-y-4">
-              <ResultCard title="Área do Teto" value={`${resForro.area.toFixed(2)} m²`} />
+              <ResultCard title="Valor Calculado" value={`${formatQty(resForro.area)} m² / ${resForro.laminas} lâmina(s)`} />
+              <ResultCard title="Valor Calculado +10%" value={`${formatQty(resForro.areaCom10)} m² / ${resForro.laminasCom10} lâmina(s)`} color="text-indigo-600" />
               <ResultCard
-                title="Total de Lâminas"
-                value={`${resForro.laminas} UN`}
+                title="Quantidade para venda"
+                value={`${resForro.laminasCom10} UN`}
                 isHighlight
                 color="text-blue-600"
                 action={
-                  <Button
-                    onClick={() => handleAddToSale({ type: 'forro', quantity: resForro.laminas })}
-                    disabled={resForro.laminas <= 0}
-                    className="bg-emerald-600 hover:bg-emerald-700 gap-2"
-                  >
+                  <Button onClick={() => handleAddToSale({ type: 'forro', quantity: resForro.laminasCom10, calculatedQuantity: resForro.laminas, label: `Forro: ${resForro.laminas} lâmina(s) +10% = ${resForro.laminasCom10} lâmina(s)` })} disabled={resForro.laminasCom10 <= 0} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
                     <ShoppingCart size={16} /> Escolher Produto
                   </Button>
                 }
@@ -291,12 +381,7 @@ const TechnicalCalculator = ({ onAddToSale, onDone, compact = false }: Technical
         </TabsContent>
       </Tabs>
 
-      <ProductSearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelect={handleProductSelect}
-        filterIntegratedOnly={true}
-      />
+      <ProductSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={handleProductSelect} filterIntegratedOnly={true} />
     </div>
   );
 };

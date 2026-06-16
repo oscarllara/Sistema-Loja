@@ -691,7 +691,10 @@ const POS = () => {
         boxSize,
         boxesInput: boxes ? boxes.toString() : undefined,
         requestedQuantity: pendingItem.requestedQuantity,
-        calculatorType: pendingItem.calculatorType
+        calculatedQuantity: pendingItem.calculatedQuantity,
+        plusTenQuantity: pendingItem.plusTenQuantity,
+        calculatorType: pendingItem.calculatorType,
+        calculationLabel: pendingItem.calculationLabel
       }]
     }));
   }, [products, priceMode]);
@@ -1561,8 +1564,14 @@ const POS = () => {
                             Retirada: {new Date(`${item.rentalStartDate}T00:00:00`).toLocaleDateString('pt-BR')} • Prev. devolução: {new Date(`${item.rentalEndDate}T00:00:00`).toLocaleDateString('pt-BR')} • {item.rentalDays} dia(s) • {item.rentalCalculation}
                           </div>
                         )}
+                        {mode !== 'LOCACAO' && item.calculatorType && (
+                          <div className="text-[10px] font-bold text-indigo-700 normal-case">
+                            Calculadora: {item.calculationLabel || `calculado ${Number(item.calculatedQuantity || item.requestedQuantity || 0).toFixed(2).replace('.', ',')}`} • Venda: {Number(item.requestedQuantity || item.quantity || 0).toFixed(2).replace('.', ',')} {item.calculatorType === 'piso' ? 'm²' : 'un'}{item.boxSize > 0 ? ` • Arred.: ${item.boxesInput || Math.ceil(Number(item.quantity || 0) / item.boxSize)} caixa(s) = ${Number(item.quantity || 0).toFixed(2).replace('.', ',')} m²` : ''}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">
+
                         {mode === 'LOCACAO' ? item.rentalCalculation : item?.selectedUnit}
                       </TableCell>
                       <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
