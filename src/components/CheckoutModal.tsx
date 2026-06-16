@@ -409,47 +409,56 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   />
                 </div>
 
-                {isPurchase && (
+                {isPurchase && remaining > 0 && (
                   <div className="space-y-2 shrink-0">
-                    <Label className="text-xs font-bold text-slate-500 uppercase">Conta/caixa para pagamento imediato</Label>
+                    <Label className="text-xs font-bold text-slate-500 uppercase">Conta/caixa somente para pagamento imediato</Label>
                     <select
                       className="w-full h-11 rounded-lg border bg-white px-3 text-sm font-bold"
                       value={selectedAccountId}
                       onChange={(e) => setSelectedAccountId(e.target.value)}
                     >
-                      <option value="">Selecione conforme forma de pagamento...</option>
+                      <option value="">Selecione apenas se for dinheiro, PIX ou cartão...</option>
                       {getSelectableAccounts('PIX').map(account => (
                         <option key={account.cd_conta} value={account.cd_conta}>{account.nome} • {account.tipo} • R$ {Number(account.saldo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
                       ))}
                     </select>
-                    <p className="text-[10px] font-bold text-slate-400">Para dinheiro selecione o caixa; para PIX selecione banco/conta; para cartão selecione a conta do cartão.</p>
+                    <p className="text-[10px] font-bold text-slate-400">Boleto, cheque e crédito a prazo entram direto no Contas a Pagar como pendentes, sem movimentar caixa.</p>
                   </div>
                 )}
 
                 <ScrollArea className="flex-1 pr-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Dinheiro')}><Banknote size={18} /><span className="text-[10px] font-bold">DINHEIRO</span></Button>
-                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('PIX')}><QrCode size={18} /><span className="text-[10px] font-bold">PIX</span></Button>
-                    <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Crédito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. CRÉDITO</span></Button>
-                    {!isPurchase && <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Débito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. DÉBITO</span></Button>}
-                    <Button variant="outline" className={cn("h-14 flex-col gap-1", isPurchase ? "" : "col-span-2 bg-amber-50 border-amber-200 text-amber-700")} onClick={() => addPayment('Crediário')}><Wallet size={18} /><span className="text-[10px] font-bold">{isPurchase ? 'CRÉDITO' : 'CREDIÁRIO (PRAZO)'}</span></Button>
-                    {isPurchase && (
-                      <>
-                        <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Boleto')}><FileText size={18} /><span className="text-[10px] font-bold">BOLETO</span></Button>
-                        <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cheque')}><Landmark size={18} /><span className="text-[10px] font-bold">CHEQUE</span></Button>
-                      </>
-                    )}
-                  </div>
+                  {remaining <= 0 ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-center text-emerald-700">
+                      <CheckCircle2 size={28} className="mx-auto mb-2" />
+                      <p className="text-sm font-black uppercase">Lançamentos completos</p>
+                      <p className="mt-1 text-xs font-bold">Agora é só finalizar a compra. Se precisar alterar, remova o lançamento ao lado.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Dinheiro')}><Banknote size={18} /><span className="text-[10px] font-bold">DINHEIRO</span></Button>
+                      <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('PIX')}><QrCode size={18} /><span className="text-[10px] font-bold">PIX</span></Button>
+                      <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Crédito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. CRÉDITO</span></Button>
+                      {!isPurchase && <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cartão Débito')}><CreditCard size={18} /><span className="text-[10px] font-bold">C. DÉBITO</span></Button>}
+                      <Button variant="outline" className={cn("h-14 flex-col gap-1", isPurchase ? "" : "col-span-2 bg-amber-50 border-amber-200 text-amber-700")} onClick={() => addPayment('Crediário')}><Wallet size={18} /><span className="text-[10px] font-bold">{isPurchase ? 'CRÉDITO' : 'CREDIÁRIO (PRAZO)'}</span></Button>
+                      {isPurchase && (
+                        <>
+                          <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Boleto')}><FileText size={18} /><span className="text-[10px] font-bold">BOLETO</span></Button>
+                          <Button variant="outline" className="h-14 flex-col gap-1" onClick={() => addPayment('Cheque')}><Landmark size={18} /><span className="text-[10px] font-bold">CHEQUE</span></Button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </ScrollArea>
 
-                {isPurchase && accounts.length === 0 && (
+                {isPurchase && accounts.length === 0 && remaining > 0 && (
                   <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-700">
                     <AlertCircle size={16} className="mt-0.5" />
-                    <p className="text-xs font-bold">Cadastre caixas, bancos ou contas de cartão em Financeiro &gt; Caixas e Bancos para pagamentos imediatos.</p>
+                    <p className="text-xs font-bold">Cadastre caixas, bancos ou contas de cartão em Financeiro &gt; Caixas e Bancos somente se for pagar à vista/imediato.</p>
                   </div>
                 )}
 
                 <div className="pt-6 mt-auto shrink-0">
+
                   <Button
                     className={cn("w-full h-16 text-lg font-black gap-2 shadow-lg", totalPaid >= total ? "bg-emerald-600" : "bg-slate-200 text-slate-400")}
                     disabled={totalPaid < total}
