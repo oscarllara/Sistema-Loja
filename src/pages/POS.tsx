@@ -470,13 +470,23 @@ const POS = () => {
     }
   };
 
-  const handleCodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCodeSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const code = inputCode.trim();
     if (!code) return;
     if (pendingProduct) { commitToCart(); return; }
     
-    const product = products.find(p => productMatchesCode(p, code));
+    let product = products.find(p => productMatchesCode(p, code));
+
+    if (!product) {
+      try {
+        const latestProducts = await db.produtos.getAll();
+        setProducts(latestProducts);
+        product = latestProducts.find(p => productMatchesCode(p, code));
+      } catch {
+        product = undefined;
+      }
+    }
 
     if (product) startInsertion(product);
     else { setSearchInitialTerm(code); setIsSearchOpen(true); }
@@ -1118,6 +1128,12 @@ const POS = () => {
                   ref={codeRef}
                   value={inputCode}
                   onChange={(e) => handleCodeChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCodeSubmit();
+                    }
+                  }}
                   onFocus={(e) => { if (pendingProduct) e.currentTarget.select(); }}
                   className={cn("h-12 border-none text-xl font-black pl-12 transition-all shadow-inner", pendingProduct ? "bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/20" : "bg-[#E1FFFF] text-slate-900 focus:ring-4 focus:ring-indigo-500/20")}
                   placeholder="Bipe o código ou digite o nome..."
