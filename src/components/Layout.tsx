@@ -20,8 +20,11 @@ import {
   Database,
   Calculator,
   ShieldCheck,
-  FileText
+  FileText,
+  Smartphone,
+  Car
 } from 'lucide-react';
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -72,12 +75,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         { icon: Wallet, label: 'Financeiro', path: '/financial', perm: 'financial' },
         { icon: History, label: 'Caixa Diário', path: '/daily-cash', perm: 'financial' },
         { icon: Calculator, label: 'Calculadora Técnica', path: '/calculator', perm: 'dashboard' },
+        { icon: Smartphone, label: 'App Mobile', path: '/mobile', perm: 'dashboard' },
       ]
     },
     {
       title: "Análise",
       items: [
         { icon: BarChart3, label: 'Relatórios', path: '/reports', perm: 'reports' },
+        { icon: Car, label: 'Gestão de Frota', path: '/fleet', perm: 'reports' },
+
         { icon: Settings, label: 'Configurações', path: '/settings', perm: 'settings' },
         { icon: Database, label: 'Importar Dados', path: '/import', perm: 'settings' },
       ]

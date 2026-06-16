@@ -302,3 +302,47 @@ export interface Patrimonio {
   proprietário: 'Empresa' | 'Sócio A' | 'Sócio B';
   cd_produto_vinculado?: number;
 }
+
+export interface Veiculo {
+  id: string;
+  cd_usuario?: number;
+  marca: string;
+  modelo: string;
+  ano?: number;
+  placa?: string;
+  created_at?: string;
+}
+
+export interface VeiculoEvento {
+  id: string;
+  veiculo_id: string;
+  cd_usuario?: number;
+  tipo: 'Abastecimento' | 'Manutenção' | 'Troca de Óleo' | 'Pneu' | 'Alinhamento/Balanceamento';
+  subtipo?: string;
+  descricao?: string;
+  combustivel?: string;
+  quantidade_litros?: number;
+  valor_litro?: number;
+  valor_total: number;
+  km_atual?: number;
+  km_proxima?: number;
+  tanque_cheio?: boolean;
+  cd_conta?: number;
+  meio_pagamento?: string;
+  cd_lancamento?: number;
+  created_at?: string;
+}
+
+export interface GastoPessoal {
+  id: string;
+  cd_usuario?: number;
+  pessoa: string;
+  categoria: string;
+  descricao?: string;
+  valor: number;
+  data_gasto: string;
+  cd_conta?: number;
+  meio_pagamento?: string;
+  cd_lancamento?: number;
+  created_at?: string;
+}

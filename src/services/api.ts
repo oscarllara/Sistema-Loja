@@ -1,7 +1,8 @@
 "use client";
 
 import { supabase } from '@/integrations/supabase/client';
-import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel, CaixaSessao } from '../types/database';
+import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel, CaixaSessao, Veiculo, VeiculoEvento, GastoPessoal } from '../types/database';
+
 import { formatAddressTitleCase, formatCnpj, formatCpfCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const AUTH_KEY = 'dyaderp_auth';
@@ -694,8 +695,55 @@ export const db = {
       if (error) throw error;
     }
   },
+  mobile: {
+    veiculos: {
+      getAll: async (): Promise<Veiculo[]> => {
+        const { data, error } = await supabase.from('veiculos').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+      add: async (vehicle: Partial<Veiculo>) => {
+        const { data, error } = await supabase.from('veiculos').insert([vehicle]).select('*').single();
+        if (error) throw error;
+        return data;
+      },
+      update: async (id: string, vehicle: Partial<Veiculo>) => {
+        const { error } = await supabase.from('veiculos').update(vehicle).eq('id', id);
+        if (error) throw error;
+      },
+      delete: async (id: string) => {
+        const { error } = await supabase.from('veiculos').delete().eq('id', id);
+        if (error) throw error;
+      }
+    },
+    veiculoEventos: {
+      getAll: async (): Promise<VeiculoEvento[]> => {
+        const { data, error } = await supabase.from('veiculo_eventos').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+      add: async (event: Partial<VeiculoEvento>) => {
+        const { data, error } = await supabase.from('veiculo_eventos').insert([event]).select('*').single();
+        if (error) throw error;
+        return data;
+      }
+    },
+    gastosPessoais: {
+      getAll: async (): Promise<GastoPessoal[]> => {
+        const { data, error } = await supabase.from('gastos_pessoais').select('*').order('data_gasto', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+      add: async (expense: Partial<GastoPessoal>) => {
+        const { data, error } = await supabase.from('gastos_pessoais').insert([expense]).select('*').single();
+        if (error) throw error;
+        return data;
+      }
+    }
+  },
   patrimonio: {
     getAll: async (): Promise<Patrimonio[]> => {
+
       const { data, error } = await supabase.from('patrimonio').select('*').order('descricao');
       if (error) throw error;
       return data || [];

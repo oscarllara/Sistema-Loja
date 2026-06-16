@@ -17,6 +17,8 @@ import Settings from "./pages/Settings";
 import Rentals from "./pages/Rentals";
 import ImportData from "./pages/ImportData";
 import Calculator from "./pages/Calculator";
+import MobileApp from "./pages/MobileApp";
+import FleetManagement from "./pages/FleetManagement";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -58,8 +60,11 @@ const App = () => (
           <Route path="/settings" element={<ProtectedRoute permission="settings"><Settings /></ProtectedRoute>} />
           <Route path="/import" element={<ProtectedRoute permission="settings"><ImportData /></ProtectedRoute>} />
           <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
+          <Route path="/mobile" element={<ProtectedRoute><MobileApp /></ProtectedRoute>} />
+          <Route path="/fleet" element={<ProtectedRoute permission="reports"><FleetManagement /></ProtectedRoute>} />
           
           <Route path="*" element={<NotFound />} />
+
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
