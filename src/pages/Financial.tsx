@@ -63,9 +63,10 @@ const Financial = () => {
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
   const [activeTab, setActiveTab] = React.useState("receivable");
   const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
+  const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto'>('All');
   const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  
+
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isTransferOpen, setIsTransferOpen] = React.useState(false);
   const [isPatrimonyOpen, setIsPatrimonyOpen] = React.useState(false);
@@ -110,9 +111,15 @@ const Financial = () => {
 
   React.useEffect(() => {
     setStatusFilter('All');
+    setPayableQuickFilter('All');
   }, [activeTab]);
 
+  const normalizeCategory = (categoria?: string) => (categoria || '').trim().toLowerCase();
+  const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'outros']);
+  const isOperationalExpense = (l: LancamentoFinanceiro) => !l.is_non_operational && operationalExpenseCategories.has(normalizeCategory(l.categoria));
+
   const handleBaixa = async (id: number) => {
+
     if (contas.length === 0) {
       showError("Nenhuma conta cadastrada para realizar a baixa.");
       return;
@@ -168,11 +175,20 @@ const Financial = () => {
       const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
       const matchesDate = data >= startDate && data <= endDate;
       const matchesType = l.tipo === tipo;
-      const matchesSearch = (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
                            (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === 'All' ? true : l.status === statusFilter;
+      const matchesPayableQuickFilter = tipo !== 'P' || payableQuickFilter === 'All'
+        ? true
+        : payableQuickFilter === 'operational'
+          ? isOperationalExpense(l)
+          : payableQuickFilter === 'nonOperational'
+            ? Boolean(l.is_non_operational)
+            : payableQuickFilter === 'cheque'
+              ? l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)
+              : l.meio_pagamento === 'Boleto' || Boolean(l.num_documento);
       
-      return matchesDate && matchesType && matchesSearch && matchesStatus;
+      return matchesDate && matchesType && matchesSearch && matchesStatus && matchesPayableQuickFilter;
     });
   };
 
@@ -327,24 +343,46 @@ const Financial = () => {
           </TabsContent>
 
           <TabsContent value="payable" className="space-y-6">
-            <FinancialSummary 
-              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento || "").split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento || "").split('T')[0] <= endDate))} 
-              type="P" 
+            <FinancialSummary
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento || "").split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento || "").split('T')[0] <= endDate))}
+              type="P"
               currentFilter={statusFilter}
               onFilterChange={setStatusFilter}
             />
-            <FinancialTable 
-              data={filterData('P')} 
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              {[
+                { key: 'All', label: 'Todas' },
+                { key: 'operational', label: 'Despesas operacionais' },
+                { key: 'nonOperational', label: 'Não operacionais' },
+                { key: 'cheque', label: 'Cheques' },
+                { key: 'boleto', label: 'Boletos' }
+              ].map(filter => (
+                <Button
+                  key={filter.key}
+                  type="button"
+                  size="sm"
+                  variant={payableQuickFilter === filter.key ? 'default' : 'outline'}
+                  className="rounded-xl text-xs font-black"
+                  onClick={() => setPayableQuickFilter(filter.key as any)}
+                >
+                  {filter.label}
+                </Button>
+              ))}
+            </div>
+            <FinancialTable
+              data={filterData('P')}
               onBaixa={handleBaixa}
+
               onViewClient={handleViewClient}
               onCompensar={(l: any) => { setSelectedCheque(l); setIsCompensateOpen(true); }}
               onDevolver={async (id: number) => {
                 if (confirm("Deseja marcar este cheque como DEVOLVIDO?")) {
                   try {
-                    await db.financeiro.add({ cd_lancamento: id, status: 'Devolvido' }); 
+                    await db.financeiro.update(id, { status: 'Devolvido' });
                     showSuccess("Cheque marcado como devolvido.");
                     loadData();
                   } catch (e) { showError("Erro ao atualizar cheque."); }
+
                 }
               }}
             />

@@ -16,7 +16,7 @@ const accountSchema = z.object({
   banco_numero: z.string().optional(),
   agencia: z.string().optional(),
   conta_numero: z.string().optional(),
-  tipo: z.enum(['Caixa', 'Banco', 'Retaguarda', 'Digital']),
+  tipo: z.enum(['Caixa', 'Banco', 'Retaguarda', 'Digital', 'Cartão']),
   saldo_inicial: z.string().default("0"),
 });
 
@@ -127,7 +127,9 @@ const AccountForm = ({ account, onSuccess }: AccountFormProps) => {
             <option value="Banco">Conta Bancária</option>
             <option value="Retaguarda">Retaguarda / Cofre</option>
             <option value="Digital">Carteira Digital</option>
+            <option value="Cartão">Cartão de Crédito</option>
           </select>
+
         </div>
         <div className="space-y-2">
           <Label>Saldo Inicial (R$)</Label>

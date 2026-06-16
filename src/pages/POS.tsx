@@ -1036,11 +1036,107 @@ const POS = () => {
       return;
     }
 
+    if (mode === 'COMPRA') {
+      const purchaseId = Date.now();
+      const supplierName = entity?.nome || 'FORNECEDOR AVULSO';
+      const purchasePayload = {
+        cd_compra: purchaseId,
+        data: new Date().toISOString(),
+        cd_fornecedores: selectedEntityId || null,
+        nome_fornecedor: supplierName,
+        total: Number(total.toFixed(2)),
+        status: 'Confirmada',
+        itens: cart.map(item => ({
+          cd_produto: item?.cd_produto,
+          nome_produto: item?.nome || 'Produto sem nome',
+          quantidade: item?.quantity || 0,
+          valor_unitario: item?.finalPrice || 0,
+          subtotal: Number(((item?.finalPrice || 0) * (item?.quantity || 0)).toFixed(2)),
+          un: item?.selectedUnit || 'UN'
+        }))
+      };
+
+      await db.compras.save(purchasePayload);
+
+      const purchaseAccountBalances = new Map<number, number>();
+      contas.forEach(conta => purchaseAccountBalances.set(conta.cd_conta, Number(conta.saldo || 0)));
+
+      for (const p of payments) {
+        const installments = Array.isArray(p.installments) && p.installments.length > 0
+          ? p.installments
+          : [{ date: new Date().toISOString().split('T')[0], amount: p.amount }];
+
+        const isImmediate = ['Dinheiro', 'PIX', 'Cartão Crédito'].includes(p.method);
+
+        for (const [index, inst] of installments.entries()) {
+          await db.financeiro.add({
+            tipo: 'P',
+            descricao: `COMPRA PDV #${purchaseId.toString().slice(-6)}${installments.length > 1 ? ` - Parcela ${index + 1}/${installments.length}` : ''} - ${supplierName}`,
+            valor: Number(inst.amount || 0),
+            data_vencimento: inst.date,
+            data_pagamento: isImmediate ? new Date().toISOString() : undefined,
+            status: isImmediate ? 'Pago' : 'Pendente',
+            cd_entidade: selectedEntityId || null,
+            nome_entidade: supplierName,
+            categoria: 'Fornecedor',
+            meio_pagamento: p.method,
+            cd_conta: isImmediate ? p.accountId : undefined,
+            cd_compra: purchaseId,
+            cd_func: Number(selectedSellerId),
+            num_documento: p.num_documento,
+            banco_nome: p.banco_nome,
+            banco_num: p.banco_num,
+            agencia: p.agencia,
+            conta_num: p.conta_num,
+            cheque_num: p.cheque_num
+          });
+
+          if (isImmediate && p.accountId) {
+            const account = contas.find(c => c.cd_conta === Number(p.accountId));
+            if (account) {
+              const saldoAtual = purchaseAccountBalances.get(account.cd_conta) ?? Number(account.saldo || 0);
+              const novoSaldo = Number((saldoAtual - Number(inst.amount || 0)).toFixed(2));
+              purchaseAccountBalances.set(account.cd_conta, novoSaldo);
+              await db.contas.update(account.cd_conta, { saldo: novoSaldo });
+            }
+          }
+        }
+      }
+
+      for (const item of cart) {
+
+        const prod = products.find(p => p.cd_produto === item.cd_produto);
+        if (!prod) continue;
+        let entradaEstoque = item.quantity;
+        if (item.isFractional && item.conversionFactor > 0) entradaEstoque = item.quantity * item.conversionFactor;
+        await db.produtos.update(prod.cd_produto, {
+          estoque: Number(prod.estoque || 0) + Number(entradaEstoque || 0),
+          compra: Number(item.finalPrice || prod.compra || 0)
+        });
+      }
+
+      showSuccess("Compra finalizada com entrada no estoque e contas a pagar lançadas.");
+      setCart([]);
+      setSelectedCartIndex(null);
+      setSelectedSellerId("");
+      setSelectedEntityId("");
+      setInputCode("");
+      setPendingProduct(null);
+      setInputQty("0,000");
+      setInputBoxes("0");
+      setInputUnitPrice("0,00");
+      setIsCheckoutOpen(false);
+      await loadAllData();
+      setTimeout(() => sellerRef.current?.focus(), 100);
+      return;
+    }
+
     const payload = {
       total: Number(total.toFixed(2)),
       custo_total: cart.reduce((acc, item) => acc + ((item?.costPrice || 0) * (item?.quantity || 0)), 0),
       cd_clientes: selectedEntityId || null,
       nome_cliente: entity?.nome || 'CONSUMIDOR FINAL',
+
       cd_func: Number(selectedSellerId),
       tipo_venda: payments.some(p => p.method === 'Crediário') ? 'Prazo' : 'Vista' as any,
       meio_pagamento: payments.length > 1 ? 'Múltiplo' : (payments[0]?.method || 'Dinheiro'),
@@ -2182,7 +2278,18 @@ const POS = () => {
         initialSearch={searchInitialTerm}
         filterRentalsOnly={mode === 'LOCACAO'}
       />
-      <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} total={total} clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || 'CONSUMIDOR FINAL'} clientId={selectedEntityId} onClientChange={(id) => setSelectedEntityId(id)} onConfirm={confirmCheckout} />
+      <CheckoutModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        total={total}
+        clientName={clients.find(e => e.cd_clientes === selectedEntityId)?.nome || (mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL')}
+        clientId={selectedEntityId}
+        onClientChange={(id) => setSelectedEntityId(id)}
+        onConfirm={confirmCheckout}
+        mode={mode}
+        accounts={contas}
+      />
+
       <PrintPreview isOpen={isPrintOpen} onClose={() => setIsPrintOpen(false)} data={lastActionData} type="Venda" />
       <Dialog open={isAddEntityOpen} onOpenChange={setIsAddEntityOpen}><DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl"><DialogHeader><DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cadastrar Novo Cliente</DialogTitle></DialogHeader><ClientForm onSuccess={() => { setIsAddEntityOpen(false); loadAllData(); }} /></DialogContent></Dialog>
       <Dialog open={isAdminAuthOpen} onOpenChange={setIsAdminAuthOpen}><DialogContent className="max-w-md rounded-3xl"><DialogHeader><DialogTitle className="text-xl font-black uppercase tracking-tighter">Acesso Restrito ao ERP</DialogTitle></DialogHeader><form onSubmit={(e) => { e.preventDefault(); if (adminPassword === 'admin') { navigate("/"); } else { showError("Senha incorreta."); } }} className="space-y-5 py-4"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha do Administrador</Label><Input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="h-14 text-2xl font-black border-2 border-slate-200 focus:border-primary rounded-2xl shadow-inner" placeholder="••••••" /></div><DialogFooter className="gap-3"><Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsAdminAuthOpen(false)}>CANCELAR</Button><Button type="submit" className="flex-1 h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-black">ACESSAR ERP</Button></DialogFooter></form></DialogContent></Dialog>

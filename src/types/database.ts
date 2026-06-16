@@ -270,7 +270,7 @@ export interface ContaBancaria {
   conta_numero?: string;
   saldo_inicial: number;
   saldo: number;
-  tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital';
+  tipo: 'Caixa' | 'Banco' | 'Retaguarda' | 'Digital' | 'Cartão';
 }
 
 export type StatusCaixa = 'Aberto' | 'Fechado';
