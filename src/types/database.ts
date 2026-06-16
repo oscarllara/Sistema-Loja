@@ -317,9 +317,10 @@ export interface VeiculoEvento {
   id: string;
   veiculo_id: string;
   cd_usuario?: number;
-  tipo: 'Abastecimento' | 'Manutenção' | 'Troca de Óleo' | 'Pneu' | 'Alinhamento/Balanceamento';
+  tipo: 'Abastecimento' | 'Manutenção' | 'Troca de Óleo' | 'Pneu' | 'Alinhamento/Balanceamento' | 'Seguro' | 'Impostos';
   subtipo?: string;
   descricao?: string;
+
   combustivel?: string;
   quantidade_litros?: number;
   valor_litro?: number;

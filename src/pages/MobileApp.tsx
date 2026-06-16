@@ -1,8 +1,9 @@
 "use client";
 
 import React from 'react';
-import { Car, Plus, Fuel, Wrench, Droplets, CircleDot, AlignCenter, Home, ReceiptText, User, ArrowLeft, WalletCards, AlertTriangle, Pencil, Check } from 'lucide-react';
+import { Car, Plus, Fuel, Wrench, Droplets, CircleDot, AlignCenter, Home, ReceiptText, User, ArrowLeft, WalletCards, AlertTriangle, Pencil, Check, ShieldCheck, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -22,16 +23,22 @@ const parseNumber = (value: string) => {
   return parseFloat(normalized) || 0;
 };
 const formatMoneyInput = (value: string) => money(parseNumber(value));
+const titleCase = (value: string) => value
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
+  .replace(/(^|\s)(\S)/g, letter => letter.toUpperCase());
 const today = () => new Date().toISOString().split('T')[0];
 
 const vehicleActions = [
-
   { type: 'Abastecimento', label: 'Abastecer', icon: Fuel, color: 'bg-emerald-500' },
   { type: 'Manutenção', label: 'Mecânica', icon: Wrench, color: 'bg-slate-700', subtype: 'Mecânica' },
   { type: 'Manutenção', label: 'Elétrica', icon: Wrench, color: 'bg-amber-500', subtype: 'Elétrica' },
   { type: 'Troca de Óleo', label: 'Óleo', icon: Droplets, color: 'bg-blue-500' },
   { type: 'Pneu', label: 'Pneu', icon: CircleDot, color: 'bg-zinc-700' },
   { type: 'Alinhamento/Balanceamento', label: 'Alinhamento', icon: AlignCenter, color: 'bg-indigo-500' },
+  { type: 'Seguro', label: 'Seguro', icon: ShieldCheck, color: 'bg-cyan-600' },
+  { type: 'Impostos', label: 'Impostos', icon: FileText, color: 'bg-rose-500' },
 ] as const;
 
 const personalCategories = ['Almoço', 'Supermercado', 'Padaria', 'Lazer', 'Viagem', 'Saúde', 'Educação', 'Outros'];
@@ -167,11 +174,12 @@ const MobileApp = () => {
     }
     await db.mobile.veiculos.add({
       cd_usuario: user?.cd_clientes,
-      marca: vehicleForm.marca.trim().toUpperCase(),
-      modelo: vehicleForm.modelo.trim().toUpperCase(),
+      marca: titleCase(vehicleForm.marca),
+      modelo: titleCase(vehicleForm.modelo),
       ano: vehicleForm.ano ? Number(vehicleForm.ano) : undefined,
       placa: vehicleForm.placa.trim().toUpperCase() || undefined,
     });
+
     showSuccess('Veículo cadastrado.');
     setVehicleForm({ marca: '', modelo: '', ano: '', placa: '' });
     setIsVehicleOpen(false);
@@ -199,9 +207,10 @@ const MobileApp = () => {
 
     await db.financeiro.add({
       tipo: 'P',
-      descricao: `${eventType.toUpperCase()} - ${selectedVehicle.marca} ${selectedVehicle.modelo} ${selectedVehicle.placa || ''}`,
+      descricao: `${eventType.toUpperCase()} - ${titleCase(selectedVehicle.marca)} ${titleCase(selectedVehicle.modelo)} ${selectedVehicle.placa || ''}`,
       valor: total,
       data_vencimento: today(),
+
       data_pagamento: new Date().toISOString(),
       status: 'Pago',
       cd_entidade: user?.cd_clientes,
@@ -302,9 +311,10 @@ const MobileApp = () => {
             <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
               <div className="mb-2 flex items-center gap-2 font-black"><AlertTriangle size={18} /> Alertas de manutenção</div>
               {alerts.slice(0, 3).map(({ vehicle, event }) => (
-                <p key={event.id} className="text-xs font-bold">{vehicle.modelo}: {event.tipo} chegou em {Number(event.km_proxima || 0).toLocaleString('pt-BR')} km.</p>
+                <p key={event.id} className="text-xs font-bold">{titleCase(vehicle.modelo)}: {event.tipo} chegou em {Number(event.km_proxima || 0).toLocaleString('pt-BR')} km.</p>
               ))}
             </div>
+
           )}
 
           {section === 'home' && (
@@ -340,10 +350,11 @@ const MobileApp = () => {
                       <div className="flex items-center gap-4">
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700"><Car size={28} /></div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-black uppercase">{vehicle.marca} {vehicle.modelo}</h3>
-                          <p className="text-xs font-bold text-slate-500">{vehicle.placa || 'Sem placa'} • {vehicle.ano || 'Ano não informado'}</p>
+                          <h3 className="font-black">{titleCase(vehicle.marca)} {titleCase(vehicle.modelo)}</h3>
+                          <p className="text-xs font-bold text-slate-500">{vehicle.placa?.toUpperCase() || 'Sem placa'} • {vehicle.ano || 'Ano não informado'}</p>
                           <p className="mt-1 text-xs font-bold text-slate-600">Gasto: R$ {money(total)} {avg ? `• Média ${avg.toFixed(1).replace('.', ',')} km/l` : ''}</p>
                         </div>
+
                       </div>
                     </CardContent>
                   </Card>
@@ -358,9 +369,10 @@ const MobileApp = () => {
               <button className="flex items-center gap-1 text-xs font-bold text-slate-500" onClick={() => setSelectedVehicle(null)}><ArrowLeft size={14} /> Veículos</button>
               <div className="rounded-[2rem] bg-slate-900 p-5 text-white">
                 <p className="text-xs font-bold uppercase text-slate-400">Veículo selecionado</p>
-                <h2 className="text-2xl font-black uppercase">{selectedVehicle.marca} {selectedVehicle.modelo}</h2>
-                <p className="text-sm font-bold text-slate-300">{selectedVehicle.placa || 'Sem placa'} • {selectedVehicle.ano || 'Ano não informado'}</p>
+                <h2 className="text-2xl font-black">{titleCase(selectedVehicle.marca)} {titleCase(selectedVehicle.modelo)}</h2>
+                <p className="text-sm font-bold text-slate-300">{selectedVehicle.placa?.toUpperCase() || 'Sem placa'} • {selectedVehicle.ano || 'Ano não informado'}</p>
               </div>
+
               <div className="grid grid-cols-3 gap-3">
                 {vehicleActions.map(action => (
                   <button key={`${action.type}-${action.label}`} onClick={() => openEvent(action.type, 'subtype' in action ? action.subtype : '')} className="rounded-3xl bg-white p-3 text-center shadow-sm active:scale-95">
@@ -443,12 +455,13 @@ const MobileApp = () => {
         <DialogContent className="max-w-sm rounded-3xl">
           <DialogHeader><DialogTitle>Novo veículo</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input placeholder="Marca" value={vehicleForm.marca} onChange={e => setVehicleForm({ ...vehicleForm, marca: e.target.value })} />
-            <Input placeholder="Modelo" value={vehicleForm.modelo} onChange={e => setVehicleForm({ ...vehicleForm, modelo: e.target.value })} />
+            <Input placeholder="Marca" value={vehicleForm.marca} onChange={e => setVehicleForm({ ...vehicleForm, marca: e.target.value })} onBlur={e => setVehicleForm(prev => ({ ...prev, marca: titleCase(e.target.value) }))} />
+            <Input placeholder="Modelo" value={vehicleForm.modelo} onChange={e => setVehicleForm({ ...vehicleForm, modelo: e.target.value })} onBlur={e => setVehicleForm(prev => ({ ...prev, modelo: titleCase(e.target.value) }))} />
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="Ano" value={vehicleForm.ano} onChange={e => setVehicleForm({ ...vehicleForm, ano: e.target.value })} />
-              <Input placeholder="Placa" value={vehicleForm.placa} onChange={e => setVehicleForm({ ...vehicleForm, placa: e.target.value })} />
+              <Input placeholder="Placa" value={vehicleForm.placa} onChange={e => setVehicleForm({ ...vehicleForm, placa: e.target.value.toUpperCase() })} />
             </div>
+
             <Button className="h-12 w-full rounded-2xl font-black" onClick={saveVehicle}>Salvar veículo</Button>
           </div>
         </DialogContent>
