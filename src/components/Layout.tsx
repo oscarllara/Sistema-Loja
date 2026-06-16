@@ -28,8 +28,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { db } from '@/services/api';
 import SyncStatus from './SyncStatus';
+import { formatPhoneBR } from '@/utils/formatters';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
+
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -87,7 +89,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     items: group.items.filter(item => !user?.permissoes || (user.permissoes as any)[item.perm])
   })).filter(group => group.items.length > 0);
 
+  const companyName = (config?.provider_name || config?.nome_empresa || 'KEY OF INNOV DEV').toUpperCase();
+  const companyPhone = formatPhoneBR(config?.provider_tel || config?.telefone || '');
+
   return (
+
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Sidebar */}
       <aside className={cn(
@@ -96,13 +102,17 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       )}>
         <div className="flex flex-col h-full">
           <div className="p-6 flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20 shrink-0">
               <ShoppingCart size={22} />
             </div>
-            <span className="text-xl font-black text-slate-900 tracking-tight">Dyad<span className="text-primary">ERP</span></span>
+            <div className="min-w-0">
+              <p className="text-base font-black text-slate-900 tracking-tight leading-tight truncate">{companyName}</p>
+              {companyPhone && <p className="text-[10px] font-bold text-slate-500 leading-tight">{companyPhone}</p>}
+            </div>
           </div>
 
           <ScrollArea className="flex-1 px-4">
+
             <div className="space-y-6 pb-6">
               {filteredMenu.map((group, idx) => (
                 <div key={idx} className="space-y-2">

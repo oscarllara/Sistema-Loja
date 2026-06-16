@@ -72,10 +72,13 @@ const sanitizeConfigPayload = (config: Partial<Configuracoes>) => {
     return acc;
   }, {} as Partial<Configuracoes>);
 
+  if (payload.provider_name) payload.provider_name = payload.provider_name.trim().toUpperCase();
+  if (payload.nome_empresa) payload.nome_empresa = payload.nome_empresa.trim().toUpperCase();
   if (payload.provider_cnpj) payload.provider_cnpj = formatCpfCnpj(payload.provider_cnpj);
   if (payload.cnpj) payload.cnpj = formatCnpj(payload.cnpj);
   if (payload.provider_tel) payload.provider_tel = formatPhoneBR(payload.provider_tel);
   if (payload.telefone) payload.telefone = formatPhoneBR(payload.telefone);
+
   if (payload.tel2) payload.tel2 = formatPhoneBR(payload.tel2);
   if (payload.tel3) payload.tel3 = formatPhoneBR(payload.tel3);
   if (payload.whatsapp_loja) payload.whatsapp_loja = formatPhoneBR(payload.whatsapp_loja);

@@ -44,10 +44,13 @@ const Settings = () => {
       ]);
       setConfig({
         ...data,
+        provider_name: (data.provider_name || '').toUpperCase(),
+        nome_empresa: (data.nome_empresa || '').toUpperCase(),
         provider_cnpj: formatCnpj(data.provider_cnpj),
         provider_tel: formatPhoneBR(data.provider_tel),
         cnpj: formatCnpj(data.cnpj),
         telefone: formatPhoneBR(data.telefone),
+
         whatsapp_loja: formatPhoneBR(data.whatsapp_loja),
         endereco: formatAddressTitleCase(data.endereco),
         payment_account_routes: data.payment_account_routes || {}
@@ -115,9 +118,10 @@ const Settings = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nome / Razão Social</Label>
-                  <Input value={config.provider_name || ""} onChange={(e) => setConfig({ ...config, provider_name: e.target.value })} />
+                  <Input value={config.provider_name || ""} onChange={(e) => setConfig({ ...config, provider_name: e.target.value.toUpperCase() })} className="uppercase" />
                 </div>
                 <div className="space-y-2">
+
                   <Label>Slogan do Provedor</Label>
                   <Input value={config.provider_slogan || ""} onChange={(e) => setConfig({ ...config, provider_slogan: e.target.value })} placeholder="Ex: A chave da inovação" />
                 </div>
@@ -220,9 +224,10 @@ const Settings = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2 space-y-2">
                   <Label>Nome da Loja / Razão Social</Label>
-                  <Input value={config.nome_empresa} onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value })} />
+                  <Input value={config.nome_empresa} onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value.toUpperCase() })} className="uppercase" />
                 </div>
                 <div className="space-y-2">
+
                   <Label>Slogan da Loja</Label>
                   <Input value={config.slogan || ""} onChange={(e) => setConfig({ ...config, slogan: e.target.value })} />
                 </div>
