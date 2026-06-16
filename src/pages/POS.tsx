@@ -24,6 +24,7 @@ import {
   QrCode,
   ArrowDownCircle,
   ArrowUpCircle,
+  ArrowRightLeft,
   RefreshCw
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
@@ -185,6 +186,10 @@ const POS = () => {
   const [cashMovementDescription, setCashMovementDescription] = React.useState("");
   const [cashMovementValue, setCashMovementValue] = React.useState("0,00");
   const [cashMovementMethod, setCashMovementMethod] = React.useState("Dinheiro");
+  const [isCashTransferOpen, setIsCashTransferOpen] = React.useState(false);
+  const [cashTransferDestinationId, setCashTransferDestinationId] = React.useState<number | "">("");
+  const [cashTransferValue, setCashTransferValue] = React.useState("0,00");
+  const [cashTransferNotes, setCashTransferNotes] = React.useState("");
   
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = React.useState(false);
@@ -639,6 +644,10 @@ const POS = () => {
   const cashExitsToday = cashMovementsToday.filter(l => l.tipo === 'P').reduce((acc, l) => acc + Number(l.valor || 0), 0);
   const cashOpeningBalance = Number(currentCashSession?.saldo_real_abertura || 0);
   const cashSystemBalance = cashOpeningBalance + cashEntriesToday - cashExitsToday;
+  const transferDestinationAccounts = React.useMemo(
+    () => contas.filter(conta => conta.cd_conta !== cashAccount?.cd_conta),
+    [contas, cashAccount]
+  );
 
   const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -919,6 +928,17 @@ const POS = () => {
     setIsCashMovementOpen(true);
   };
 
+  const openCashTransferDialog = () => {
+    if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de transferir recursos."); return; }
+    if (transferDestinationAccounts.length === 0) { showError("Cadastre outra conta para receber a transferência."); return; }
+
+    setCashTransferDestinationId(transferDestinationAccounts[0].cd_conta);
+    setCashTransferValue('0,00');
+    setCashTransferNotes(`TRANSFERÊNCIA DO ${cashAccount.nome}`);
+    setIsCashTransferOpen(true);
+  };
+
   const handleAddCashMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
@@ -952,6 +972,33 @@ const POS = () => {
       await loadAllData();
     } catch {
       showError("Não foi possível registrar o lançamento.");
+    }
+  };
+
+  const handleCashTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashAccount) { showError("Nenhuma conta caixa cadastrada."); return; }
+    if (currentCashSession?.status !== 'Aberto') { showError("Abra o caixa antes de transferir recursos."); return; }
+    if (!cashTransferDestinationId) { showError("Selecione a conta de destino."); return; }
+    if (cashTransferDestinationId === cashAccount.cd_conta) { showError("A conta de destino precisa ser diferente do caixa atual."); return; }
+
+    const value = parseBRNumber(cashTransferValue);
+    if (value <= 0) { showError("Informe um valor válido."); return; }
+
+    try {
+      await db.financeiro.transferir({
+        cd_conta_origem: cashAccount.cd_conta,
+        cd_conta_destino: Number(cashTransferDestinationId),
+        valor: Number(value.toFixed(2)),
+        data: today,
+        obs: cashTransferNotes.trim().toUpperCase()
+      });
+
+      showSuccess("Transferência registrada.");
+      setIsCashTransferOpen(false);
+      await loadAllData();
+    } catch {
+      showError("Não foi possível registrar a transferência.");
     }
   };
 
@@ -1404,6 +1451,52 @@ const POS = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isCashTransferOpen} onOpenChange={setIsCashTransferOpen}>
+        <DialogContent className="max-w-lg rounded-3xl border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2 text-sky-700">
+              <ArrowRightLeft size={24} /> Transferência entre contas
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCashTransfer} className="space-y-4 py-2">
+            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origem</p>
+              <p className="font-black text-slate-900">{cashAccount?.nome || 'Sem caixa'} • Saldo {formatCurrency(Number(cashAccount?.saldo || 0))}</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Destino</Label>
+              <select value={cashTransferDestinationId} onChange={(e) => setCashTransferDestinationId(Number(e.target.value))} className="w-full h-12 rounded-2xl border border-input bg-background px-3 text-sm font-bold">
+                {transferDestinationAccounts.map(conta => (
+                  <option key={conta.cd_conta} value={conta.cd_conta}>
+                    {conta.nome} • {conta.tipo} • Saldo {formatCurrency(Number(conta.saldo || 0))}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor</Label>
+                <Input value={cashTransferValue} onChange={(e) => setCashTransferValue(e.target.value)} className="h-12 rounded-2xl font-black text-lg" placeholder="0,00" autoFocus />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data</Label>
+                <Input value={new Date(`${today}T00:00:00`).toLocaleDateString('pt-BR')} className="h-12 rounded-2xl font-black" disabled />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Observação</Label>
+              <Input value={cashTransferNotes} onChange={(e) => setCashTransferNotes(e.target.value)} className="h-12 rounded-2xl font-bold uppercase" />
+            </div>
+            <DialogFooter className="gap-3">
+              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setIsCashTransferOpen(false)}>Cancelar</Button>
+              <Button type="submit" className="flex-1 h-12 rounded-xl font-black bg-sky-600 hover:bg-sky-700">
+                Transferir
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isDailyCashPanelOpen} onOpenChange={setIsDailyCashPanelOpen}>
         <DialogContent className="max-w-6xl h-[92vh] overflow-hidden rounded-3xl border-none shadow-2xl p-0 flex flex-col">
           <div className="bg-slate-950 text-white p-6 shrink-0">
@@ -1426,6 +1519,9 @@ const POS = () => {
                   </Button>
                   <Button variant="outline" className="bg-rose-500/15 border-rose-400/20 text-rose-100 hover:bg-rose-500/25 rounded-2xl font-black" onClick={() => openCashMovementDialog('P')}>
                     <ArrowUpCircle size={16} className="mr-2" /> Nova Saída
+                  </Button>
+                  <Button variant="outline" className="bg-sky-500/15 border-sky-400/20 text-sky-100 hover:bg-sky-500/25 rounded-2xl font-black" onClick={openCashTransferDialog}>
+                    <ArrowRightLeft size={16} className="mr-2" /> Transferência
                   </Button>
                   <Button variant="outline" className="bg-white/10 border-white/10 text-white hover:bg-white/20 rounded-2xl font-black" onClick={loadAllData}>
                     <RefreshCw size={16} className="mr-2" /> Atualizar
