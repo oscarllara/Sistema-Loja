@@ -729,6 +729,17 @@ const POS = () => {
     });
   }, [dailyCashMovementsToday, dailyCashFilter, dailyCashTypeFilter]);
 
+  const dailyCashPreviousBalance = React.useMemo(() => {
+    if (isDailyCashMainAccount) return dailyCashOpeningBalance;
+    return Number(dailyCashAccount?.saldo || 0) - dailyCashEntriesToday + dailyCashExitsToday;
+  }, [dailyCashAccount, dailyCashEntriesToday, dailyCashExitsToday, dailyCashOpeningBalance, isDailyCashMainAccount]);
+
+  const showDailyCashInitialRow = dailyCashTypeFilter === 'Todos' && (
+    isDailyCashMainAccount
+      ? dailyCashFilter === 'Todos' || dailyCashFilter === 'Dinheiro'
+      : true
+  );
+
   const openCashDialog = () => {
     setOpeningRealValue(formatMoneyInput(expectedOpeningBalance));
     setCashNotes("");
@@ -1862,42 +1873,59 @@ const POS = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDailyCashMovements.length === 0 ? (
+                    {filteredDailyCashMovements.length === 0 && !showDailyCashInitialRow ? (
                       <TableRow>
                         <TableCell colSpan={5} className="h-36 text-center text-slate-400 font-bold">Nenhum lançamento encontrado para este filtro.</TableCell>
                       </TableRow>
-                    ) : filteredDailyCashMovements.map(item => {
-                      const saleNumber = getDailyCashSaleNumber(item);
-                      const descriptionWithoutSale = saleNumber
-                        ? item.descricao.replace(/VENDA\s+PDV\s+#\d+\s*-\s*/i, '')
-                        : item.descricao;
+                    ) : (
+                      <>
+                        {showDailyCashInitialRow && (
+                          <TableRow className="bg-slate-50/80">
+                            <TableCell>
+                              <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase bg-slate-200 text-slate-700">Inicial</span>
+                            </TableCell>
+                            <TableCell className="font-black text-slate-800 max-w-[320px]">
+                              {isDailyCashMainAccount ? 'ABERTURA DE CAIXA' : 'SALDO ANTERIOR / INÍCIO DO DIA'}
+                            </TableCell>
+                            <TableCell className="font-black text-slate-900">{isDailyCashMainAccount ? 'Dinheiro' : 'Saldo anterior'}</TableCell>
+                            <TableCell className="font-bold text-slate-500">{dailyCashAccount?.nome || '-'}</TableCell>
+                            <TableCell className="text-right font-black text-slate-900">{formatCurrency(dailyCashPreviousBalance)}</TableCell>
+                          </TableRow>
+                        )}
+                        {filteredDailyCashMovements.map(item => {
+                          const saleNumber = getDailyCashSaleNumber(item);
+                          const descriptionWithoutSale = saleNumber
+                            ? item.descricao.replace(/VENDA\s+PDV\s+#\d+\s*-\s*/i, '')
+                            : item.descricao;
 
-                      return (
-                        <TableRow key={item.cd_lancamento} className="hover:bg-slate-50">
-                          <TableCell>
-                            <span className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", item.tipo === 'R' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{item.tipo === 'R' ? 'Entrada' : 'Saída'}</span>
-                          </TableCell>
-                          <TableCell className="font-bold text-slate-700 max-w-[320px]">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {saleNumber && (
-                                <button
-                                  type="button"
-                                  className="shrink-0 rounded-lg bg-indigo-50 px-2 py-1 font-black text-indigo-700 hover:bg-indigo-100 hover:underline"
-                                  title="Clique para reimprimir esta venda"
-                                  onClick={() => handleDailyCashReprintSale(item)}
-                                >
-                                  #{saleNumber}
-                                </button>
-                              )}
-                              <span className="truncate">{descriptionWithoutSale}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-black text-slate-900">{item.meio_pagamento || 'Não informado'}</TableCell>
-                          <TableCell className="font-bold text-slate-500">{item.nome_entidade || '-'}</TableCell>
-                          <TableCell className={cn("text-right font-black", item.tipo === 'R' ? "text-emerald-700" : "text-rose-700")}>{item.tipo === 'R' ? '+' : '-'} {formatCurrency(Number(item.valor || 0))}</TableCell>
-                        </TableRow>
-                      );
-                    })}
+                          return (
+                            <TableRow key={item.cd_lancamento} className="hover:bg-slate-50">
+                              <TableCell>
+                                <span className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", item.tipo === 'R' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>{item.tipo === 'R' ? 'Entrada' : 'Saída'}</span>
+                              </TableCell>
+                              <TableCell className="font-bold text-slate-700 max-w-[320px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {saleNumber && (
+                                    <button
+                                      type="button"
+                                      className="shrink-0 rounded-lg bg-indigo-50 px-2 py-1 font-black text-indigo-700 hover:bg-indigo-100 hover:underline"
+                                      title="Clique para reimprimir esta venda"
+                                      onClick={() => handleDailyCashReprintSale(item)}
+                                    >
+                                      #{saleNumber}
+                                    </button>
+                                  )}
+                                  <span className="truncate">{descriptionWithoutSale}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-black text-slate-900">{item.meio_pagamento || 'Não informado'}</TableCell>
+                              <TableCell className="font-bold text-slate-500">{item.nome_entidade || '-'}</TableCell>
+                              <TableCell className={cn("text-right font-black", item.tipo === 'R' ? "text-emerald-700" : "text-rose-700")}>{item.tipo === 'R' ? '+' : '-'} {formatCurrency(Number(item.valor || 0))}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </>
+                    )}
                   </TableBody>
                 </Table>
               </ScrollArea>
