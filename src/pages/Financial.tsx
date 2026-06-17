@@ -61,7 +61,14 @@ const Financial = () => {
   const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
+  const [employees, setEmployees] = React.useState<Cliente[]>([]);
   const [activeTab, setActiveTab] = React.useState("receivable");
+  
+  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<number | "all">("all");
+  const [isPayCommissionOpen, setIsPayCommissionOpen] = React.useState(false);
+  const [payCommissionEmployeeId, setPayCommissionEmployeeId] = React.useState<number | "">("");
+  const [payCommissionAccountId, setPayCommissionAccountId] = React.useState<number | "">("");
+  const [payCommissionAmount, setPayCommissionAmount] = React.useState<string>("");
   const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
   const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto'>('All');
   const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
@@ -89,14 +96,16 @@ const Financial = () => {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [lData, cData, pData] = await Promise.all([
+      const [lData, cData, pData, eData] = await Promise.all([
         db.financeiro.getAll().catch(() => []),
         db.contas.getAll().catch(() => []),
-        db.patrimonio.getAll().catch(() => [])
+        db.patrimonio.getAll().catch(() => []),
+        db.clientes.getAll().catch(() => [])
       ]);
       setLancamentos(lData || []);
       setContas(cData || []);
       setPatrimonio(pData || []);
+      setEmployees((eData || []).filter(c => c.is_funcionario || c.usuario === 'admin'));
     } catch (err) {
       console.error("Erro ao carregar dados financeiros:", err);
       showError("Erro ao carregar dados financeiros.");
@@ -117,6 +126,40 @@ const Financial = () => {
   const normalizeCategory = (categoria?: string) => (categoria || '').trim().toLowerCase();
   const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'veículo', 'veiculo', 'outros']);
   const isOperationalExpense = (l: LancamentoFinanceiro) => !l.is_non_operational && operationalExpenseCategories.has(normalizeCategory(l.categoria));
+
+  const getCommissionSummary = React.useMemo(() => {
+    const commissionLancamentos = lancamentos.filter(l =>
+      normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao'
+    );
+
+    return employees.map(emp => {
+      const empCommissions = commissionLancamentos.filter(l => Number(l.cd_func) === Number(emp.cd_clientes));
+      const pendingAmount = empCommissions
+        .filter(l => l.status === 'Pendente')
+        .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+      const paidAmount = empCommissions
+        .filter(l => l.status === 'Pago')
+        .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+      return {
+        employee: emp,
+        pendingAmount,
+        paidAmount,
+        totalAmount: pendingAmount + paidAmount
+      };
+    });
+  }, [lancamentos, employees]);
+
+  const totalPendingCommissions = React.useMemo(() => {
+    return lancamentos
+      .filter(l => (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') && l.status === 'Pendente')
+      .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+  }, [lancamentos]);
+
+  const totalPaidCommissions = React.useMemo(() => {
+    return lancamentos
+      .filter(l => (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') && l.status === 'Pago')
+      .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+  }, [lancamentos]);
 
   const handleBaixa = async (id: number) => {
 
@@ -143,6 +186,102 @@ const Financial = () => {
       loadData();
     } catch (err) {
       showError("Erro ao compensar cheque.");
+    }
+  };
+
+  const handlePayCommissionSubmit = async () => {
+    const employeeId = Number(payCommissionEmployeeId);
+    const accountId = Number(payCommissionAccountId);
+    const amountToPay = parseFloat(payCommissionAmount.replace(/\./g, "").replace(",", "."));
+
+    if (!employeeId) {
+      showError("Selecione um funcionário.");
+      return;
+    }
+    if (!accountId) {
+      showError("Selecione a conta/caixa de origem para o pagamento.");
+      return;
+    }
+    if (isNaN(amountToPay) || amountToPay <= 0) {
+      showError("Informe um valor válido para o pagamento.");
+      return;
+    }
+
+    const selectedAccount = contas.find(c => Number(c.cd_conta) === accountId);
+    if (!selectedAccount) {
+      showError("Conta selecionada não encontrada.");
+      return;
+    }
+
+    try {
+      // Find all pending commission entries for this employee
+      const commissionLancamentos = lancamentos.filter(l =>
+        (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') &&
+        Number(l.cd_func) === employeeId &&
+        l.status === 'Pendente'
+      );
+
+      // Sort oldest first
+      const sortedPending = [...commissionLancamentos].sort((a, b) =>
+        new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime()
+      );
+
+      let remainingPayment = amountToPay;
+
+      for (const entry of sortedPending) {
+        if (remainingPayment <= 0) break;
+
+        const entryVal = Number(entry.valor) || 0;
+        if (entryVal <= remainingPayment) {
+          // Pay full record
+          await db.financeiro.update(entry.cd_lancamento, {
+            status: 'Pago',
+            data_pagamento: new Date().toISOString(),
+            cd_conta: accountId
+          });
+          remainingPayment -= entryVal;
+        } else {
+          // Partially pay by splitting entry
+          await db.financeiro.update(entry.cd_lancamento, {
+            valor: Number(remainingPayment.toFixed(2)),
+            status: 'Pago',
+            data_pagamento: new Date().toISOString(),
+            cd_conta: accountId
+          });
+
+          const leftOver = entryVal - remainingPayment;
+          await db.financeiro.add({
+            tipo: 'P',
+            descricao: entry.descricao + ' (Saldo Remanescente)',
+            valor: Number(leftOver.toFixed(2)),
+            data_vencimento: entry.data_vencimento,
+            status: 'Pendente',
+            cd_entidade: entry.cd_entidade,
+            nome_entidade: entry.nome_entidade,
+            categoria: entry.categoria,
+            cd_venda: entry.cd_venda,
+            cd_func: entry.cd_func,
+            is_non_operational: false
+          });
+
+          remainingPayment = 0;
+        }
+      }
+
+      // Deduct paid amount from selected account
+      const currentSaldo = Number(selectedAccount.saldo || 0);
+      const newSaldo = Number((currentSaldo - amountToPay).toFixed(2));
+      await db.contas.update(accountId, { saldo: newSaldo });
+
+      showSuccess(`Pagamento de R$ ${amountToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} compensado com sucesso!`);
+      setIsPayCommissionOpen(false);
+      setPayCommissionEmployeeId("");
+      setPayCommissionAccountId("");
+      setPayCommissionAmount("");
+      loadData();
+    } catch (err: any) {
+      console.error("Erro ao pagar comissões:", err);
+      showError(err?.message || "Falha ao realizar o pagamento.");
     }
   };
 
@@ -326,6 +465,7 @@ const Financial = () => {
             <TabsTrigger value="payable" className="rounded-lg gap-2"><ArrowDownCircle size={16} /> Contas a Pagar</TabsTrigger>
             <TabsTrigger value="accounts" className="rounded-lg gap-2"><Wallet size={16} /> Caixas e Bancos</TabsTrigger>
             <TabsTrigger value="patrimony" className="rounded-lg gap-2"><Home size={16} /> Patrimônio</TabsTrigger>
+            <TabsTrigger value="commissions" className="rounded-lg gap-2"><Briefcase size={16} /> Comissões e Vendedores</TabsTrigger>
           </TabsList>
 
           <TabsContent value="receivable" className="space-y-6">
@@ -530,6 +670,189 @@ const Financial = () => {
               )}
             </div>
           </TabsContent>
+
+          <TabsContent value="commissions" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-none shadow-sm bg-purple-50">
+                <CardContent className="p-6">
+                  <p className="text-[10px] font-bold uppercase text-purple-600">Total de Comissões Pendentes (A Pagar)</p>
+                  <p className="text-2xl font-black text-purple-900 mt-1">R$ {totalPendingCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] text-purple-700 font-bold mt-2 uppercase">Aguardando pagamento de comissões</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-sm bg-emerald-50">
+                <CardContent className="p-6">
+                  <p className="text-[10px] font-bold uppercase text-emerald-600">Total de Comissões Pagas</p>
+                  <p className="text-2xl font-black text-emerald-950 mt-1">R$ {totalPaidCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] text-emerald-700 font-bold mt-2 uppercase">Já descontado do caixa/bancos</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-sm bg-slate-50">
+                <CardContent className="p-6">
+                  <p className="text-[10px] font-bold uppercase text-slate-500">Funcionários / Vendedores</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{employees.length}</p>
+                  <p className="text-[9px] text-slate-400 font-bold mt-2 uppercase">Com login de operador ou funcionário ativo</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+              {/* Left column: Employee List & Summary */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Conta Corrente de Funcionários</h3>
+                    <Button
+                      size="sm"
+                      className="bg-purple-600 hover:bg-purple-700 font-black rounded-xl text-[10px] uppercase gap-1"
+                      onClick={() => {
+                        setIsPayCommissionOpen(true);
+                      }}
+                    >
+                      <PlusCircle size={12} /> Compensar Pagamento
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    <div
+                      onClick={() => setSelectedEmployeeId("all")}
+                      className={cn(
+                        "p-4 rounded-xl border text-left cursor-pointer transition-all",
+                        selectedEmployeeId === "all" ? "bg-indigo-50 border-indigo-200 ring-2 ring-indigo-500/20" : "bg-slate-50 hover:bg-slate-100 border-transparent"
+                      )}
+                    >
+                      <p className="font-black text-slate-900 uppercase text-xs">Todos os Funcionários</p>
+                      <div className="mt-2 flex justify-between items-end">
+                        <div>
+                          <p className="text-[9px] text-slate-400 uppercase font-bold">Total Pendente</p>
+                          <p className="text-sm font-bold text-slate-800">R$ {totalPendingCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {getCommissionSummary.map(summary => (
+                      <div
+                        key={summary.employee.cd_clientes}
+                        onClick={() => setSelectedEmployeeId(summary.employee.cd_clientes)}
+                        className={cn(
+                          "p-4 rounded-xl border text-left cursor-pointer transition-all space-y-1 relative group",
+                          selectedEmployeeId === summary.employee.cd_clientes ? "bg-purple-50 border-purple-200 ring-2 ring-purple-500/20" : "bg-slate-50 hover:bg-slate-100 border-transparent"
+                        )}
+                      >
+                        <p className="font-black text-slate-900 uppercase text-xs truncate pr-16">{summary.employee.nome}</p>
+                        <div className="flex justify-between items-end mt-2">
+                          <div>
+                            <p className="text-[9px] text-slate-400 uppercase font-bold">Comissão Pendente</p>
+                            <p className={cn("text-sm font-black", summary.pendingAmount > 0 ? "text-purple-600" : "text-slate-500")}>
+                              R$ {summary.pendingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] text-slate-400 uppercase font-bold">Total Pago</p>
+                            <p className="text-xs font-semibold text-emerald-600">
+                              R$ {summary.paidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+
+                        {summary.pendingAmount > 0 && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="absolute top-2 right-2 rounded-lg bg-purple-100 text-purple-700 text-[9px] font-black hover:bg-purple-200 h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPayCommissionEmployeeId(summary.employee.cd_clientes);
+                              setPayCommissionAmount(summary.pendingAmount.toFixed(2).replace('.', ','));
+                              setIsPayCommissionOpen(true);
+                            }}
+                          >
+                            Pagar
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right column: Selected Employee Detailed Log */}
+              <div className="md:col-span-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                  <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                    {selectedEmployeeId === "all" ? "Extrato Geral de Comissões" : `Extrato de Comissões · ${employees.find(e => e.cd_clientes === selectedEmployeeId)?.nome || ''}`}
+                  </h3>
+
+                  <div className="overflow-x-auto font-sans">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-left">Data</TableHead>
+                          {selectedEmployeeId === "all" && <TableHead className="text-left">Funcionário</TableHead>}
+                          <TableHead className="text-left">Descrição</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead className="text-center">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lancamentos
+                          .filter(l => {
+                            const isCommission = normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao';
+                            if (!isCommission) return false;
+                            if (selectedEmployeeId !== "all" && Number(l.cd_func) !== Number(selectedEmployeeId)) return false;
+                            return true;
+                          })
+                          .sort((a, b) => b.cd_lancamento - a.cd_lancamento)
+                          .map(entry => (
+                            <TableRow key={entry.cd_lancamento} className="hover:bg-slate-50/50">
+                              <TableCell className="text-xs text-slate-500 font-medium">
+                                {new Date(entry.data_vencimento).toLocaleDateString('pt-BR')}
+                              </TableCell>
+                              {selectedEmployeeId === "all" && (
+                                <TableCell className="text-xs font-bold text-slate-700 uppercase">
+                                  {entry.nome_entidade}
+                                </TableCell>
+                              )}
+                              <TableCell className="text-xs font-semibold text-slate-950 uppercase">
+                                {entry.descricao}
+                              </TableCell>
+                              <TableCell className="text-xs text-right font-black text-slate-950">
+                                R$ {Number(entry.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge
+                                  className={cn(
+                                    "text-[9px] font-black border-none uppercase",
+                                    entry.status === 'Pago' ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"
+                                  )}
+                                >
+                                  {entry.status === 'Pago' ? 'COMPENSADO' : 'PENDENTE'}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+
+                        {lancamentos.filter(l => {
+                          const isCommission = normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao';
+                          if (!isCommission) return false;
+                          if (selectedEmployeeId !== "all" && Number(l.cd_func) !== Number(selectedEmployeeId)) return false;
+                          return true;
+                        }).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={selectedEmployeeId === "all" ? 5 : 4} className="py-12 text-center text-slate-400">
+                              Nenhum lançamento de comissão registrado para este funcionário.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
 
         <Dialog open={isCompensateOpen} onOpenChange={setIsCompensateOpen}>
@@ -544,7 +867,7 @@ const Financial = () => {
               </div>
               <div className="space-y-2">
                 <Label>Conta para Débito</Label>
-                <select 
+                <select
                   className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                   value={targetAccountId}
                   onChange={(e) => setTargetAccountId(e.target.value)}
@@ -558,6 +881,105 @@ const Financial = () => {
               <Button variant="outline" onClick={() => setIsCompensateOpen(false)}>Cancelar</Button>
               <Button onClick={handleCompensarCheque} className="bg-emerald-600 hover:bg-emerald-700" disabled={!targetAccountId}>
                 Compensar Agora
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isPayCommissionOpen} onOpenChange={(open) => {
+          setIsPayCommissionOpen(open);
+          if (!open) {
+            setPayCommissionEmployeeId("");
+            setPayCommissionAccountId("");
+            setPayCommissionAmount("");
+          }
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Briefcase className="text-purple-600" />
+                Compensar Pagamento de Comissão
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 uppercase">Funcionário / Vendedor</Label>
+                <select
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold uppercase"
+                  value={payCommissionEmployeeId}
+                  onChange={(e) => {
+                    const empId = Number(e.target.value);
+                    setPayCommissionEmployeeId(empId || "");
+                    if (empId) {
+                      // Calculate pending sum
+                      const summary = getCommissionSummary.find(s => Number(s.employee.cd_clientes) === empId);
+                      if (summary) {
+                        setPayCommissionAmount(summary.pendingAmount.toFixed(2).replace('.', ','));
+                      }
+                    } else {
+                      setPayCommissionAmount("");
+                    }
+                  }}
+                >
+                  <option value="">Selecione o Funcionário...</option>
+                  {employees.map(e => {
+                    const summary = getCommissionSummary.find(s => Number(s.employee.cd_clientes) === Number(e.cd_clientes));
+                    const pending = summary ? summary.pendingAmount : 0;
+                    return (
+                      <option key={e.cd_clientes} value={e.cd_clientes}>
+                        {e.nome} (Pendente: R$ {pending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {payCommissionEmployeeId && (
+                <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+                  <p className="text-[10px] font-bold text-purple-600 uppercase">Saldo Pendente</p>
+                  <p className="text-2xl font-black text-purple-900 mt-1">
+                    R$ {(getCommissionSummary.find(s => Number(s.employee.cd_clientes) === Number(payCommissionEmployeeId))?.pendingAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 uppercase">Conta / Caixa de Origem (Para Débito)</Label>
+                <select
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold uppercase"
+                  value={payCommissionAccountId}
+                  onChange={(e) => setPayCommissionAccountId(e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="">Selecione a conta...</option>
+                  {contas.map(c => (
+                    <option key={c.cd_conta} value={c.cd_conta}>
+                      {c.nome} (Saldo: R$ {(Number(c.saldo) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 uppercase">Valor a ser Pago (R$)</Label>
+                <Input
+                  value={payCommissionAmount}
+                  onChange={(e) => setPayCommissionAmount(e.target.value)}
+                  className="h-10 text-sm font-bold border-2 focus:border-purple-500"
+                  placeholder="0,00"
+                />
+                <p className="text-[9px] text-slate-500 font-bold uppercase">
+                  Por padrão, preenchemos com o saldo devedor acumulado deste funcionário.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsPayCommissionOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handlePayCommissionSubmit}
+                className="bg-purple-600 hover:bg-purple-700"
+                disabled={!payCommissionEmployeeId || !payCommissionAccountId || !payCommissionAmount}
+              >
+                Compensar & Debitar Conta
               </Button>
             </DialogFooter>
           </DialogContent>

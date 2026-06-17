@@ -43,38 +43,48 @@ const ProductHistoryModal = ({ isOpen, onClose, product }: ProductHistoryModalPr
 
       // Saídas (Vendas)
       vendas.forEach(v => {
-        const item = v.itens?.find(i => i.cd_produto === product.cd_produto);
+        const saleItems = Array.isArray(v.itens) ? v.itens : [];
+        const item = saleItems.find(i => Number(i.cd_produto) === Number(product.cd_produto));
         if (item) {
+          const qtde = Number(item.qtde ?? item.quantity ?? item.quantidade ?? 0);
+          const valor = Number(item.valor ?? item.valor_unitario ?? item.finalPrice ?? 0);
           movements.push({
             data: v.data,
             tipo: 'SAÍDA',
             origem: `Venda #${v.cd_venda}`,
             entidade: v.nome_cliente || 'Consumidor',
-            qtde: item.qtde,
-            valor: item.valor,
-            total: item.subtotal
+            qtde,
+            valor,
+            total: Number(item.subtotal ?? (qtde * valor) ?? 0)
           });
         }
       });
 
       // Entradas (Compras)
       compras.forEach(c => {
-        const item = c.itens?.find(i => i.cd_produto === product.cd_produto);
+        const purchaseItems: any[] = Array.isArray(c.itens) ? c.itens : (Array.isArray(c.items) ? c.items : []);
+        const item = purchaseItems.find(i => Number(i.cd_produto) === Number(product.cd_produto));
         if (item) {
+          const qtde = Number(item.quantidade ?? item.qtde ?? item.quantity ?? 0);
+          const valor = Number(item.valor_unitario ?? item.valor_unit ?? item.valor ?? 0);
           movements.push({
+
             data: c.data,
             tipo: 'ENTRADA',
-            origem: `Compra NF ${c.nota_fiscal || 'S/N'}`,
+            origem: `Compra ${c.nota_fiscal ? `NF ${c.nota_fiscal}` : `#${c.cd_compra || 'S/N'}`}`,
             entidade: c.nome_fornecedor || 'Fornecedor',
-            qtde: item.qtde,
-            valor: item.valor_unit,
-            total: item.subtotal
+            qtde,
+            valor,
+            total: Number(item.subtotal ?? (qtde * valor) ?? 0)
           });
         }
       });
 
       // Ordena por data (mais recente primeiro)
-      setHistory(movements.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()));
+      setHistory(movements.sort((a, b) => new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime()));
+    } catch (err) {
+      console.error("Erro ao carregar histórico do produto:", err);
+      setHistory([]);
     } finally {
       setIsLoading(false);
     }
@@ -151,9 +161,10 @@ const ProductHistoryModal = ({ isOpen, onClose, product }: ProductHistoryModalPr
                       <TableCell className="py-3">
                         <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
                           <Calendar size={12} className="text-slate-400" />
-                          {new Date(m.data).toLocaleString()}
+                          {m.data ? new Date(m.data).toLocaleString() : '-'}
                         </div>
                       </TableCell>
+
                       <TableCell>
                         <Badge className={cn(
                           "text-[9px] font-black border-none px-2 py-0.5",
@@ -175,10 +186,11 @@ const ProductHistoryModal = ({ isOpen, onClose, product }: ProductHistoryModalPr
                           {m.entidade}
                         </div>
                       </TableCell>
-                      <TableCell className="text-center font-black text-slate-900">{m.qtde}</TableCell>
-                      <TableCell className="text-right text-xs font-medium text-slate-500">R$ {m.valor.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-black text-slate-900">R$ {m.total.toFixed(2)}</TableCell>
+                      <TableCell className="text-center font-black text-slate-900">{Number(m.qtde || 0).toLocaleString('pt-BR')}</TableCell>
+                      <TableCell className="text-right text-xs font-medium text-slate-500">R$ {Number(m.valor || 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-black text-slate-900">R$ {Number(m.total || 0).toFixed(2)}</TableCell>
                     </TableRow>
+
                   ))}
                   {history.length === 0 && (
                     <TableRow>

@@ -1145,12 +1145,12 @@ const POS = () => {
             cd_conta: isImmediate ? p.accountId : undefined,
             cd_compra: purchaseId,
             cd_func: Number(selectedSellerId),
-            num_documento: p.num_documento,
+            num_documento: inst.documentNumber || p.num_documento,
             banco_nome: p.banco_nome,
             banco_num: p.banco_num,
             agencia: p.agencia,
             conta_num: p.conta_num,
-            cheque_num: p.cheque_num
+            cheque_num: inst.checkNumber || p.cheque_num
           });
 
           if (isImmediate && p.accountId) {
@@ -1267,6 +1267,37 @@ const POS = () => {
         accountBalances.set(destinoPagamento.cd_conta, novoSaldo);
         await db.contas.update(destinoPagamento.cd_conta, { saldo: novoSaldo });
       }
+    }
+
+    // Calcular Comissão do Vendedor
+    let totalComissao = 0;
+    cart.forEach(item => {
+      if (item?.gera_comissao) {
+        const itemTotal = (item.finalPrice || 0) * (item.quantity || 0);
+        const itemPct = Number(item.comissao_percentual || 0);
+        if (itemPct > 0) {
+          totalComissao += itemTotal * (itemPct / 100);
+        }
+      }
+    });
+
+    if (totalComissao > 0 && selectedSellerId) {
+      const sellerObj = sellers.find(s => Number(s.cd_clientes) === Number(selectedSellerId));
+      const sellerName = sellerObj?.nome || `Operador #${selectedSellerId}`;
+
+      await db.financeiro.add({
+        tipo: 'P',
+        descricao: `COMISSÃO VENDA #${saleId || Date.now().toString().slice(-6)} - ${payload.nome_cliente}`,
+        valor: Number(totalComissao.toFixed(2)),
+        data_vencimento: new Date().toISOString().split('T')[0],
+        status: 'Pendente',
+        cd_entidade: Number(selectedSellerId),
+        nome_entidade: sellerName,
+        categoria: 'Comissão',
+        cd_venda: saleId,
+        cd_func: Number(selectedSellerId),
+        is_non_operational: false
+      });
     }
     
     for (const item of cart) {

@@ -65,6 +65,8 @@ const productSchema = z.object({
   descricao_site: z.string().optional().nullable(),
   integrar_calculadora: z.boolean().default(false),
   cd_fornecedores: z.string().optional().nullable(),
+  gera_comissao: z.boolean().default(false),
+  comissao_percentual: z.string().default("0"),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -142,6 +144,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       cod_barras: product.cod_barras || "",
       id_importado: product.id_importado || "",
       fracionado: initialFractionalEnabled,
+      gera_comissao: product.gera_comissao ?? false,
+      comissao_percentual: (product.comissao_percentual ?? 0).toString().replace('.', ','),
     } : {
       id_manual: "",
       un: "UN",
@@ -164,7 +168,9 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
       valor_diaria: "0,00",
       valor_semana: "0,00",
       valor_quinzena: "0,00",
-      valor_mes: "0,00"
+      valor_mes: "0,00",
+      gera_comissao: false,
+      comissao_percentual: "0",
     }
   });
 
@@ -175,6 +181,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
   const isLocacao = watch("is_locacao");
   const isFracionado = watch("fracionado");
   const isKit = watch("is_kit");
+  const isGeraComissao = watch("gera_comissao");
 
   const availableKitProducts = React.useMemo(() => {
     return allProducts.filter((item) => item.cd_produto !== product?.cd_produto);
@@ -349,6 +356,8 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
         link_externo: data.link_externo?.trim() || null,
         descricao_site: data.descricao_site?.trim() || null,
         integrar_calculadora: !!data.integrar_calculadora,
+        gera_comissao: !!data.gera_comissao,
+        comissao_percentual: parseToNumber(data.comissao_percentual),
         cd_fornecedores: supplierId && !isNaN(supplierId) ? supplierId : null as any,
         data_atualizacao: new Date().toISOString()
       };
@@ -565,7 +574,7 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
           </TabsContent>
 
           <TabsContent value="precos" className="space-y-6 m-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-6">
                 <h4 className="font-black text-slate-900 flex items-center gap-2 uppercase text-xs tracking-widest"><DollarSign size={16} className="text-indigo-600" /> Formação de Preço</h4>
                 <div className="space-y-2">
@@ -591,6 +600,33 @@ const ProductForm = ({ product, onSuccess }: ProductFormProps) => {
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-emerald-700">Preço Final À Vista (R$)</Label>
                   <Input value={watch("venda_vista")} onChange={(e) => handleCashPriceChange(e.target.value)} className="h-12 text-xl font-black text-emerald-700 border-2 border-emerald-100 focus:border-emerald-600 bg-white" placeholder="0,00" />
+                </div>
+              </div>
+
+              <div className="p-6 bg-purple-50 rounded-2xl border border-purple-100 space-y-6 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-black text-purple-900 flex items-center gap-2 uppercase text-xs tracking-widest">
+                    <Percent size={16} className="text-purple-600" /> Comissão de Vendas
+                  </h4>
+                  
+                  <div className="flex items-center space-x-2 p-3 bg-white rounded-xl border border-purple-200 mb-4 mt-6">
+                    <Checkbox id="gera_comissao" checked={!!isGeraComissao} onCheckedChange={(checked) => setValue("gera_comissao", !!checked)} />
+                    <Label htmlFor="gera_comissao" className="font-bold text-xs text-purple-900 cursor-pointer uppercase">Este produto gera comissão</Label>
+                  </div>
+
+                  {isGeraComissao && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                      <Label className="text-[10px] font-bold uppercase text-purple-700">Comissão do Funcionário (%)</Label>
+                      <Input
+                        {...register("comissao_percentual")}
+                        className="h-12 text-lg font-black text-purple-700 border-2 border-purple-200 focus:border-purple-600 bg-white"
+                        placeholder="0,00"
+                      />
+                      <p className="text-[9px] text-purple-600 font-bold uppercase mt-1">
+                        Ao finalizar a venda deste item, o valor correspondente a este percentual será acumulado na conta corrente do vendedor.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

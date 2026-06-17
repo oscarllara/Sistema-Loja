@@ -38,9 +38,12 @@ type PurchasePaymentMethod = 'Dinheiro' | 'PIX' | 'Cartão Crédito' | 'Crediár
 interface Installment {
   date: string;
   amount: number;
+  documentNumber?: string;
+  checkNumber?: string;
 }
 
 export interface CheckoutPayment {
+
   method: string;
   amount: number;
   installments?: Installment[];
@@ -230,8 +233,8 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const confirmInstallments = () => {
     const totalInst = tempInstallments.reduce((acc, i) => acc + Number(i.amount || 0), 0);
     if (totalInst <= 0) return;
-    if (installmentMethod === 'Boleto' && !documentNumber.trim()) {
-      showError("Informe o número do boleto.");
+    if (installmentMethod === 'Boleto' && tempInstallments.some(inst => !inst.documentNumber?.trim())) {
+      showError("Informe o número do boleto em todas as parcelas.");
       return;
     }
     if (installmentMethod === 'Cheque' && (!bankNumber.trim() || !agency.trim() || !accountNumber.trim() || !checkNumber.trim())) {
@@ -243,7 +246,8 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       method: installmentMethod,
       amount: totalInst,
       installments: tempInstallments,
-      num_documento: installmentMethod === 'Boleto' ? documentNumber.trim() : undefined,
+      num_documento: installmentMethod === 'Boleto' ? tempInstallments.map(inst => inst.documentNumber?.trim()).filter(Boolean).join(', ') : undefined,
+
       banco_nome: installmentMethod === 'Cheque' ? bankName.trim() : undefined,
       banco_num: installmentMethod === 'Cheque' ? bankNumber.trim() : undefined,
       agencia: installmentMethod === 'Cheque' ? agency.trim() : undefined,
@@ -368,13 +372,13 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                 )}
 
                 {isPurchase && installmentMethod === 'Boleto' && (
-                  <div className="space-y-1 shrink-0">
-                    <Label className="text-[9px] uppercase font-bold text-slate-500">Número do boleto</Label>
-                    <Input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} className="h-9 text-xs font-bold" placeholder="Digite o número do boleto" />
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-[10px] font-bold text-blue-700 shrink-0">
+                    Informe o número do boleto em cada parcela abaixo. Cada vencimento pode ter um documento diferente.
                   </div>
                 )}
 
                 {isPurchase && installmentMethod === 'Cheque' && (
+
                   <div className="grid grid-cols-2 gap-2 shrink-0">
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Banco</Label><Input value={bankNumber} onChange={(e) => setBankNumber(e.target.value)} className="h-9 text-xs" placeholder="Nº banco" /></div>
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Nome banco</Label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-xs" placeholder="Opcional" /></div>
@@ -396,8 +400,15 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                           <Label className="text-[9px] uppercase font-bold text-slate-500">Valor (R$)</Label>
                           <Input type="number" value={inst.amount} onChange={(e) => { const n = [...tempInstallments]; n[idx].amount = parseFloat(e.target.value) || 0; setTempInstallments(n); }} className="h-8 text-xs font-bold" />
                         </div>
+                        {isPurchase && installmentMethod === 'Boleto' && (
+                          <div className="space-y-1 col-span-2">
+                            <Label className="text-[9px] uppercase font-bold text-slate-500">Número do boleto da {idx + 1}ª parcela</Label>
+                            <Input value={inst.documentNumber || ''} onChange={(e) => { const n = [...tempInstallments]; n[idx].documentNumber = e.target.value; setTempInstallments(n); }} className="h-8 text-xs font-bold" placeholder={`Boleto parcela ${idx + 1}`} />
+                          </div>
+                        )}
                       </div>
                     ))}
+
                   </div>
                 </ScrollArea>
 

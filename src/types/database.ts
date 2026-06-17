@@ -113,6 +113,8 @@ export interface Produto {
   link_externo?: string;
   descricao_site?: string;
   integrar_calculadora?: boolean;
+  gera_comissao?: boolean;
+  comissao_percentual?: number;
 }
 
 export type TipoFinanceiro = 'R' | 'P';
