@@ -18,7 +18,8 @@ import {
   CreditCard,
   QrCode,
   ArrowRightLeft,
-  RefreshCw
+  RefreshCw,
+  Printer as PrintIcon
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,8 +53,35 @@ const normalizeMoneyInput = (value: string) => formatMoneyInput(parseMoney(value
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 type DailyCashPaymentFilter = 'Todos' | 'Dinheiro' | 'Cartão' | 'PIX';
 
+const toLocalDateStr = (isoStr?: string | null) => {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return isoStr.split('T')[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDocumentDetails = (item: LancamentoFinanceiro) => {
+  if (item.cd_venda) return { id: item.cd_venda, type: 'Venda' as const, label: `Venda #${item.cd_venda}` };
+  if (item.cd_compra) return { id: item.cd_compra, type: 'Compra' as const, label: `Compra #${item.cd_compra}` };
+  if (item.cd_aluguel) return { id: item.cd_aluguel, type: 'Locacao' as const, label: `Locação #${item.cd_aluguel}` };
+
+  const vMatch = item.descricao?.match(/VENDA\s+PDV\s+#(\d+)/i);
+  if (vMatch) return { id: Number(vMatch[1]), type: 'Venda' as const, label: `Venda #${vMatch[1]}` };
+
+  const cMatch = item.descricao?.match(/COMPRA\s+PDV\s+#(\d+)/i);
+  if (cMatch) return { id: Number(cMatch[1]), type: 'Compra' as const, label: `Compra #${cMatch[1]}` };
+
+  const aMatch = item.descricao?.match(/LOCAÇÃO\s+#(\d+)/i);
+  if (aMatch) return { id: Number(aMatch[1]), type: 'Locacao' as const, label: `Locação #${aMatch[1]}` };
+
+  return null;
+};
+
 const DailyCash = () => {
-  const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = React.useState(() => toLocalDateStr(new Date().toISOString()));
   const [showAllTime, setShowAllTime] = React.useState(false);
   const [selectedAccountId, setSelectedAccountId] = React.useState<string>("all");
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -84,7 +112,12 @@ const DailyCash = () => {
   const [openingRealValue, setOpeningRealValue] = React.useState("0,00");
   const [closingRealValue, setClosingRealValue] = React.useState("0,00");
   const [cashNotes, setCashNotes] = React.useState("");
-  const today = new Date().toISOString().split('T')[0];
+
+  const [printDocData, setPrintDocData] = React.useState<any>(null);
+  const [printDocType, setPrintDocType] = React.useState<'Venda' | 'Orcamento' | 'Fechamento' | 'Compra' | 'Locacao'>('Fechamento');
+  const [isDocPrintOpen, setIsDocPrintOpen] = React.useState(false);
+
+  const today = toLocalDateStr(new Date().toISOString());
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -326,21 +359,60 @@ const DailyCash = () => {
     }
   };
 
-  // Filtra as movimentações baseadas na data e na conta selecionada
+  const handleReprintDocument = async (item: LancamentoFinanceiro) => {
+    const doc = getDocumentDetails(item);
+    if (!doc) return;
+
+    try {
+      if (doc.type === 'Venda') {
+        const sales = await db.vendas.getAll();
+        const sale = sales.find(v => v.cd_venda === doc.id);
+        if (sale) {
+          setPrintDocType('Venda');
+          setPrintDocData({ ...sale, type: 'Venda' });
+          setIsDocPrintOpen(true);
+        } else {
+          showError("Venda não encontrada para reimpressão.");
+        }
+      } else if (doc.type === 'Compra') {
+        const compras = await db.compras.getAll();
+        const compra = compras.find(c => c.cd_compra === doc.id);
+        if (compra) {
+          setPrintDocType('Compra');
+          setPrintDocData({ ...compra, type: 'Compra' });
+          setIsDocPrintOpen(true);
+        } else {
+          showError("Compra não encontrada para reimpressão.");
+        }
+      } else if (doc.type === 'Locacao') {
+        const rentals = await db.alugueis.getAll();
+        const rental = rentals.find(r => r.cd_aluguel === doc.id);
+        if (rental) {
+          setPrintDocType('Locacao');
+          setPrintDocData({ ...rental, type: 'Locacao' });
+          setIsDocPrintOpen(true);
+        } else {
+          showError("Contrato de locação não encontrado para reimpressão.");
+        }
+      }
+    } catch {
+      showError("Falha ao buscar os detalhes da operação.");
+    }
+  };
+
   const movDia = lancamentos.filter(l => {
     if (l.status !== 'Pago') return false;
-    
-    // Filtro de Conta
     if (selectedAccountId !== "all" && l.cd_conta !== Number(selectedAccountId)) return false;
-
     if (showAllTime) return true;
-    return l.data_pagamento?.startsWith(selectedDate) || l.data_vencimento.startsWith(selectedDate);
+
+    const date = toLocalDateStr(l.data_pagamento || l.data_vencimento);
+    return date === selectedDate;
   }).sort((a, b) => new Date(a.data_pagamento || a.data_vencimento).getTime() - new Date(b.data_pagamento || b.data_vencimento).getTime());
 
   const saldoAnteriorCalculado = showAllTime ? 0 : lancamentos
     .filter(l => {
       const isPaid = l.status === 'Pago';
-      const isBefore = (l.data_pagamento || l.data_vencimento).split('T')[0] < selectedDate;
+      const isBefore = toLocalDateStr(l.data_pagamento || l.data_vencimento) < selectedDate;
       const matchesAccount = selectedAccountId === "all" || l.cd_conta === Number(selectedAccountId);
       return isPaid && isBefore && matchesAccount;
     })
@@ -431,7 +503,7 @@ const DailyCash = () => {
                     disabled={showAllTime}
                     value={selectedDate} 
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="border-none p-0 focus:ring-0 font-bold cursor-pointer bg-transparent disabled:cursor-not-allowed"
+                    className="border-none p-0 focus:ring-0 font-bold cursor-pointer bg-transparent disabled:cursor-not-allowed text-xs"
                   />
                 </div>
 
@@ -521,7 +593,7 @@ const DailyCash = () => {
               </div>
               {nextCashSession && Number(nextCashSession.diferenca_abertura || 0) !== 0 && (
                 <div className="rounded-xl bg-rose-100 border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700">
-                  Diferença conferida na próxima abertura ({new Date(`${nextCashSession.data_caixa}T00:00:00`).toLocaleDateString('pt-BR')}): R$ {Number(nextCashSession.diferenca_abertura || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  Diferença com o dia seguinte ({new Date(`${nextCashSession.data_caixa}T00:00:00`).toLocaleDateString('pt-BR')}): R$ {Number(nextCashSession.diferenca_abertura || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </div>
               )}
             </CardContent>
@@ -654,30 +726,51 @@ const DailyCash = () => {
                   {filteredExtrato.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-20 text-slate-400">Nenhuma movimentação encontrada.</TableCell></TableRow>
                   ) : (
-                    [...filteredExtrato].reverse().map((item, i) => (
-                      <TableRow key={i} className={cn(item.tipo === 'R' ? "hover:bg-emerald-50/30" : "hover:bg-rose-50/30", "group")}>
-                        <TableCell className="text-[10px] font-mono text-slate-400">
-                          {item.data_pagamento ? new Date(item.data_pagamento).toLocaleString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : '--/-- --:--'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-xs font-bold text-slate-800">{item.descricao}</div>
-                          <div className="text-[9px] text-slate-400 uppercase font-bold">{item.meio_pagamento} | {item.contaNome}</div>
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-bold text-emerald-600">{item.tipo === 'R' ? item.valor.toFixed(2) : '0,00'}</TableCell>
-                        <TableCell className="text-right text-xs font-bold text-rose-600">{item.tipo === 'P' ? item.valor.toFixed(2) : '0,00'}</TableCell>
-                        <TableCell className="text-right text-xs font-bold text-slate-900">{item.atual.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600" onClick={() => handleEdit(item)}>
-                              <Edit size={14} />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-600" onClick={() => handleDelete(item.cd_lancamento)}>
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    [...filteredExtrato].reverse().map((item, i) => {
+                      const doc = getDocumentDetails(item);
+                      const isClickable = !!doc;
+                      const displayDesc = doc 
+                        ? item.descricao.replace(/VENDA\s+PDV\s+#\d+\s*-\s*/i, '').replace(/COMPRA\s+PDV\s+#\d+\s*-\s*/i, '')
+                        : item.descricao;
+
+                      return (
+                        <TableRow key={i} className={cn(item.tipo === 'R' ? "hover:bg-emerald-50/30" : "hover:bg-rose-50/30", "group")}>
+                          <TableCell className="text-[10px] font-mono text-slate-400">
+                            {item.data_pagamento ? new Date(item.data_pagamento).toLocaleString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : '--/-- --:--'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {isClickable && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReprintDocument(item)}
+                                  className="shrink-0 inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 hover:text-indigo-800 transition-colors font-black text-indigo-700 text-[10px] px-2 py-0.5"
+                                  title="Clique para abrir comprovante para impressão/visualização"
+                                >
+                                  <PrintIcon size={10} />
+                                  {doc.label}
+                                </button>
+                              )}
+                              <div className="text-xs font-bold text-slate-800">{displayDesc}</div>
+                            </div>
+                            <div className="text-[9px] text-slate-400 uppercase font-bold mt-0.5">{item.meio_pagamento} | {item.contaNome}</div>
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold text-emerald-600">{item.tipo === 'R' ? item.valor.toFixed(2) : '0,00'}</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-rose-600">{item.tipo === 'P' ? item.valor.toFixed(2) : '0,00'}</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-slate-900">{item.atual.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600" onClick={() => handleEdit(item)}>
+                                <Edit size={14} />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-rose-600" onClick={() => handleDelete(item.cd_lancamento)}>
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -818,7 +911,7 @@ const DailyCash = () => {
         <Dialog open={isOpenCashOpen} onOpenChange={setIsOpenCashOpen}>
           <DialogContent>
             <DialogHeader><DialogTitle>Abrir Caixa</DialogTitle></DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <div className="rounded-xl bg-slate-50 border p-4">
                 <p className="text-[10px] uppercase font-black text-slate-400">Conta</p>
                 <p className="font-black text-slate-900">{cashAccount?.nome}</p>
@@ -848,7 +941,7 @@ const DailyCash = () => {
         <Dialog open={isCloseCashOpen} onOpenChange={setIsCloseCashOpen}>
           <DialogContent>
             <DialogHeader><DialogTitle>Fechar Caixa</DialogTitle></DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <div className="rounded-xl bg-slate-50 border p-4 space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Resumo do fechamento</p>
                 <div className="flex justify-between text-sm"><span>Saldo de abertura:</span><strong>R$ {saldoAnterior.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
@@ -880,6 +973,13 @@ const DailyCash = () => {
           onClose={() => setIsPrintOpen(false)} 
           data={printData} 
           type="Fechamento" 
+        />
+
+        <PrintPreview
+          isOpen={isDocPrintOpen}
+          onClose={() => { setIsDocPrintOpen(false); setPrintDocData(null); }}
+          data={printDocData}
+          type={printDocType}
         />
       </div>
     </Layout>
