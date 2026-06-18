@@ -979,7 +979,7 @@ const DailyCash = () => {
           isOpen={isDocPrintOpen}
           onClose={() => { setIsDocPrintOpen(false); setPrintDocData(null); }}
           data={printDocData}
-          type={printDocType}
+          type={printDocType as any}
         />
       </div>
     </Layout>

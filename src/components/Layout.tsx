@@ -22,8 +22,20 @@ import {
   ShieldCheck,
   FileText,
   Smartphone,
-  Car
+  Car,
+  Bell,
+  Globe
 } from 'lucide-react';
+
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -41,6 +53,41 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(!isMobile);
   const [config, setConfig] = React.useState<any>(null);
   const user = db.auth.getUser();
+
+  const [siteOrders, setSiteOrders] = React.useState<any[]>([]);
+  const [isNotificationOpen, setIsNotificationOpen] = React.useState(false);
+
+  const checkSiteOrders = React.useCallback(async () => {
+    try {
+      const data = await db.orcamentos.getAll();
+      const openSite = data.filter((o: any) => o.status === 'Aberto' && o.origem === 'Site');
+      setSiteOrders(prev => {
+        if (openSite.length > prev.length && prev.length > 0) {
+          toast.info("Novo Pedido Recebido do Site! 🛒", {
+            description: `Há ${openSite.length} pedido(s) aguardando aprovação.`,
+            action: {
+              label: "Visualizar",
+              onClick: () => setIsNotificationOpen(true)
+            }
+          });
+          try {
+            const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav");
+            audio.volume = 0.5;
+            audio.play();
+          } catch (e) {}
+        }
+        return openSite;
+      });
+    } catch (e) {
+      console.error("Erro ao carregar pedidos do site:", e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    checkSiteOrders();
+    const interval = setInterval(checkSiteOrders, 15000);
+    return () => clearInterval(interval);
+  }, [checkSiteOrders]);
 
   React.useEffect(() => {
     db.config.get().then(setConfig).catch(() => {});
@@ -181,6 +228,18 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             {isSidebarOpen ? <X /> : <Menu />}
           </Button>
           <div className="flex items-center gap-4 ml-auto">
+            {siteOrders.length > 0 && (
+              <button
+                onClick={() => setIsNotificationOpen(true)}
+                className="relative p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all flex items-center justify-center border border-blue-200 shadow-sm"
+                title="Novos pedidos do site"
+              >
+                <Bell size={18} className="animate-bounce" />
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 bg-rose-600 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                  {siteOrders.length}
+                </span>
+              </button>
+            )}
             <SyncStatus />
           </div>
         </header>
@@ -190,6 +249,71 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
       </main>
+
+      <Dialog open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
+        <DialogContent className="max-w-xl max-h-[80vh] flex flex-col rounded-3xl border-none shadow-2xl">
+          <DialogHeader className="flex flex-row items-center gap-3">
+            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+              <Globe size={24} />
+            </div>
+            <div>
+              <DialogTitle className="text-xl font-black uppercase tracking-tighter">Pedidos do Site</DialogTitle>
+              <DialogDescription className="text-xs font-bold text-slate-500">
+                Há {siteOrders.length} pedido(s) pendente(s) da loja virtual aguardando conferência.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-3 py-4 pr-1">
+            {siteOrders.map((order) => (
+              <div
+                key={order.cd_orcamento}
+                className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-slate-100 transition-all flex items-center justify-between gap-4"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                      #{order.cd_orcamento}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      {new Date(order.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-sm font-black text-slate-800 uppercase mt-1 truncate">{order.nome_cliente}</p>
+                  <p className="text-xs font-bold text-slate-500">{order.itens?.length || 0} produto(s)</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-base font-black text-emerald-600">
+                    R$ {Number(order.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold mt-2 gap-1.5"
+                    onClick={() => {
+                      setIsNotificationOpen(false);
+                      navigate("/pos");
+                    }}
+                  >
+                    <ShoppingCart size={12} /> Faturar
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {siteOrders.length === 0 && (
+              <div className="text-center py-12 text-slate-400">
+                <Globe size={40} className="mx-auto mb-3 text-slate-300" />
+                <p className="text-sm font-black uppercase">Tudo em dia!</p>
+                <p className="text-xs font-bold mt-1 text-slate-400">Nenhum pedido novo do site no momento.</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="w-full h-11 rounded-xl font-bold" onClick={() => setIsNotificationOpen(false)}>
+              FECHAR LISTA
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

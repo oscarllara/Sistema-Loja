@@ -190,13 +190,14 @@ export interface Venda {
   cd_venda: number;
   data: string;
   total: number;
-  custo_total: number; 
+  custo_total: number;
   cd_clientes: number;
   nome_cliente?: string;
   cd_func: number;
   tipo_venda: 'Vista' | 'Prazo';
   meio_pagamento: MeioPagamento;
   itens: any[];
+  origem?: 'PDV' | 'Site';
 }
 
 export interface Orcamento extends Omit<Venda, 'cd_venda'> {

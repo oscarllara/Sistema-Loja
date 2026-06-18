@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { FileText, Search, ShoppingCart, Trash2, Loader2 } from 'lucide-react';
+import { FileText, Search, ShoppingCart, Trash2, Loader2, Globe } from 'lucide-react';
 import { db } from '@/services/api';
 import { Orcamento } from '@/types/database';
 
@@ -102,7 +102,20 @@ const QuotesModal = ({ isOpen, onClose, onLoadQuote }: QuotesModalProps) => {
                   <TableRow key={o.cd_orcamento}>
                     <TableCell className="font-mono font-bold">{o.cd_orcamento}</TableCell>
                     <TableCell>{new Date(o.data).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-medium uppercase">{o.nome_cliente}</TableCell>
+                    <TableCell className="font-medium uppercase">
+                      <div className="flex items-center gap-2">
+                        <span>{o.nome_cliente}</span>
+                        {o.origem === 'Site' ? (
+                          <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-blue-200">
+                            <Globe size={10} /> SITE
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-500 text-[10px] font-black px-2 py-0.5 rounded-full border border-slate-200">
+                            PDV
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right font-bold">R$ {o.total.toFixed(2)}</TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center gap-2">
