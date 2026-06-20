@@ -32,7 +32,7 @@ const ImportData = () => {
     });
   };
 
-  const processExcel = async (file: File, type: 'clientes' | 'produtos') => {
+  const processExcel = async (file: File, type: 'clientes' | 'produtos' | 'receber' | 'pagar') => {
     if (isImporting) return;
     setIsImporting(true);
     setIsFinished(false);
@@ -56,8 +56,10 @@ const ImportData = () => {
 
         if (type === 'produtos') {
           await importProdutos(jsonData);
-        } else {
+        } else if (type === 'clientes') {
           await importClientes(jsonData);
+        } else {
+          await importFinanceiro(jsonData, type);
         }
         
         dismissToast(loadingId);
@@ -154,6 +156,74 @@ const ImportData = () => {
     addLog("Clientes importados com sucesso.");
   };
 
+  const importFinanceiro = async (data: any[], type: 'receber' | 'pagar') => {
+    const first = data[0];
+    const kDesc = findKey(first, ['DESCRICAO', 'NOME', 'CLIENTE', 'FORNECEDOR', 'NOME_ENTIDADE']);
+    const kValor = findKey(first, ['VALOR', 'VLR', 'TOTAL', 'VALOR_A_RECEBER', 'VALOR_A_PAGAR']);
+    const kDataVenc = findKey(first, ['VENCIMENTO', 'DATA_VENC', 'VENC', 'DATA_VENCIMENTO']);
+    const kDoc = findKey(first, ['DOCUMENTO', 'NF', 'NUM_DOCUMENTO', 'DUPLICATA', 'BOLETO']);
+    const kChequeNum = findKey(first, ['CHEQUE', 'NUM_CHEQUE', 'N_CHEQUE', 'CHQ']);
+    const kBanco = findKey(first, ['BANCO', 'BANCO_NOME', 'NOME_BANCO']);
+
+    if (!kDesc) throw new Error("Coluna de Descrição / Nome não identificada.");
+    if (!kValor) throw new Error("Coluna de Valor não identificada.");
+    if (!kDataVenc) throw new Error("Coluna de Data de Vencimento não identificada.");
+
+    addLog(`Mapeando lançamentos de ${type === 'receber' ? 'Contas a Receber' : 'Contas a Pagar'}...`);
+
+    const mapped = data.map((item) => {
+      let rawDate = item[kDataVenc];
+      let formattedDate = "";
+      if (typeof rawDate === 'number') {
+        const jsDate = new Date((rawDate - 25569) * 86400 * 1000);
+        formattedDate = jsDate.toISOString().split('T')[0];
+      } else if (rawDate) {
+        try {
+          const parts = rawDate.toString().split('/');
+          if (parts.length === 3) {
+            formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          } else {
+            formattedDate = new Date(rawDate).toISOString().split('T')[0];
+          }
+        } catch (e) {
+          formattedDate = new Date().toISOString().split('T')[0];
+        }
+      } else {
+        formattedDate = new Date().toISOString().split('T')[0];
+      }
+
+      const chequeNum = kChequeNum ? (item[kChequeNum] || "").toString().trim() : "";
+      const isCheque = chequeNum !== "";
+
+      return {
+        tipo: type === 'receber' ? 'R' : 'P',
+        descricao: (item[kDesc] || "").toString().trim().toUpperCase(),
+        valor: parseNum(item[kValor]),
+        data_vencimento: formattedDate,
+        status: 'Pendente',
+        num_documento: kDoc ? (item[kDoc] || "").toString().trim() : "",
+        meio_pagamento: isCheque ? 'Cheque' : (kDoc && item[kDoc] ? 'Boleto' : 'Dinheiro'),
+        cheque_num: chequeNum,
+        banco_nome: kBanco ? (item[kBanco] || "").toString().trim().toUpperCase() : "",
+        categoria: type === 'receber' ? 'Cliente' : 'Fornecedor',
+        data_pagamento: null,
+        cd_conta: null
+      };
+    }).filter(f => f.descricao && f.valor > 0);
+
+    addLog(`Enviando ${mapped.length} lançamentos para o banco...`);
+
+    const chunkSize = 100;
+    for (let i = 0; i < mapped.length; i += chunkSize) {
+      const chunk = mapped.slice(i, i + chunkSize);
+      addLog(`Enviando lote ${Math.floor(i/chunkSize) + 1} de ${Math.ceil(mapped.length/chunkSize)}...`);
+      const { error } = await db.financeiro.addBulk(chunk);
+      if (error) throw error;
+    }
+
+    addLog(`Sucesso: ${mapped.length} lançamentos de ${type === 'receber' ? 'Contas a Receber' : 'Contas a Pagar'} importados.`);
+  };
+
   return (
     <Layout>
       <div className="space-y-6 max-w-4xl mx-auto">
@@ -183,18 +253,18 @@ const ImportData = () => {
         )}
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border-none shadow-sm hover:shadow-md transition-all">
+          <Card className="border-none shadow-sm hover:shadow-md transition-all rounded-3xl">
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileSpreadsheet className="text-emerald-600" /> Produtos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="relative">
-                <input 
-                  type="file" 
-                  accept=".xlsx, .xls" 
-                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" 
+                <input
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   disabled={isImporting}
-                  onChange={(e) => e.target.files?.[0] && processExcel(e.target.files[0], 'produtos')} 
+                  onChange={(e) => e.target.files?.[0] && processExcel(e.target.files[0], 'produtos')}
                 />
-                <Button className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 gap-2" disabled={isImporting}>
+                <Button className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 gap-2 rounded-2xl" disabled={isImporting}>
                   {isImporting ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
                   Selecionar PRODUTO.xlsx
                 </Button>
@@ -203,23 +273,63 @@ const ImportData = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm hover:shadow-md transition-all">
+          <Card className="border-none shadow-sm hover:shadow-md transition-all rounded-3xl">
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileSpreadsheet className="text-blue-600" /> Clientes</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="relative">
-                <input 
-                  type="file" 
-                  accept=".xlsx, .xls" 
-                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" 
+                <input
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   disabled={isImporting}
-                  onChange={(e) => e.target.files?.[0] && processExcel(e.target.files[0], 'clientes')} 
+                  onChange={(e) => e.target.files?.[0] && processExcel(e.target.files[0], 'clientes')}
                 />
-                <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 gap-2" disabled={isImporting}>
+                <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 gap-2 rounded-2xl" disabled={isImporting}>
                   {isImporting ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
                   Selecionar CLIENTES.xlsx
                 </Button>
               </div>
               <p className="text-[10px] text-slate-400 text-center">Colunas esperadas: Nome, CPF/CNPJ, Telefone.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm hover:shadow-md transition-all rounded-3xl">
+            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileSpreadsheet className="text-amber-600" /> Contas a Receber</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  disabled={isImporting}
+                  onChange={(e) => e.target.files?.[0] && processExcel(e.target.files[0], 'receber')}
+                />
+                <Button className="w-full h-12 bg-amber-600 hover:bg-amber-700 gap-2 rounded-2xl" disabled={isImporting}>
+                  {isImporting ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
+                  Selecionar RECEBER.xlsx
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400 text-center">Colunas esperadas: Descrição/Cliente, Valor, Vencimento, Documento (Opcional).</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm hover:shadow-md transition-all rounded-3xl">
+            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileSpreadsheet className="text-rose-600" /> Contas a Pagar</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  disabled={isImporting}
+                  onChange={(e) => e.target.files?.[0] && processExcel(e.target.files[0], 'pagar')}
+                />
+                <Button className="w-full h-12 bg-rose-600 hover:bg-rose-700 gap-2 rounded-2xl" disabled={isImporting}>
+                  {isImporting ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
+                  Selecionar PAGAR.xlsx
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400 text-center">Colunas esperadas: Fornecedor, Valor, Vencimento, Cheque/Doc (Opcional), Banco (Opcional).</p>
             </CardContent>
           </Card>
         </div>

@@ -369,6 +369,10 @@ export const db = {
       const { error } = await supabase.from('financeiro').insert([l]);
       if (error) throw error;
     },
+    addBulk: async (list: any[]) => {
+      const { error } = await supabase.from('financeiro').insert(list);
+      return { error };
+    },
     update: async (id: number, data: any) => {
       const { error } = await supabase.from('financeiro').update(data).eq('cd_lancamento', id);
       if (error) throw error;
