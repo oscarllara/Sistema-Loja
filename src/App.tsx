@@ -32,7 +32,7 @@ const ProtectedRoute = ({ children, permission, sessionAccessKey }: { children: 
   const hasTemporaryAccess = temporaryAccessUntil > Date.now();
   
   if (permission && user.permissoes && !(user.permissoes as any)[permission] && !hasTemporaryAccess) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/pos" replace />;
   }
   
   return <>{children}</>;
@@ -47,7 +47,8 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/" element={<Navigate to="/pos" replace />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/pos" element={<ProtectedRoute permission="pos"><POS /></ProtectedRoute>} />
           <Route path="/rentals" element={<ProtectedRoute permission="rentals"><Rentals /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute permission="inventory"><Inventory /></ProtectedRoute>} />

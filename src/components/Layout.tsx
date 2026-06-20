@@ -102,7 +102,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     {
       title: "Principal",
       items: [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/', perm: 'dashboard' },
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', perm: 'dashboard' },
         { icon: ShoppingCart, label: 'Frente de Caixa', path: '/pos', perm: 'pos' },
         { icon: CalendarClock, label: 'Locação / Aluguel', path: '/rentals', perm: 'rentals' },
       ]
