@@ -52,7 +52,7 @@ const Login = () => {
 
   const handleSupportClick = () => {
     if (whatsapp) {
-      const message = encodeURIComponent("Olá! Esqueci minha senha de acesso ao DyadERP e gostaria de solicitar uma nova.");
+      const message = encodeURIComponent("Olá! Esqueci minha senha de acesso ao Key Of Innov ERP e gostaria de solicitar uma nova.");
       window.open(`https://wa.me/${whatsapp}?text=${message}`, '_blank');
     }
   };
@@ -64,7 +64,7 @@ const Login = () => {
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg mb-4">
             <ShoppingCart size={32} />
           </div>
-          <CardTitle className="text-2xl font-bold text-slate-900">DyadERP</CardTitle>
+          <CardTitle className="text-2xl font-bold text-slate-900">Key Of Innov ERP</CardTitle>
           <p className="text-slate-500 text-sm">Entre com suas credenciais para acessar</p>
         </CardHeader>
         <CardContent>

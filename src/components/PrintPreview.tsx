@@ -165,7 +165,7 @@ TOTAL GERAL: R$ ${data.total.toFixed(2).padStart(10)}
 
         <div className="mt-8 text-center border-t pt-4">
           <p className="text-[9px] italic">Obrigado pela preferência!</p>
-          <p className="text-[8px] text-slate-400 mt-2">Sistema DyadERP - www.dyad.sh</p>
+          <p className="text-[8px] text-slate-400 mt-2">Key Of Innov ERP - Sistema de Gestão</p>
         </div>
       </>
     );

@@ -207,7 +207,7 @@ const ProductHistoryModal = ({ isOpen, onClose, product }: ProductHistoryModalPr
         </div>
         
         <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase">
-          <span>DyadERP - Sistema de Gestão</span>
+          <span>Key Of Innov ERP - Sistema de Gestão</span>
           <span>Total de registros: {history.length}</span>
         </div>
       </DialogContent>
