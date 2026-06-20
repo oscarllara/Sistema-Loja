@@ -22,7 +22,9 @@ import {
   Loader2,
   Info,
   Edit,
-  Trash2
+  Trash2,
+  Barcode,
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,7 +72,7 @@ const Financial = () => {
   const [payCommissionAccountId, setPayCommissionAccountId] = React.useState<number | "">("");
   const [payCommissionAmount, setPayCommissionAmount] = React.useState<string>("");
   const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
-  const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto'>('All');
+  const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto' | 'cheque_compensado' | 'cheque_nao_compensado'>('All');
   const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -323,13 +325,51 @@ const Financial = () => {
           ? isOperationalExpense(l)
           : payableQuickFilter === 'nonOperational'
             ? Boolean(l.is_non_operational)
-            : payableQuickFilter === 'cheque'
-              ? l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)
-              : l.meio_pagamento === 'Boleto' || Boolean(l.num_documento);
+            : payableQuickFilter === 'cheque_compensado'
+              ? (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && l.status === 'Pago'
+              : payableQuickFilter === 'cheque_nao_compensado'
+                ? (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && (l.status === 'Pendente' || l.status === 'Devolvido')
+                : payableQuickFilter === 'cheque'
+                  ? l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)
+                  : l.meio_pagamento === 'Boleto' || Boolean(l.num_documento);
       
       return matchesDate && matchesType && matchesSearch && matchesStatus && matchesPayableQuickFilter;
     });
   };
+
+  const payablesPeriodSums = React.useMemo(() => {
+    const payables = (lancamentos || []).filter(l => {
+      if (!l || l.tipo !== 'P') return false;
+      const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
+      const matchesDate = data >= startDate && data <= endDate;
+      const matchesSearch = (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesStatus = statusFilter === 'All' ? true : l.status === statusFilter;
+      return matchesDate && matchesSearch && matchesStatus;
+    });
+
+    const totalAll = payables.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countAll = payables.length;
+
+    const boletos = payables.filter(l => l.meio_pagamento === 'Boleto' || Boolean(l.num_documento));
+    const totalBoletos = boletos.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countBoletos = boletos.length;
+
+    const chequesCompensados = payables.filter(l => (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && l.status === 'Pago');
+    const totalChequesCompensados = chequesCompensados.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countChequesCompensados = chequesCompensados.length;
+
+    const chequesNaoCompensados = payables.filter(l => (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && (l.status === 'Pendente' || l.status === 'Devolvido'));
+    const totalChequesNaoCompensados = chequesNaoCompensados.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countChequesNaoCompensados = chequesNaoCompensados.length;
+
+    return {
+      totalAll, countAll,
+      totalBoletos, countBoletos,
+      totalChequesCompensados, countChequesCompensados,
+      totalChequesNaoCompensados, countChequesNaoCompensados
+    };
+  }, [lancamentos, startDate, endDate, searchTerm, statusFilter]);
 
   const filteredPatrimony = (patrimonio || []).filter(p => {
     if (!p) return false;
@@ -489,25 +529,136 @@ const Financial = () => {
               currentFilter={statusFilter}
               onFilterChange={setStatusFilter}
             />
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              {[
-                { key: 'All', label: 'Todas' },
-                { key: 'operational', label: 'Despesas operacionais' },
-                { key: 'nonOperational', label: 'Não operacionais' },
-                { key: 'cheque', label: 'Cheques' },
-                { key: 'boleto', label: 'Boletos' }
-              ].map(filter => (
-                <Button
-                  key={filter.key}
-                  type="button"
-                  size="sm"
-                  variant={payableQuickFilter === filter.key ? 'default' : 'outline'}
-                  className="rounded-xl text-xs font-black"
-                  onClick={() => setPayableQuickFilter(filter.key as any)}
-                >
-                  {filter.label}
-                </Button>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {/* Card 1: Todos */}
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'All' ? "ring-2 ring-indigo-500 bg-indigo-50/50 border-indigo-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('All')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Todas as Despesas</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriodSums.totalAll.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] font-bold text-slate-500 mt-1 inline-block">
+                      {payablesPeriodSums.countAll} lançamentos
+                    </span>
+                  </div>
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    payableQuickFilter === 'All' ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    <FileText size={18} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Card 2: Boletos */}
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'boleto' ? "ring-2 ring-blue-500 bg-blue-50/50 border-blue-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('boleto')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Boletos Bancários</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriodSums.totalBoletos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] font-bold text-slate-500 mt-1 inline-block">
+                      {payablesPeriodSums.countBoletos} boletos
+                    </span>
+                  </div>
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    payableQuickFilter === 'boleto' ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    <Barcode size={18} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Card 3: Cheques Compensados */}
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'cheque_compensado' ? "ring-2 ring-emerald-500 bg-emerald-50/50 border-emerald-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('cheque_compensado')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cheques Compensados</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriodSums.totalChequesCompensados.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] font-bold text-slate-500 mt-1 inline-block">
+                      {payablesPeriodSums.countChequesCompensados} pagos
+                    </span>
+                  </div>
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    payableQuickFilter === 'cheque_compensado' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    <CheckCircle2 size={18} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Card 4: Cheques Não Compensados */}
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'cheque_nao_compensado' ? "ring-2 ring-amber-500 bg-amber-50/50 border-amber-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('cheque_nao_compensado')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cheques Pendentes</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriodSums.totalChequesNaoCompensados.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] font-bold text-slate-500 mt-1 inline-block">
+                      {payablesPeriodSums.countChequesNaoCompensados} pendentes
+                    </span>
+                  </div>
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    payableQuickFilter === 'cheque_nao_compensado' ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    <AlertCircle size={18} />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center text-xs text-slate-500 bg-slate-50 border border-slate-200/60 p-2.5 rounded-2xl mb-4">
+              <span className="font-bold uppercase text-[9px] tracking-wider ml-1 mr-2 text-slate-400">Outros Filtros:</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={payableQuickFilter === 'operational' ? 'default' : 'outline'}
+                className="h-7 rounded-lg text-[11px] font-bold"
+                onClick={() => setPayableQuickFilter('operational')}
+              >
+                Despesas Operacionais
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={payableQuickFilter === 'nonOperational' ? 'default' : 'outline'}
+                className="h-7 rounded-lg text-[11px] font-bold"
+                onClick={() => setPayableQuickFilter('nonOperational')}
+              >
+                Despesas Não Operacionais
+              </Button>
             </div>
             <FinancialTable
               data={filterData('P')}
@@ -1099,9 +1250,24 @@ const FinancialTable = ({ data, onBaixa, onViewClient, onCompensar, onDevolver }
         ) : (
           data.map((l: any) => {
             const isRentalEntry = l.categoria === 'Locação' || !!l.cd_aluguel;
+            const isPendingCheque = l.meio_pagamento === 'Cheque' && (l.status === 'Pendente' || l.status === 'Devolvido');
 
             return (
-            <TableRow key={l.cd_lancamento} className={cn("transition-colors", isRentalEntry ? "bg-amber-50/70 hover:bg-amber-100/80" : "hover:bg-slate-50/50")}>
+            <TableRow
+              key={l.cd_lancamento}
+              className={cn(
+                "transition-colors",
+                isRentalEntry ? "bg-amber-50/70 hover:bg-amber-100/80" : "hover:bg-slate-50/50",
+                isPendingCheque && "cursor-pointer hover:bg-emerald-50/40 border-l-4 border-l-amber-500"
+              )}
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.closest('button')) return;
+                if (isPendingCheque && onCompensar) {
+                  onCompensar(l);
+                }
+              }}
+            >
               <TableCell className="text-xs">{new Date(l.data_vencimento).toLocaleDateString()}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
