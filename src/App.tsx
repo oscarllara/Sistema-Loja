@@ -33,18 +33,18 @@ const ProtectedRoute = ({ children, permission, sessionAccessKey }: { children: 
   const hasTemporaryAccess = temporaryAccessUntil > Date.now();
   
   if (permission && user.permissoes && !(user.permissoes as any)[permission] && !hasTemporaryAccess) {
-    return <Navigate to="/pos" replace />;
+    return <Navigate to="/" replace />;
   }
   
   return <>{children}</>;
 };
 
-const RootRedirect = () => {
+const HomeSelector = () => {
   const hostname = window.location.hostname;
   if (hostname.includes('mobile.') || hostname.includes('moble.')) {
-    return <Navigate to="/mobile" replace />;
+    return <ProtectedRoute><MobileApp /></ProtectedRoute>;
   }
-  return <Navigate to="/pos" replace />;
+  return <ProtectedRoute permission="pos"><POS /></ProtectedRoute>;
 };
 
 const App = () => {
@@ -84,7 +84,7 @@ const App = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             
-            <Route path="/" element={<RootRedirect />} />
+            <Route path="/" element={<HomeSelector />} />
             <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/pos" element={<ProtectedRoute permission="pos"><POS /></ProtectedRoute>} />
             <Route path="/rentals" element={<ProtectedRoute permission="rentals"><Rentals /></ProtectedRoute>} />
