@@ -39,6 +39,14 @@ const ProtectedRoute = ({ children, permission, sessionAccessKey }: { children: 
   return <>{children}</>;
 };
 
+const RootRedirect = () => {
+  const hostname = window.location.hostname;
+  if (hostname.includes('mobile.') || hostname.includes('moble.')) {
+    return <Navigate to="/mobile" replace />;
+  }
+  return <Navigate to="/pos" replace />;
+};
+
 const App = () => {
   React.useEffect(() => {
     db.config.get().then(config => {
@@ -76,7 +84,7 @@ const App = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             
-            <Route path="/" element={<Navigate to="/pos" replace />} />
+            <Route path="/" element={<RootRedirect />} />
             <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/pos" element={<ProtectedRoute permission="pos"><POS /></ProtectedRoute>} />
             <Route path="/rentals" element={<ProtectedRoute permission="rentals"><Rentals /></ProtectedRoute>} />
