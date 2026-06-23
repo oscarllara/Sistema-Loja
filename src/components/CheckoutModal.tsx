@@ -25,7 +25,6 @@ import {
   Landmark,
   Zap
 } from 'lucide-react';
-
 import { cn } from '@/lib/utils';
 import { db } from '@/services/api';
 import { showError } from '@/utils/toast';
@@ -43,7 +42,6 @@ interface Installment {
 }
 
 export interface CheckoutPayment {
-
   method: string;
   amount: number;
   installments?: Installment[];
@@ -54,6 +52,7 @@ export interface CheckoutPayment {
   agencia?: string;
   conta_num?: string;
   cheque_num?: string;
+  bandeira_cartao?: string;
 }
 
 interface CheckoutModalProps {
@@ -72,7 +71,6 @@ const parseMoney = (value: string) => parseFloat(value.replace(/\./g, '').replac
 const formatMoney = (value: number) => value.toFixed(2).replace('.', ',');
 
 const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId, onClientChange, mode = 'VENDA', accounts = [] }: CheckoutModalProps) => {
-
   const isPurchase = mode === 'COMPRA';
   const [payments, setPayments] = React.useState<CheckoutPayment[]>([]);
   const [inputValue, setInputValue] = React.useState("");
@@ -95,8 +93,10 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [isLoading, setIsLoading] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
 
-  const totalPaid = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  // New Card State
+  const [selectedCardBrand, setSelectedCardBrand] = React.useState("");
 
+  const totalPaid = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
   const remaining = Math.max(0, total - totalPaid);
   const titleEntity = isPurchase ? 'Identificar Fornecedor' : 'Identificar Cliente';
   const emptyEntity = isPurchase ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL';
@@ -134,13 +134,29 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       setAgency("");
       setAccountNumber("");
       setCheckNumber("");
+      setSelectedCardBrand("");
       setIsBlinking(false);
       setIsConfirming(false);
     }
   }, [isOpen, total, loadData, isPurchase]);
 
-  const getSelectableAccounts = (method: string) => {
+  const cardBrands = React.useMemo(() => {
+    if (!config?.payment_account_routes) return [];
+    return Object.entries(config.payment_account_routes)
+      .filter(([key]) => key.startsWith('CardConfig-'))
+      .map(([key, val]: any) => {
+        const brand = key.replace('CardConfig-', '');
+        let info = { percentage: 0, days: 30, accountId: 0 };
+        try { info = typeof val === 'string' ? JSON.parse(val) : val; } catch(e){}
+        return { brand, ...info };
+      });
+  }, [config?.payment_account_routes]);
 
+  const activeBrandConfig = React.useMemo(() => {
+    return cardBrands.find(b => b.brand === selectedCardBrand);
+  }, [cardBrands, selectedCardBrand]);
+
+  const getSelectableAccounts = (method: string) => {
     if (method === 'Dinheiro') return accounts.filter(a => ['Caixa', 'Retaguarda'].includes(a.tipo));
     return accounts;
   };
@@ -191,9 +207,9 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
     setIsInstallmentMode(true);
   };
 
-  const addPayment = (method: PurchasePaymentMethod | 'Cartão Débito') => {
+  const addPayment = (method: string) => {
     if (method === 'Crediário' || method === 'Boleto' || method === 'Cheque') {
-      openInstallments(method);
+      openInstallments(method as any);
       return;
     }
 
@@ -219,15 +235,22 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       return;
     }
 
-    setPayments([...payments, {
+    if ((method === 'Cartão Crédito' || method === 'Cartão Débito') && !isPurchase && cardBrands.length > 0 && !selectedCardBrand) {
+      showError("Selecione a bandeira/regra do cartão antes de adicionar o pagamento.");
+      return;
+    }
 
+    setPayments([...payments, {
       method,
       amount,
-      accountId: selectedAccountId ? Number(selectedAccountId) : undefined
+      accountId: selectedAccountId ? Number(selectedAccountId) : undefined,
+      bandeira_cartao: selectedCardBrand || undefined
     }]);
+
     const newRemaining = Math.max(0, total - (totalPaid + amount));
     setInputValue(newRemaining > 0 ? formatMoney(newRemaining) : "0,00");
     setSelectedAccountId("");
+    setSelectedCardBrand("");
   };
 
   const confirmInstallments = () => {
@@ -247,7 +270,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       amount: totalInst,
       installments: tempInstallments,
       num_documento: installmentMethod === 'Boleto' ? tempInstallments.map(inst => inst.documentNumber?.trim()).filter(Boolean).join(', ') : undefined,
-
       banco_nome: installmentMethod === 'Cheque' ? bankName.trim() : undefined,
       banco_num: installmentMethod === 'Cheque' ? bankNumber.trim() : undefined,
       agencia: installmentMethod === 'Cheque' ? agency.trim() : undefined,
@@ -279,7 +301,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   };
 
   const installmentTitle = isPurchase
-
     ? installmentMethod === 'Boleto' ? 'CONFIGURAR BOLETO'
       : installmentMethod === 'Cheque' ? 'CONFIGURAR CHEQUE'
       : 'CONFIGURAR CRÉDITO / PARCELAS'
@@ -323,7 +344,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   {payments.map((p, i) => (
                     <div key={i} className="bg-white p-3 rounded-lg border border-slate-200">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-700">{p.method}{p.installments ? ` • ${p.installments.length}x` : ''}</span>
+                        <span className="font-bold text-slate-700">{p.method}{p.bandeira_cartao ? ` (${p.bandeira_cartao})` : ''}{p.installments ? ` • ${p.installments.length}x` : ''}</span>
                         <div className="flex items-center gap-3">
                           <span className="font-black">R$ {p.amount.toFixed(2)}</span>
                           <button onClick={() => removePayment(i)} className="text-rose-500"><Trash2 size={14} /></button>
@@ -378,7 +399,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                 )}
 
                 {isPurchase && installmentMethod === 'Cheque' && (
-
                   <div className="grid grid-cols-2 gap-2 shrink-0">
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Banco</Label><Input value={bankNumber} onChange={(e) => setBankNumber(e.target.value)} className="h-9 text-xs" placeholder="Nº banco" /></div>
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Nome banco</Label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-xs" placeholder="Opcional" /></div>
@@ -408,7 +428,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                         )}
                       </div>
                     ))}
-
                   </div>
                 </ScrollArea>
 
@@ -452,6 +471,30 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   </div>
                 )}
 
+                {/* Card Brand Selector if Cartão is selected */}
+                {!isPurchase && cardBrands.length > 0 && (
+                  <div className="space-y-2 shrink-0 border border-slate-100 bg-slate-50 p-3 rounded-2xl">
+                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Bandeira / Regra do Cartão (Obrigatório)</Label>
+                    <select
+                      className="w-full h-10 rounded-xl border border-input bg-white px-3 text-xs font-bold uppercase"
+                      value={selectedCardBrand}
+                      onChange={(e) => setSelectedCardBrand(e.target.value)}
+                    >
+                      <option value="">Selecione a Bandeira...</option>
+                      {cardBrands.map(b => (
+                        <option key={b.brand} value={b.brand}>
+                          {b.brand} ({b.percentage}% tx • {b.days}d)
+                        </option>
+                      ))}
+                    </select>
+                    {activeBrandConfig && (
+                      <p className="text-[9px] font-bold text-indigo-600 mt-1 uppercase">
+                        Desconto líquido: R$ {(parseMoney(inputValue) * (1 - activeBrandConfig.percentage / 100)).toFixed(2)} • Crédito em {activeBrandConfig.days} dias na conta de destino
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <ScrollArea className="flex-1 pr-2">
                   {remaining <= 0 ? (
                     <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-center text-emerald-700">
@@ -479,12 +522,11 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                 {isPurchase && accounts.length === 0 && remaining > 0 && (
                   <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-700">
                     <AlertCircle size={16} className="mt-0.5" />
-                    <p className="text-xs font-bold">Cadastre caixas, bancos ou contas de cartão em Financeiro &gt; Caixas e Bancos somente se for pagar à vista/imediato.</p>
+                    <p className="text-xs font-bold">Cadastre caixas, bancos ou contas de cartão em Financeiro > Caixas e Bancos somente se for pagar à vista/imediato.</p>
                   </div>
                 )}
 
                 <div className="pt-6 mt-auto shrink-0">
-
                   <Button
                     className={cn("w-full h-16 text-lg font-black gap-2 shadow-lg", totalPaid >= total ? "bg-emerald-600" : "bg-slate-200 text-slate-400")}
                     disabled={totalPaid < total || isConfirming}
@@ -492,7 +534,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   >
                     <CheckCircle2 size={24} /> {isConfirming ? (isPurchase ? 'FINALIZANDO COMPRA...' : 'FINALIZANDO...') : (isPurchase ? 'FINALIZAR COMPRA' : 'FINALIZAR (F10)')}
                   </Button>
-
                 </div>
               </div>
             )}

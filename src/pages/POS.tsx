@@ -1291,6 +1291,18 @@ const POS = () => {
     contas.forEach(conta => accountBalances.set(conta.cd_conta, Number(conta.saldo || 0)));
 
     for (const p of payments) {
+      const isCard = p.method === 'Cartão Crédito' || p.method === 'Cartão Débito';
+      const cardBrandConfig = isCard && p.bandeira_cartao
+        ? (config?.payment_account_routes as any)?.[`CardConfig-${p.bandeira_cartao}`]
+        : null;
+      
+      let cardInfo = null;
+      if (cardBrandConfig) {
+        try {
+          cardInfo = typeof cardBrandConfig === 'string' ? JSON.parse(cardBrandConfig) : cardBrandConfig;
+        } catch(e) {}
+      }
+
       if (p.method === 'Crediário') {
         const installments = Array.isArray(p.installments) && p.installments.length > 0
           ? p.installments
@@ -1311,6 +1323,28 @@ const POS = () => {
             cd_func: Number(selectedSellerId)
           });
         }
+      } else if (cardInfo) {
+        // AUTOMATED CREDIT CARD WORKFLOW (NET VALUE & SCHEDULING DELAY)
+        const netValue = Number((p.amount * (1 - cardInfo.percentage / 100)).toFixed(2));
+        const creditDate = new Date();
+        creditDate.setDate(creditDate.getDate() + (cardInfo.days || 30));
+        const creditDateStr = creditDate.toISOString().split('T')[0];
+
+        await db.financeiro.add({
+          tipo: 'R',
+          descricao: `VENDA CARTÃO #${saleId || Date.now().toString().slice(-6)} (${p.bandeira_cartao}) - ${payload.nome_cliente}`,
+          valor: netValue,
+          data_vencimento: creditDateStr,
+          status: 'Pendente',
+          cd_entidade: payload.cd_clientes,
+          nome_entidade: payload.nome_cliente,
+          categoria: 'Venda',
+          meio_pagamento: p.method,
+          cd_conta: cardInfo.accountId,
+          cd_venda: saleId,
+          cd_func: Number(selectedSellerId),
+          bandeira_cartao: p.bandeira_cartao
+        });
       } else if (Number(p.amount || 0) > 0) {
         const destinoPagamento = getPaymentAccount(p.method);
         if (!destinoPagamento) continue;
@@ -1487,7 +1521,7 @@ const POS = () => {
       return;
     }
 
-    showSuccess(`Financeiro liberado por: ${authorizedUser.nome}`);
+    showSuccess("Financeiro liberado por: " + authorizedUser.nome);
     setIsPOSFinancialAuthOpen(false);
     setPOSFinancialPassword("");
     setIsPOSFinancialOpen(true);
@@ -1554,7 +1588,7 @@ const POS = () => {
       showSuccess(cashMovementType === 'R' ? "Entrada registrada." : "Saída registrada.");
       setIsCashMovementOpen(false);
       await loadAllData();
-    } catch {
+    } catch (err) {
       showError("Não foi possível registrar o lançamento.");
     }
   };
@@ -1584,7 +1618,7 @@ const POS = () => {
       showSuccess("Transferência registrada.");
       setIsCashTransferOpen(false);
       await loadAllData();
-    } catch {
+    } catch (err) {
       showError("Não foi possível registrar a transferência.");
     }
   };
@@ -1625,7 +1659,7 @@ const POS = () => {
           showError("Locação não encontrada para reimpressão.");
         }
       }
-    } catch {
+    } catch (err) {
       showError("Não foi possível carregar os detalhes do documento.");
     }
   };
@@ -1986,7 +2020,7 @@ const POS = () => {
             </div>
           </form>
         </footer>
-      </div>
+      </main>
 
       <Dialog open={isOpenCashOpen} onOpenChange={setIsOpenCashOpen}>
         <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">

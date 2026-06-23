@@ -26,7 +26,6 @@ import {
   Bell,
   Globe
 } from 'lucide-react';
-
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -36,7 +35,6 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -46,7 +44,6 @@ import SyncStatus from './SyncStatus';
 import { formatPhoneBR } from '@/utils/formatters';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
-
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -91,6 +88,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   React.useEffect(() => {
     db.config.get().then(setConfig).catch(() => {});
+    // Auto sync/credit matured card transactions silently
+    db.financeiro.syncCardCredits().catch(() => {});
   }, []);
 
   const handleLogout = () => {
@@ -130,7 +129,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       items: [
         { icon: BarChart3, label: 'Relatórios', path: '/reports', perm: 'reports' },
         { icon: Car, label: 'Gestão de Frota', path: '/fleet', perm: 'reports' },
-
         { icon: Settings, label: 'Configurações', path: '/settings', perm: 'settings' },
         { icon: Database, label: 'Importar Dados', path: '/import', perm: 'settings' },
       ]
@@ -146,7 +144,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const companyPhone = formatPhoneBR(config?.provider_tel || '');
 
   return (
-
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Sidebar */}
       <aside className={cn(
@@ -158,14 +155,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20 shrink-0">
               <ShoppingCart size={22} />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 text-left">
               <p className="text-base font-black text-slate-900 tracking-tight leading-tight truncate">{companyName}</p>
               {companyPhone && <p className="text-[10px] font-bold text-slate-500 leading-tight">{companyPhone}</p>}
             </div>
           </div>
 
           <ScrollArea className="flex-1 px-4">
-
             <div className="space-y-6 pb-6">
               {filteredMenu.map((group, idx) => (
                 <div key={idx} className="space-y-2">

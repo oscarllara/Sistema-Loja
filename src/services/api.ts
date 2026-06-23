@@ -2,20 +2,15 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Cliente, Produto, Venda, LancamentoFinanceiro, ContaBancaria, Configuracoes, Compra, Orcamento, Patrimonio, Aluguel, CaixaSessao, Veiculo, VeiculoEvento, GastoPessoal } from '../types/database';
-
 import { formatAddressTitleCase, formatCnpj, formatCpfCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const AUTH_KEY = 'dyaderp_auth';
-
 const OFFLINE_SALES_KEY = 'dyaderp_offline_sales';
 
 const sanitizeProductPayload = (product: Partial<Produto>) => {
   const payload = { ...product } as Partial<Produto> & { id?: unknown };
-
   delete payload.id;
-
   if (payload.id_manual === undefined || payload.id_manual === "") delete payload.id_manual;
-
   if ('id_importado' in payload && payload.id_importado === "") payload.id_importado = null;
   if ('cod_barras' in payload && payload.cod_barras === "") payload.cod_barras = null;
   if ('ncm' in payload && payload.ncm === "") payload.ncm = null;
@@ -27,7 +22,6 @@ const sanitizeProductPayload = (product: Partial<Produto>) => {
   if ('is_kit' in payload && !payload.is_kit) {
     payload.itens_kit = null;
   }
-
   return payload;
 };
 
@@ -79,7 +73,6 @@ const sanitizeConfigPayload = (config: Partial<Configuracoes>) => {
   if (payload.cnpj) payload.cnpj = formatCnpj(payload.cnpj);
   if (payload.provider_tel) payload.provider_tel = formatPhoneBR(payload.provider_tel);
   if (payload.telefone) payload.telefone = formatPhoneBR(payload.telefone);
-
   if (payload.tel2) payload.tel2 = formatPhoneBR(payload.tel2);
   if (payload.tel3) payload.tel3 = formatPhoneBR(payload.tel3);
   if (payload.whatsapp_loja) payload.whatsapp_loja = formatPhoneBR(payload.whatsapp_loja);
@@ -113,10 +106,8 @@ const sanitizeAccountPayload = (account: any) => ({
 });
 
 export const db = {
-
   auth: {
     login: async (usuario: string, senha: string) => {
-
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
@@ -158,7 +149,6 @@ export const db = {
   produtos: {
     getAll: async (): Promise<Produto[]> => {
       const pageSize = 1000;
-
       let from = 0;
       let allProducts: Produto[] = [];
 
@@ -170,7 +160,6 @@ export const db = {
           .range(from, from + pageSize - 1);
 
         if (error) throw error;
-
         const batch = data || [];
         allProducts = [...allProducts, ...batch];
 
@@ -204,7 +193,6 @@ export const db = {
       const nextImportedId = String(maxImportedId + 1);
 
       const { cd_produto, ...productData } = p as Produto;
-
       const payload = sanitizeProductPayload({
         ...productData,
         id_manual: nextManualId,
@@ -231,7 +219,6 @@ export const db = {
     },
     update: async (id: number, data: Partial<Produto>) => {
       const { cd_produto, ...updateData } = data as Produto;
-
       const payload = sanitizeProductPayload({
         ...updateData,
         data_atualizacao: new Date().toISOString()
@@ -258,7 +245,6 @@ export const db = {
     }
   },
   clientes: {
-
     getAll: async (): Promise<Cliente[]> => {
       const { data, error } = await supabase.from('clientes').select('*').order('nome');
       if (error) throw error;
@@ -292,7 +278,6 @@ export const db = {
     },
     delete: async (id: number) => {
       const { error } = await supabase.from('clientes').delete().eq('cd_clientes', id);
-
       if (error) throw error;
     }
   },
@@ -312,7 +297,6 @@ export const db = {
     }
   },
   caixa: {
-
     getAll: async (): Promise<CaixaSessao[]> => {
       const { data, error } = await supabase.from('caixa_sessoes').select('*').order('data_caixa', { ascending: false });
       if (error) throw error;
@@ -475,6 +459,34 @@ export const db = {
     changeAccount: async (lancamentoId: number, newAccountId: number) => {
       const { error } = await supabase.from('financeiro').update({ cd_conta: newAccountId }).eq('cd_lancamento', lancamentoId);
       if (error) throw error;
+    },
+    syncCardCredits: async () => {
+      try {
+        const { data: list, error } = await supabase
+          .from('financeiro')
+          .select('*')
+          .eq('status', 'Pendente')
+          .in('meio_pagamento', ['Cartão Crédito', 'Cartão Débito']);
+        if (error) throw error;
+        
+        const todayStr = new Date().toISOString().split('T')[0];
+        const pendingCredits = (list || []).filter(l => l.data_vencimento <= todayStr && l.cd_conta);
+        
+        for (const credit of pendingCredits) {
+          const { data: conta } = await supabase.from('contas').select('saldo').eq('cd_conta', credit.cd_conta).single();
+          if (conta) {
+            await supabase.from('financeiro').update({
+              status: 'Pago',
+              data_pagamento: new Date().toISOString()
+            }).eq('cd_lancamento', credit.cd_lancamento);
+            
+            const novoSaldo = Number(conta.saldo) + Number(credit.valor);
+            await supabase.from('contas').update({ saldo: novoSaldo }).eq('cd_conta', credit.cd_conta);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar créditos de cartões:", err);
+      }
     }
   },
   vendas: {
@@ -747,7 +759,6 @@ export const db = {
   },
   patrimonio: {
     getAll: async (): Promise<Patrimonio[]> => {
-
       const { data, error } = await supabase.from('patrimonio').select('*').order('descricao');
       if (error) throw error;
       return data || [];

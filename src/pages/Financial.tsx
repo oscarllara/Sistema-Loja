@@ -24,7 +24,11 @@ import {
   Edit,
   Trash2,
   Barcode,
-  AlertCircle
+  AlertCircle,
+  CreditCard,
+  TrendingUp,
+  Percent,
+  Calendar
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,7 +76,7 @@ const Financial = () => {
   const [payCommissionAccountId, setPayCommissionAccountId] = React.useState<number | "">("");
   const [payCommissionAmount, setPayCommissionAmount] = React.useState<string>("");
   const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
-  const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto' | 'cheque_compensado' | 'cheque_nao_compensado'>('All');
+  const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto' | 'cheque_compensated' | 'cheque_nao_compensado'>('All');
   const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -87,7 +91,6 @@ const Financial = () => {
   const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
   
   const [isCompensateOpen, setIsCompensateOpen] = React.useState(false);
-
   const [selectedCheque, setSelectedCheque] = React.useState<LancamentoFinanceiro | null>(null);
   const [targetAccountId, setTargetAccountId] = React.useState<string>("");
 
@@ -163,8 +166,29 @@ const Financial = () => {
       .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
   }, [lancamentos]);
 
-  const handleBaixa = async (id: number) => {
+  // Card Tracking Calculations
+  const cardMovements = React.useMemo(() => {
+    return (lancamentos || []).filter(l => {
+      const isCard = l.meio_pagamento === 'Cartão Crédito' || l.meio_pagamento === 'Cartão Débito';
+      const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
+      const matchesDate = data >= startDate && data <= endDate;
+      const matchesSearch = !searchTerm || (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) || (l.bandeira_cartao || "").toLowerCase().includes(searchTerm.toLowerCase());
+      return isCard && matchesDate && matchesSearch;
+    });
+  }, [lancamentos, startDate, endDate, searchTerm]);
 
+  const cardStats = React.useMemo(() => {
+    const totalSales = cardMovements.reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    const pendingAmount = cardMovements.filter(l => l.status === 'Pendente').reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    const receivedAmount = cardMovements.filter(l => l.status === 'Pago').reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    return {
+      totalSales,
+      pendingAmount,
+      receivedAmount
+    };
+  }, [cardMovements]);
+
+  const handleBaixa = async (id: number) => {
     if (contas.length === 0) {
       showError("Nenhuma conta cadastrada para realizar a baixa.");
       return;
@@ -216,14 +240,12 @@ const Financial = () => {
     }
 
     try {
-      // Find all pending commission entries for this employee
       const commissionLancamentos = lancamentos.filter(l =>
         (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') &&
         Number(l.cd_func) === employeeId &&
         l.status === 'Pendente'
       );
 
-      // Sort oldest first
       const sortedPending = [...commissionLancamentos].sort((a, b) =>
         new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime()
       );
@@ -235,7 +257,6 @@ const Financial = () => {
 
         const entryVal = Number(entry.valor) || 0;
         if (entryVal <= remainingPayment) {
-          // Pay full record
           await db.financeiro.update(entry.cd_lancamento, {
             status: 'Pago',
             data_pagamento: new Date().toISOString(),
@@ -243,7 +264,6 @@ const Financial = () => {
           });
           remainingPayment -= entryVal;
         } else {
-          // Partially pay by splitting entry
           await db.financeiro.update(entry.cd_lancamento, {
             valor: Number(remainingPayment.toFixed(2)),
             status: 'Pago',
@@ -270,7 +290,6 @@ const Financial = () => {
         }
       }
 
-      // Deduct paid amount from selected account
       const currentSaldo = Number(selectedAccount.saldo || 0);
       const newSaldo = Number((currentSaldo - amountToPay).toFixed(2));
       await db.contas.update(accountId, { saldo: newSaldo });
@@ -444,8 +463,17 @@ const Financial = () => {
                   <AccountForm account={editingAccount} onSuccess={() => { setIsAccountOpen(false); setEditingAccount(undefined); loadData(); }} />
                 </DialogContent>
               </Dialog>
+            ) : activeTab === 'cards' ? (
+              <Button onClick={() => {
+                const loadingId = showError("Sincronizando depósitos de cartões...");
+                db.financeiro.syncCardCredits().then(() => {
+                  loadData();
+                  showSuccess("Sincronização de depósitos concluída!");
+                }).catch(() => showError("Falha ao sincronizar."));
+              }} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
+                <RefreshCw size={16} /> Sincronizar Créditos de Cartões
+              </Button>
             ) : (
-
               <>
                 <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
                   <DialogTrigger asChild>
@@ -506,6 +534,7 @@ const Financial = () => {
             <TabsTrigger value="accounts" className="rounded-lg gap-2"><Wallet size={16} /> Caixas e Bancos</TabsTrigger>
             <TabsTrigger value="patrimony" className="rounded-lg gap-2"><Home size={16} /> Patrimônio</TabsTrigger>
             <TabsTrigger value="commissions" className="rounded-lg gap-2"><Briefcase size={16} /> Comissões e Vendedores</TabsTrigger>
+            <TabsTrigger value="cards" className="rounded-lg gap-2"><CreditCard size={16} /> Controle de Cartões</TabsTrigger>
           </TabsList>
 
           <TabsContent value="receivable" className="space-y-6">
@@ -530,7 +559,6 @@ const Financial = () => {
               onFilterChange={setStatusFilter}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              {/* Card 1: Todos */}
               <Card
                 className={cn(
                   "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
@@ -557,7 +585,6 @@ const Financial = () => {
                 </CardContent>
               </Card>
 
-              {/* Card 2: Boletos */}
               <Card
                 className={cn(
                   "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
@@ -584,7 +611,6 @@ const Financial = () => {
                 </CardContent>
               </Card>
 
-              {/* Card 3: Cheques Compensados */}
               <Card
                 className={cn(
                   "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
@@ -593,6 +619,630 @@ const Financial = () => {
                 onClick={() => setPayableQuickFilter('cheque_compensado')}
               >
                 <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cheques Compensados</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriod<dyad-write path="src/pages/Financial.tsx" description="Completing and writing the entire Financial page with the card control panel integrated.">
+"use client";
+
+import React from 'react';
+import Layout from '@/components/Layout';
+import { 
+  Wallet, 
+  ArrowUpCircle, 
+  ArrowDownCircle, 
+  ArrowLeftRight,
+  Plus,
+  CheckCircle2,
+  Clock,
+  Home,
+  Search,
+  Briefcase,
+  Layers,
+  RotateCcw,
+  CheckSquare,
+  PlusCircle,
+  Car,
+  FileText,
+  Loader2,
+  Info,
+  Edit,
+  Trash2,
+  Barcode,
+  AlertCircle,
+  CreditCard,
+  TrendingUp,
+  Percent,
+  Calendar
+} from 'lucide-react';
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { db } from '@/services/api';
+import { LancamentoFinanceiro, ContaBancaria, Patrimonio, Cliente } from '@/types/database';
+import { Badge } from "@/components/ui/badge";
+import { showSuccess, showError } from '@/utils/toast';
+import FinancialForm from '@/components/FinancialForm';
+import AccountForm from '@/components/AccountForm';
+import PatrimonyForm from '@/components/PatrimonyForm';
+import AccountDetails from '@/components/AccountDetails';
+import ClientDetails from '@/components/ClientDetails';
+import TransferForm from '@/components/TransferForm';
+import { cn } from '@/lib/utils';
+
+const Financial = () => {
+  const [lancamentos, setLancamentos] = React.useState<LancamentoFinanceiro[]>([]);
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
+  const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
+  const [employees, setEmployees] = React.useState<Cliente[]>([]);
+  const [activeTab, setActiveTab] = React.useState("receivable");
+  
+  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<number | "all">("all");
+  const [isPayCommissionOpen, setIsPayCommissionOpen] = React.useState(false);
+  const [payCommissionEmployeeId, setPayCommissionEmployeeId] = React.useState<number | "">("");
+  const [payCommissionAccountId, setPayCommissionAccountId] = React.useState<number | "">("");
+  const [payCommissionAmount, setPayCommissionAmount] = React.useState<string>("");
+  const [statusFilter, setStatusFilter] = React.useState<'All' | 'Pago' | 'Pendente'>('All');
+  const [payableQuickFilter, setPayableQuickFilter] = React.useState<'All' | 'operational' | 'nonOperational' | 'cheque' | 'boleto' | 'cheque_compensated' | 'cheque_nao_compensado'>('All');
+  const [patrimonyFilter, setPatrimonyFilter] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isTransferOpen, setIsTransferOpen] = React.useState(false);
+  const [isPatrimonyOpen, setIsPatrimonyOpen] = React.useState(false);
+  const [isAccountOpen, setIsAccountOpen] = React.useState(false);
+  
+  const [selectedAccountForDetails, setSelectedAccountForDetails] = React.useState<ContaBancaria | null>(null);
+  const [selectedClientForDetails, setSelectedClientForDetails] = React.useState<Cliente | null>(null);
+  const [editingPatrimony, setEditingPatrimony] = React.useState<Patrimonio | undefined>(undefined);
+  const [editingAccount, setEditingAccount] = React.useState<ContaBancaria | undefined>(undefined);
+  
+  const [isCompensateOpen, setIsCompensateOpen] = React.useState(false);
+  const [selectedCheque, setSelectedCheque] = React.useState<LancamentoFinanceiro | null>(null);
+  const [targetAccountId, setTargetAccountId] = React.useState<string>("");
+
+  const [startDate, setStartDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = React.useState(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]);
+  const [searchTerm, setSearchTerm] = React.useState("");
+
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [lData, cData, pData, eData] = await Promise.all([
+        db.financeiro.getAll().catch(() => []),
+        db.contas.getAll().catch(() => []),
+        db.patrimonio.getAll().catch(() => []),
+        db.clientes.getAll().catch(() => [])
+      ]);
+      setLancamentos(lData || []);
+      setContas(cData || []);
+      setPatrimonio(pData || []);
+      setEmployees((eData || []).filter(c => c.is_funcionario || c.usuario === 'admin'));
+    } catch (err) {
+      console.error("Erro ao carregar dados financeiros:", err);
+      showError("Erro ao carregar dados financeiros.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  React.useEffect(() => {
+    setStatusFilter('All');
+    setPayableQuickFilter('All');
+  }, [activeTab]);
+
+  const normalizeCategory = (categoria?: string) => (categoria || '').trim().toLowerCase();
+  const operationalExpenseCategories = new Set(['salário', 'salario', 'aluguel', 'pro-labore', 'pró-labore', 'imposto', 'energia', 'água', 'agua', 'internet', 'telefone', 'vale', 'comissão', 'comissao', 'veículo', 'veiculo', 'outros']);
+  const isOperationalExpense = (l: LancamentoFinanceiro) => !l.is_non_operational && operationalExpenseCategories.has(normalizeCategory(l.categoria));
+
+  const getCommissionSummary = React.useMemo(() => {
+    const commissionLancamentos = lancamentos.filter(l =>
+      normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao'
+    );
+
+    return employees.map(emp => {
+      const empCommissions = commissionLancamentos.filter(l => Number(l.cd_func) === Number(emp.cd_clientes));
+      const pendingAmount = empCommissions
+        .filter(l => l.status === 'Pendente')
+        .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+      const paidAmount = empCommissions
+        .filter(l => l.status === 'Pago')
+        .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+      return {
+        employee: emp,
+        pendingAmount,
+        paidAmount,
+        totalAmount: pendingAmount + paidAmount
+      };
+    });
+  }, [lancamentos, employees]);
+
+  const totalPendingCommissions = React.useMemo(() => {
+    return lancamentos
+      .filter(l => (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') && l.status === 'Pendente')
+      .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+  }, [lancamentos]);
+
+  const totalPaidCommissions = React.useMemo(() => {
+    return lancamentos
+      .filter(l => (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') && l.status === 'Pago')
+      .reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+  }, [lancamentos]);
+
+  // Card Tracking Calculations
+  const cardMovements = React.useMemo(() => {
+    return (lancamentos || []).filter(l => {
+      const isCard = l.meio_pagamento === 'Cartão Crédito' || l.meio_pagamento === 'Cartão Débito';
+      const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
+      const matchesDate = data >= startDate && data <= endDate;
+      const matchesSearch = !searchTerm || (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) || (l.bandeira_cartao || "").toLowerCase().includes(searchTerm.toLowerCase());
+      return isCard && matchesDate && matchesSearch;
+    });
+  }, [lancamentos, startDate, endDate, searchTerm]);
+
+  const cardStats = React.useMemo(() => {
+    const totalSales = cardMovements.reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    const pendingAmount = cardMovements.filter(l => l.status === 'Pendente').reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    const receivedAmount = cardMovements.filter(l => l.status === 'Pago').reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    return {
+      totalSales,
+      pendingAmount,
+      receivedAmount
+    };
+  }, [cardMovements]);
+
+  const handleBaixa = async (id: number) => {
+    if (contas.length === 0) {
+      showError("Nenhuma conta cadastrada para realizar a baixa.");
+      return;
+    }
+    try {
+      await db.financeiro.baixar(id, contas[0].cd_conta);
+      showSuccess("Baixa realizada com sucesso!");
+      loadData();
+    } catch (err) {
+      showError("Erro ao realizar baixa.");
+    }
+  };
+
+  const handleCompensarCheque = async () => {
+    if (!selectedCheque || !targetAccountId) return;
+    try {
+      await db.financeiro.baixar(selectedCheque.cd_lancamento, Number(targetAccountId));
+      showSuccess("Cheque compensado com sucesso!");
+      setIsCompensateOpen(false);
+      setSelectedCheque(null);
+      loadData();
+    } catch (err) {
+      showError("Erro ao compensar cheque.");
+    }
+  };
+
+  const handlePayCommissionSubmit = async () => {
+    const employeeId = Number(payCommissionEmployeeId);
+    const accountId = Number(payCommissionAccountId);
+    const amountToPay = parseFloat(payCommissionAmount.replace(/\./g, "").replace(",", "."));
+
+    if (!employeeId) {
+      showError("Selecione um funcionário.");
+      return;
+    }
+    if (!accountId) {
+      showError("Selecione a conta/caixa de origem para o pagamento.");
+      return;
+    }
+    if (isNaN(amountToPay) || amountToPay <= 0) {
+      showError("Informe um valor válido para o pagamento.");
+      return;
+    }
+
+    const selectedAccount = contas.find(c => Number(c.cd_conta) === accountId);
+    if (!selectedAccount) {
+      showError("Conta selecionada não encontrada.");
+      return;
+    }
+
+    try {
+      const commissionLancamentos = lancamentos.filter(l =>
+        (normalizeCategory(l.categoria) === 'comissão' || normalizeCategory(l.categoria) === 'comissao') &&
+        Number(l.cd_func) === employeeId &&
+        l.status === 'Pendente'
+      );
+
+      const sortedPending = [...commissionLancamentos].sort((a, b) =>
+        new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime()
+      );
+
+      let remainingPayment = amountToPay;
+
+      for (const entry of sortedPending) {
+        if (remainingPayment <= 0) break;
+
+        const entryVal = Number(entry.valor) || 0;
+        if (entryVal <= remainingPayment) {
+          await db.financeiro.update(entry.cd_lancamento, {
+            status: 'Pago',
+            data_pagamento: new Date().toISOString(),
+            cd_conta: accountId
+          });
+          remainingPayment -= entryVal;
+        } else {
+          await db.financeiro.update(entry.cd_lancamento, {
+            valor: Number(remainingPayment.toFixed(2)),
+            status: 'Pago',
+            data_pagamento: new Date().toISOString(),
+            cd_conta: accountId
+          });
+
+          const leftOver = entryVal - remainingPayment;
+          await db.financeiro.add({
+            tipo: 'P',
+            descricao: entry.descricao + ' (Saldo Remanescente)',
+            valor: Number(leftOver.toFixed(2)),
+            data_vencimento: entry.data_vencimento,
+            status: 'Pendente',
+            cd_entidade: entry.cd_entidade,
+            nome_entidade: entry.nome_entidade,
+            categoria: entry.categoria,
+            cd_venda: entry.cd_venda,
+            cd_func: entry.cd_func,
+            is_non_operational: false
+          });
+
+          remainingPayment = 0;
+        }
+      }
+
+      const currentSaldo = Number(selectedAccount.saldo || 0);
+      const newSaldo = Number((currentSaldo - amountToPay).toFixed(2));
+      await db.contas.update(accountId, { saldo: newSaldo });
+
+      showSuccess(`Pagamento de R$ ${amountToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} compensado com sucesso!`);
+      setIsPayCommissionOpen(false);
+      setPayCommissionEmployeeId("");
+      setPayCommissionAccountId("");
+      setPayCommissionAmount("");
+      loadData();
+    } catch (err: any) {
+      console.error("Erro ao pagar comissões:", err);
+      showError(err?.message || "Falha ao realizar o pagamento.");
+    }
+  };
+
+  const handleViewClient = async (clientId?: number) => {
+    if (!clientId) return;
+    try {
+      const allClients = await db.clientes.getAll();
+      const client = allClients.find(c => c.cd_clientes === clientId);
+      if (client) setSelectedClientForDetails(client);
+    } catch (err) {
+      showError("Erro ao buscar dados do cliente.");
+    }
+  };
+
+  const handleDeletePatrimony = async (id: number) => {
+    if (confirm("Deseja realmente excluir este bem do patrimônio?")) {
+      try {
+        await db.patrimonio.delete(id);
+        showSuccess("Patrimônio excluído!");
+        loadData();
+      } catch (e) {
+        showError("Erro ao excluir patrimônio.");
+      }
+    }
+  };
+
+  const filterData = (tipo: 'R' | 'P') => {
+    return (lancamentos || []).filter(l => {
+      if (!l) return false;
+      const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
+      const matchesDate = data >= startDate && data <= endDate;
+      const matchesType = l.tipo === tipo;
+      const matchesSearch = (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesStatus = statusFilter === 'All' ? true : l.status === statusFilter;
+      const matchesPayableQuickFilter = tipo !== 'P' || payableQuickFilter === 'All'
+        ? true
+        : payableQuickFilter === 'operational'
+          ? isOperationalExpense(l)
+          : payableQuickFilter === 'nonOperational'
+            ? Boolean(l.is_non_operational)
+            : payableQuickFilter === 'cheque_compensado'
+              ? (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && l.status === 'Pago'
+              : payableQuickFilter === 'cheque_nao_compensado'
+                ? (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && (l.status === 'Pendente' || l.status === 'Devolvido')
+                : payableQuickFilter === 'cheque'
+                  ? l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)
+                  : l.meio_pagamento === 'Boleto' || Boolean(l.num_documento);
+      
+      return matchesDate && matchesType && matchesSearch && matchesStatus && matchesPayableQuickFilter;
+    });
+  };
+
+  const payablesPeriodSums = React.useMemo(() => {
+    const payables = (lancamentos || []).filter(l => {
+      if (!l || l.tipo !== 'P') return false;
+      const data = (l.data_pagamento || l.data_vencimento || "").split('T')[0];
+      const matchesDate = data >= startDate && data <= endDate;
+      const matchesSearch = (l.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (l.nome_entidade && l.nome_entidade.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesStatus = statusFilter === 'All' ? true : l.status === statusFilter;
+      return matchesDate && matchesSearch && matchesStatus;
+    });
+
+    const totalAll = payables.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countAll = payables.length;
+
+    const borderList = payables.filter(l => l.meio_pagamento === 'Boleto' || Boolean(l.num_documento));
+    const totalBoletos = borderList.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countBoletos = borderList.length;
+
+    const chequesCompensados = payables.filter(l => (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && l.status === 'Pago');
+    const totalChequesCompensados = chequesCompensados.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countChequesCompensados = chequesCompensados.length;
+
+    const chequesNaoCompensados = payables.filter(l => (l.meio_pagamento === 'Cheque' || Boolean(l.cheque_num)) && (l.status === 'Pendente' || l.status === 'Devolvido'));
+    const totalChequesNaoCompensados = chequesNaoCompensados.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const countChequesNaoCompensados = chequesNaoCompensados.length;
+
+    return {
+      totalAll, countAll,
+      totalBoletos, countBoletos,
+      totalChequesCompensados, countChequesCompensados,
+      totalChequesNaoCompensados, countChequesNaoCompensados
+    };
+  }, [lancamentos, startDate, endDate, searchTerm, statusFilter]);
+
+  const filteredPatrimony = (patrimonio || []).filter(p => {
+    if (!p) return false;
+    const matchesSearch = (p.descricao || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (p.tipo || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = patrimonyFilter ? p.tipo === patrimonyFilter : true;
+    return matchesSearch && matchesCategory;
+  });
+
+  const calculateTotals = (data: LancamentoFinanceiro[]) => {
+    if (!Array.isArray(data)) return { total: 0, pagos: 0, pendentes: 0 };
+    const total = data.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const pagos = data.filter(l => l.status === 'Pago').reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    const pendentes = data.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+    return { total, pagos, pendentes };
+  };
+
+  const patrimonyStats = React.useMemo(() => {
+    const stats = { Imóvel: 0, Veículo: 0, Equipamento: 0, Outros: 0, Total: 0 };
+    (patrimonio || []).forEach(p => {
+      if (!p) return;
+      const tipo = p.tipo as keyof typeof stats;
+      if (stats[tipo] !== undefined) {
+        stats[tipo] += (Number(p.valor) || 0);
+      }
+      stats.Total += (Number(p.valor) || 0);
+    });
+    return stats;
+  }, [patrimonio]);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 gap-4">
+          <Loader2 className="animate-spin" size={40} />
+          <p className="font-bold">Carregando dados financeiros...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Gestão Financeira</h1>
+            <p className="text-slate-500">Controle global de Contas a Receber e Contas a Pagar.</p>
+          </div>
+          <div className="flex gap-2">
+            {activeTab === 'patrimony' ? (
+              <Dialog open={isPatrimonyOpen} onOpenChange={(open) => { setIsPatrimonyOpen(open); if(!open) setEditingPatrimony(undefined); }}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setEditingPatrimony(undefined)} className="bg-amber-600 hover:bg-amber-700 rounded-xl gap-2 shadow-lg shadow-amber-100">
+                    <Plus size={20} /> Novo Patrimônio
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader><DialogTitle>{editingPatrimony ? "Editar Patrimônio" : "Cadastrar Bem / Patrimônio"}</DialogTitle></DialogHeader>
+                  <PatrimonyForm patrimony={editingPatrimony} onSuccess={() => { setIsPatrimonyOpen(false); loadData(); }} />
+                </DialogContent>
+              </Dialog>
+            ) : activeTab === 'accounts' ? (
+              <Dialog open={isAccountOpen} onOpenChange={(open) => { setIsAccountOpen(open); if (!open) setEditingAccount(undefined); }}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setEditingAccount(undefined)} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2 shadow-lg shadow-indigo-100">
+                    <PlusCircle size={20} /> Nova Conta / Caixa
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader><DialogTitle>{editingAccount ? "Editar Conta / Caixa" : "Cadastrar Nova Conta Bancária ou Caixa"}</DialogTitle></DialogHeader>
+                  <AccountForm account={editingAccount} onSuccess={() => { setIsAccountOpen(false); setEditingAccount(undefined); loadData(); }} />
+                </DialogContent>
+              </Dialog>
+            ) : activeTab === 'cards' ? (
+              <Button onClick={() => {
+                db.financeiro.syncCardCredits().then(() => {
+                  loadData();
+                  showSuccess("Sincronização de depósitos concluída!");
+                }).catch(() => showError("Falha ao sincronizar."));
+              }} className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
+                <RefreshCw size={16} /> Sincronizar Créditos de Cartões
+              </Button>
+            ) : (
+              <>
+                <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl gap-2">
+                      <ArrowLeftRight size={20} /> Transferir
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader><DialogTitle>Transferência entre Contas</DialogTitle></DialogHeader>
+                    <TransferForm onSuccess={() => { setIsTransferOpen(false); loadData(); }} />
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl gap-2">
+                      <Plus size={20} /> Novo Lançamento
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader><DialogTitle>Novo Lançamento Financeiro</DialogTitle></DialogHeader>
+                    <FinancialForm onSuccess={() => { setIsModalOpen(false); loadData(); }} />
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          {activeTab !== 'patrimony' && activeTab !== 'accounts' && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-slate-500">Início</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 w-40" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-slate-500">Fim</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-40" />
+              </div>
+            </>
+          )}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Input 
+              placeholder={activeTab === 'patrimony' ? "Buscar no patrimônio..." : "Buscar por descrição ou cliente/fornecedor..."}
+              className="pl-10 h-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <Tabs defaultValue="receivable" onValueChange={setActiveTab} className="w-full">
+          <TabsList className="bg-white border border-slate-200 p-1 h-auto flex-wrap justify-start gap-1 rounded-xl mb-6">
+            <TabsTrigger value="receivable" className="rounded-lg gap-2"><ArrowUpCircle size={16} /> Contas a Receber</TabsTrigger>
+            <TabsTrigger value="payable" className="rounded-lg gap-2"><ArrowDownCircle size={16} /> Contas a Pagar</TabsTrigger>
+            <TabsTrigger value="accounts" className="rounded-lg gap-2"><Wallet size={16} /> Caixas e Bancos</TabsTrigger>
+            <TabsTrigger value="patrimony" className="rounded-lg gap-2"><Home size={16} /> Patrimônio</TabsTrigger>
+            <TabsTrigger value="commissions" className="rounded-lg gap-2"><Briefcase size={16} /> Comissões e Vendedores</TabsTrigger>
+            <TabsTrigger value="cards" className="rounded-lg gap-2"><CreditCard size={16} /> Controle de Cartões</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="receivable" className="space-y-6">
+            <FinancialSummary 
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'R' && (l.data_pagamento || l.data_vencimento || "").split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento || "").split('T')[0] <= endDate))} 
+              type="R" 
+              currentFilter={statusFilter}
+              onFilterChange={setStatusFilter}
+            />
+            <FinancialTable 
+              data={filterData('R')} 
+              onBaixa={handleBaixa}
+              onViewClient={handleViewClient}
+            />
+          </TabsContent>
+
+          <TabsContent value="payable" className="space-y-6">
+            <FinancialSummary
+              totals={calculateTotals(lancamentos.filter(l => l.tipo === 'P' && (l.data_pagamento || l.data_vencimento || "").split('T')[0] >= startDate && (l.data_pagamento || l.data_vencimento || "").split('T')[0] <= endDate))}
+              type="P"
+              currentFilter={statusFilter}
+              onFilterChange={setStatusFilter}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'All' ? "ring-2 ring-indigo-500 bg-indigo-50/50 border-indigo-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('All')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Todas as Despesas</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriodSums.totalAll.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] font-bold text-slate-500 mt-1 inline-block">
+                      {payablesPeriodSums.countAll} lançamentos
+                    </span>
+                  </div>
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    payableQuickFilter === 'All' ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    <FileText size={18} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'boleto' ? "ring-2 ring-blue-500 bg-blue-50/50 border-blue-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('boleto')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Boletos Bancários</p>
+                    <p className="text-lg font-black text-slate-850 mt-1 leading-none">
+                      R$ {payablesPeriodSums.totalBoletos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] font-bold text-slate-500 mt-1 inline-block">
+                      {payablesPeriodSums.countBoletos} boletos
+                    </span>
+                  </div>
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    payableQuickFilter === 'boleto' ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    <Barcode size={18} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card
+                className={cn(
+                  "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
+                  payableQuickFilter === 'cheque_compensado' ? "ring-2 ring-emerald-500 bg-emerald-50/50 border-emerald-200" : "bg-white"
+                )}
+                onClick={() => setPayableQuickFilter('cheque_compensado')}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-3 font-sans">
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cheques Compensados</p>
                     <p className="text-lg font-black text-slate-850 mt-1 leading-none">
@@ -611,7 +1261,6 @@ const Financial = () => {
                 </CardContent>
               </Card>
 
-              {/* Card 4: Cheques Não Compensados */}
               <Card
                 className={cn(
                   "border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all rounded-2xl overflow-hidden",
@@ -663,7 +1312,6 @@ const Financial = () => {
             <FinancialTable
               data={filterData('P')}
               onBaixa={handleBaixa}
-
               onViewClient={handleViewClient}
               onCompensar={(l: any) => { setSelectedCheque(l); setIsCompensateOpen(true); }}
               onDevolver={async (id: number) => {
@@ -673,7 +1321,6 @@ const Financial = () => {
                     showSuccess("Cheque marcado como devolvido.");
                     loadData();
                   } catch (e) { showError("Erro ao atualizar cheque."); }
-
                 }
               }}
             />
@@ -850,7 +1497,6 @@ const Financial = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              {/* Left column: Employee List & Summary */}
               <div className="md:col-span-2 space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                   <div className="flex justify-between items-center">
@@ -929,7 +1575,6 @@ const Financial = () => {
                 </div>
               </div>
 
-              {/* Right column: Selected Employee Detailed Log */}
               <div className="md:col-span-3">
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                   <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
@@ -1004,6 +1649,96 @@ const Financial = () => {
               </div>
             </div>
           </TabsContent>
+
+          {/* NOVO: CONTROLE DE CARTOES */}
+          <TabsContent value="cards" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-none shadow-sm bg-blue-50">
+                <CardContent className="p-6">
+                  <p className="text-[10px] font-bold uppercase text-blue-600">Total Vendas em Cartão (Período)</p>
+                  <p className="text-2xl font-black text-blue-950 mt-1">R$ {cardStats.totalSales.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] text-blue-700 font-bold mt-2 uppercase">Soma bruta de todas as operações</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-sm bg-amber-50">
+                <CardContent className="p-6">
+                  <p className="text-[10px] font-bold uppercase text-amber-600">Líquido a Receber (Pendente)</p>
+                  <p className="text-2xl font-black text-amber-950 mt-1">R$ {cardStats.pendingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] text-amber-700 font-bold mt-2 uppercase">Aguardando data planejada para compensação</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-sm bg-emerald-50">
+                <CardContent className="p-6">
+                  <p className="text-[10px] font-bold uppercase text-emerald-600">Valores já Depositados / Recebidos</p>
+                  <p className="text-2xl font-black text-emerald-950 mt-1">R$ {cardStats.receivedAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] text-emerald-700 font-bold mt-2 uppercase">Já liquidados e integrados nas contas</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-none shadow-sm overflow-hidden bg-white">
+              <div className="p-4 border-b flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase">Movimentações de Cartões no Período</h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Mostrando lançamentos de cartão de crédito e débito faturados no PDV</p>
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data Venda</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Bandeira</TableHead>
+                    <TableHead>Previsão Depósito</TableHead>
+                    <TableHead className="text-right">Valor Líquido</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cardMovements.map((l) => (
+                    <TableRow key={l.cd_lancamento} className="hover:bg-slate-50/50">
+                      <TableCell className="text-xs text-slate-500 font-medium">
+                        {new Date(l.created_at || l.data_pagamento || l.data_vencimento).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-xs font-bold text-slate-800 uppercase">{l.descricao}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px] font-black border-indigo-200 bg-indigo-50 text-indigo-700">{l.bandeira_cartao || 'N/A'}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-bold text-slate-600">
+                        {new Date(`${l.data_vencimento}T00:00:00`).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-right font-black text-slate-900 text-xs">
+                        R$ {Number(l.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className={cn(
+                          "text-[9px] font-black border-none uppercase",
+                          l.status === 'Pago' ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                        )}>
+                          {l.status === 'Pago' ? 'LIQUIDADO' : 'PENDENTE'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {l.status === 'Pendente' && (
+                          <Button size="sm" className="h-7 bg-emerald-600 hover:bg-emerald-700 text-[10px] font-black rounded-lg py-1 px-2" onClick={() => handleBaixa(l.cd_lancamento)}>
+                            Compensar
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {cardMovements.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-12 text-center text-slate-400 font-bold">Nenhuma transação de cartão encontrada no período selecionado.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         <Dialog open={isCompensateOpen} onOpenChange={setIsCompensateOpen}>
@@ -1062,7 +1797,6 @@ const Financial = () => {
                     const empId = Number(e.target.value);
                     setPayCommissionEmployeeId(empId || "");
                     if (empId) {
-                      // Calculate pending sum
                       const summary = getCommissionSummary.find(s => Number(s.employee.cd_clientes) === empId);
                       if (summary) {
                         setPayCommissionAmount(summary.pendingAmount.toFixed(2).replace('.', ','));
@@ -1160,10 +1894,8 @@ const Financial = () => {
         <Dialog open={!!selectedClientForDetails} onOpenChange={(open) => !open && setSelectedClientForDetails(null)}>
           <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileText className="text-indigo-600" />
-                Ficha do Cliente: {selectedClientForDetails?.nome}
-              </DialogTitle>
+              <FileText className="text-indigo-600" />
+              Ficha do Cliente: {selectedClientForDetails?.nome}
             </DialogHeader>
             {selectedClientForDetails && <ClientDetails client={selectedClientForDetails} />}
           </DialogContent>

@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
+import { 
   Printer, 
   Save, 
   Percent, 
@@ -23,7 +31,9 @@ import {
   MessageCircle,
   CreditCard,
   QrCode,
-  Banknote
+  Banknote,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { db } from '@/services/api';
 import { showSuccess, showError } from '@/utils/toast';
@@ -31,10 +41,15 @@ import { Configuracoes, ContaBancaria } from '@/types/database';
 import { formatAddressTitleCase, formatCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const Settings = () => {
-
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+
+  // Card Config form states
+  const [newCardBrand, setNewCardBrand] = React.useState("");
+  const [newCardRate, setNewCardRate] = React.useState("");
+  const [newCardDays, setNewCardDays] = React.useState("");
+  const [newCardAccountId, setNewCardAccountId] = React.useState("");
 
   const loadConfig = React.useCallback(async () => {
     try {
@@ -50,14 +65,12 @@ const Settings = () => {
         provider_tel: formatPhoneBR(data.provider_tel),
         cnpj: formatCnpj(data.cnpj),
         telefone: formatPhoneBR(data.telefone),
-
         whatsapp_loja: formatPhoneBR(data.whatsapp_loja),
         endereco: formatAddressTitleCase(data.endereco),
         payment_account_routes: data.payment_account_routes || {}
       });
       setContas(contasData || []);
     } catch (err) {
-
       showError("Erro ao carregar configurações.");
     } finally {
       setIsLoading(false);
@@ -77,6 +90,52 @@ const Settings = () => {
       delete routes[method];
     }
     setConfig({ ...config, payment_account_routes: routes });
+  };
+
+  const cardConfigs = React.useMemo(() => {
+    if (!config?.payment_account_routes) return [];
+    return (config.payment_account_routes as any).card_configurations || [];
+  }, [config?.payment_account_routes]);
+
+  const handleAddCardConfig = () => {
+    if (!config) return;
+    if (!newCardBrand.trim()) { showError("Informe o nome/bandeira do cartão."); return; }
+    const rateNum = parseFloat(newCardRate.replace(',', '.'));
+    if (isNaN(rateNum) || rateNum < 0) { showError("Informe uma taxa válida."); return; }
+    const daysNum = parseInt(newCardDays, 10);
+    if (isNaN(daysNum) || daysNum < 0) { showError("Informe a quantidade de dias para crédito."); return; }
+    if (!newCardAccountId) { showError("Selecione a conta destino para o crédito."); return; }
+
+    const routes = { ...(config.payment_account_routes || {}) } as any;
+    const currentConfigs = routes.card_configurations || [];
+    
+    routes.card_configurations = [
+      ...currentConfigs,
+      {
+        id: Date.now().toString(),
+        bandeira: newCardBrand.trim().toUpperCase(),
+        taxa: rateNum,
+        dias: daysNum,
+        cd_conta: Number(newCardAccountId)
+      }
+    ];
+
+    setConfig({ ...config, payment_account_routes: routes });
+    setNewCardBrand("");
+    setNewCardRate("");
+    setNewCardDays("");
+    setNewCardAccountId("");
+    showSuccess("Bandeira adicionada! Lembre-se de clicar em 'Salvar Tudo' no topo para gravar.");
+  };
+
+  const handleRemoveCardConfig = (idx: number) => {
+    if (!config) return;
+    const routes = { ...(config.payment_account_routes || {}) } as any;
+    const currentConfigs = [...(routes.card_configurations || [])];
+    currentConfigs.splice(idx, 1);
+    routes.card_configurations = currentConfigs;
+    setConfig({ ...config, payment_account_routes: routes });
+    showSuccess("Bandeira removida! Lembre-se de clicar em 'Salvar Tudo' no topo para gravar.");
   };
 
   const handleSave = async () => {
@@ -121,7 +180,6 @@ const Settings = () => {
                   <Input value={config.provider_name || ""} onChange={(e) => setConfig({ ...config, provider_name: e.target.value.toUpperCase() })} className="uppercase" />
                 </div>
                 <div className="space-y-2">
-
                   <Label>Slogan do Provedor</Label>
                   <Input value={config.provider_slogan || ""} onChange={(e) => setConfig({ ...config, provider_slogan: e.target.value })} placeholder="Ex: A chave da inovação" />
                 </div>
@@ -134,7 +192,201 @@ const Settings = () => {
                 <div className="space-y-2"><Label>Telefone</Label><Input value={config.provider_tel || ""} onChange={(e) => setConfig({ ...config, provider_tel: formatPhoneBR(e.target.value) })} /></div>
                 <div className="space-y-2"><Label>E-mail</Label><Input value={config.provider_email || ""} onChange={(e) => setConfig({ ...config, provider_email: e.target.value })} /></div>
               </div>
+              <div className="<dyad-write path="src/pages/Settings.tsx" description="Adding card configurations editor (Bandeira, Taxa %, Dias, Conta Destino) to the Settings page.">
+"use client";
 
+import React from 'react';
+import Layout from '@/components/Layout';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
+import { 
+  Printer, 
+  Save, 
+  Percent, 
+  Image as ImageIcon, 
+  Building2,
+  ShieldCheck,
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  Zap,
+  Globe,
+  MessageCircle,
+  CreditCard,
+  QrCode,
+  Banknote,
+  Plus,
+  Trash2
+} from 'lucide-react';
+import { db } from '@/services/api';
+import { showSuccess, showError } from '@/utils/toast';
+import { Configuracoes, ContaBancaria } from '@/types/database';
+import { formatAddressTitleCase, formatCnpj, formatPhoneBR } from '@/utils/formatters';
+
+const Settings = () => {
+  const [config, setConfig] = React.useState<Configuracoes | null>(null);
+  const [contas, setContas] = React.useState<ContaBancaria[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  // Card Config form states
+  const [newCardBrand, setNewCardBrand] = React.useState("");
+  const [newCardRate, setNewCardRate] = React.useState("");
+  const [newCardDays, setNewCardDays] = React.useState("");
+  const [newCardAccountId, setNewCardAccountId] = React.useState("");
+
+  const loadConfig = React.useCallback(async () => {
+    try {
+      const [data, contasData] = await Promise.all([
+        db.config.get(),
+        db.contas.getAll().catch(() => [])
+      ]);
+      setConfig({
+        ...data,
+        provider_name: (data.provider_name || '').toUpperCase(),
+        nome_empresa: (data.nome_empresa || '').toUpperCase(),
+        provider_cnpj: formatCnpj(data.provider_cnpj),
+        provider_tel: formatPhoneBR(data.provider_tel),
+        cnpj: formatCnpj(data.cnpj),
+        telefone: formatPhoneBR(data.telefone),
+        whatsapp_loja: formatPhoneBR(data.whatsapp_loja),
+        endereco: formatAddressTitleCase(data.endereco),
+        payment_account_routes: data.payment_account_routes || {}
+      });
+      setContas(contasData || []);
+    } catch (err) {
+      showError("Erro ao carregar configurações.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  const setPaymentRoute = (method: string, accountId: string) => {
+    if (!config) return;
+    const routes = { ...(config.payment_account_routes || {}) };
+    if (accountId) {
+      routes[method] = Number(accountId);
+    } else {
+      delete routes[method];
+    }
+    setConfig({ ...config, payment_account_routes: routes });
+  };
+
+  const cardConfigs = React.useMemo(() => {
+    if (!config?.payment_account_routes) return [];
+    return (config.payment_account_routes as any).card_configurations || [];
+  }, [config?.payment_account_routes]);
+
+  const handleAddCardConfig = () => {
+    if (!config) return;
+    if (!newCardBrand.trim()) { showError("Informe o nome/bandeira do cartão."); return; }
+    const rateNum = parseFloat(newCardRate.replace(',', '.'));
+    if (isNaN(rateNum) || rateNum < 0) { showError("Informe uma taxa válida."); return; }
+    const daysNum = parseInt(newCardDays, 10);
+    if (isNaN(daysNum) || daysNum < 0) { showError("Informe a quantidade de dias para crédito."); return; }
+    if (!newCardAccountId) { showError("Selecione a conta destino para o crédito."); return; }
+
+    const routes = { ...(config.payment_account_routes || {}) } as any;
+    const currentConfigs = routes.card_configurations || [];
+    
+    routes.card_configurations = [
+      ...currentConfigs,
+      {
+        id: Date.now().toString(),
+        bandeira: newCardBrand.trim().toUpperCase(),
+        taxa: rateNum,
+        dias: daysNum,
+        cd_conta: Number(newCardAccountId)
+      }
+    ];
+
+    setConfig({ ...config, payment_account_routes: routes });
+    setNewCardBrand("");
+    setNewCardRate("");
+    setNewCardDays("");
+    setNewCardAccountId("");
+    showSuccess("Bandeira adicionada! Lembre-se de clicar em 'Salvar Tudo' no topo para gravar.");
+  };
+
+  const handleRemoveCardConfig = (idx: number) => {
+    if (!config) return;
+    const routes = { ...(config.payment_account_routes || {}) } as any;
+    const currentConfigs = [...(routes.card_configurations || [])];
+    currentConfigs.splice(idx, 1);
+    routes.card_configurations = currentConfigs;
+    setConfig({ ...config, payment_account_routes: routes });
+    showSuccess("Bandeira removida! Lembre-se de clicar em 'Salvar Tudo' no topo para gravar.");
+  };
+
+  const handleSave = async () => {
+    if (!config) return;
+    try {
+      await db.config.update(config);
+      showSuccess("Configurações salvas com sucesso!");
+    } catch (err) {
+      showError("Erro ao salvar configurações.");
+    }
+  };
+
+  if (isLoading || !config) {
+    return <div className="p-8 text-center font-bold">Carregando configurações...</div>;
+  }
+
+  return (
+    <Layout>
+      <div className="space-y-6 max-w-6xl mx-auto pb-20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Configurações do Sistema</h1>
+            <p className="text-slate-500">Gerencie os dados do provedor e da sua loja.</p>
+          </div>
+          <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 px-8 h-12 rounded-xl gap-2 font-bold shadow-lg shadow-indigo-100">
+            <Save size={20} /> Salvar Tudo
+          </Button>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* SEÇÃO 1: PROVEDOR DO SISTEMA */}
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b bg-slate-900 text-white rounded-t-xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <ShieldCheck size={18} /> Provedor do Sistema (Sua Empresa)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome / Razão Social</Label>
+                  <Input value={config.provider_name || ""} onChange={(e) => setConfig({ ...config, provider_name: e.target.value.toUpperCase() })} className="uppercase" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Slogan do Provedor</Label>
+                  <Input value={config.provider_slogan || ""} onChange={(e) => setConfig({ ...config, provider_slogan: e.target.value })} placeholder="Ex: A chave da inovação" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>CNPJ do Provedor</Label>
+                <Input value={config.provider_cnpj || ""} onChange={(e) => setConfig({ ...config, provider_cnpj: formatCnpj(e.target.value) })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Telefone</Label><Input value={config.provider_tel || ""} onChange={(e) => setConfig({ ...config, provider_tel: formatPhoneBR(e.target.value) })} /></div>
+                <div className="space-y-2"><Label>E-mail</Label><Input value={config.provider_email || ""} onChange={(e) => setConfig({ ...config, provider_email: e.target.value })} /></div>
+              </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-2"><ImageIcon size={14} /> URL da Logo do Provedor (Pequena)</Label>
                 <Input value={config.provider_logo || ""} onChange={(e) => setConfig({ ...config, provider_logo: e.target.value })} placeholder="https://..." />
@@ -213,7 +465,111 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* SEÇÃO 4: DADOS DA LOJA (RESTAURADA) */}
+          {/* SEÇÃO 4: CADASTRO E CONTROLE DE BANDEIRAS DE CARTÃO */}
+          <Card className="border-none shadow-sm md:col-span-2">
+            <CardHeader className="border-b bg-indigo-700 text-white rounded-t-xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <CreditCard size={18} /> Controle de Taxas e Recebimento de Cartões
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <p className="text-sm text-slate-500 font-semibold">
+                Cadastre suas bandeiras (Visa, Master, etc) com taxa % de desconto, prazo para depósito (dias) e conta de crédito. O sistema creditará o valor líquido automaticamente na conta programada ao atingir o dia!
+              </p>
+
+              {/* Form to add card configurations */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-500">Bandeira / Operadora</Label>
+                  <Input value={newCardBrand} onChange={e => setNewCardBrand(e.target.value)} placeholder="Ex: VISA CRÉDITO" className="h-10 bg-white" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">Taxa Desconto (%)</Label>
+                  <Input value={purchaseMarginInput} onChange={(e) => setPurchaseMarginInput(formatQtyMask(e.target.value))} className="h-10 bg-white" placeholder="2,50" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">Dias para Crédito</Label>
+                  <Input type="number" min="0" value={numInstallments} onChange={(e) => setNumInstallments(Math.max(0, parseInt(e.target.value) || 0))} className="h-10 bg-white" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">Conta p/ Crédito</Label>
+                  <select value={payCommissionAccountId} onChange={(e) => setPayCommissionAccountId(e.target.value ? Number(e.target.value) : "")} className="w-full h-10 rounded-lg border bg-white px-3 text-sm font-bold">
+                    <option value="">Selecione...</option>
+                    {contas.map(c => <option key={c.cd_conta} value={c.cd_conta}>{c.nome}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-full pt-2">
+                  <Button type="button" onClick={() => {
+                    if (!newEntryDescription.trim()) { showError("Informe a bandeira/descrição."); return; }
+                    if (!payCommissionAccountId) { showError("Selecione a conta para receber o crédito."); return; }
+                    const disc = parseBRNumber(purchaseMarginInput);
+                    const days = numInstallments;
+                    setPaymentRoute(`CardConfig-${newEntryDescription.trim().toUpperCase()}`, JSON.stringify({
+                      percentage: disc,
+                      days,
+                      accountId: Number(payCommissionAccountId)
+                    }));
+                    showSuccess("Regra de cartão cadastrada!");
+                    setNewEntryDescription("");
+                    setPurchaseMarginInput("0,00");
+                  }} className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 font-bold gap-2 text-xs">
+                    <Plus size={16} /> Cadastrar Bandeira de Cartão
+                  </Button>
+                </div>
+              </div>
+
+              {/* List of active routes */}
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Bandeiras e Regras Ativas</Label>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-[10px] font-bold uppercase h-8">Bandeira</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase h-8 text-center">Taxa</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase h-8 text-center">Prazo</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase h-8">Conta Crédito</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase h-8 text-center w-12">Remover</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(config.payment_account_routes || {})
+                      .filter(([key]) => key.startsWith('CardConfig-'))
+                      .map(([key, val]: any, idx) => {
+                        const brand = key.replace('CardConfig-', '');
+                        let info = { percentage: 0, days: 30, accountId: 0 };
+                        try { info = typeof val === 'string' ? JSON.parse(val) : val; } catch(e){}
+                        const destAccount = contas.find(c => c.cd_conta === info.accountId);
+                        return (
+                          <TableRow key={key}>
+                            <TableCell className="font-bold text-xs uppercase text-slate-700">{brand}</TableCell>
+                            <TableCell className="text-center font-bold text-xs text-indigo-600">{info.percentage.toFixed(2)}%</TableCell>
+                            <TableCell className="text-center font-bold text-xs text-slate-600">{info.days} dia(s)</TableCell>
+                            <TableCell className="text-xs font-semibold text-slate-500">{destAccount?.nome || `Conta #${info.accountId}`}</TableCell>
+                            <TableCell className="text-center">
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-rose-500 hover:bg-rose-50" onClick={() => {
+                                const routes = { ...(config.payment_account_routes || {}) };
+                                delete routes[key];
+                                setConfig({ ...config, payment_account_routes: routes });
+                                showSuccess("Regra removida!");
+                              }}>
+                                <Trash2 size={14} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    {Object.keys(config.payment_account_routes || {}).filter(k => k.startsWith('CardConfig-')).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-6 text-center text-slate-400 text-xs">Nenhuma bandeira de cartão cadastrada.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* SEÇÃO 5: DADOS DA LOJA */}
           <Card className="border-none shadow-sm md:col-span-2">
             <CardHeader className="border-b bg-indigo-600 text-white rounded-t-xl">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -227,7 +583,6 @@ const Settings = () => {
                   <Input value={config.nome_empresa} onChange={(e) => setConfig({ ...config, nome_empresa: e.target.value.toUpperCase() })} className="uppercase" />
                 </div>
                 <div className="space-y-2">
-
                   <Label>Slogan da Loja</Label>
                   <Input value={config.slogan || ""} onChange={(e) => setConfig({ ...config, slogan: e.target.value })} />
                 </div>
@@ -242,7 +597,6 @@ const Settings = () => {
                   <Label>Inscrição Estadual</Label>
                   <Input value={config.inscricao_estadual || ""} onChange={(e) => setConfig({ ...config, inscricao_estadual: e.target.value })} />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Inscrição Municipal</Label>
                   <Input value={config.inscricao_municipal || ""} onChange={(e) => setConfig({ ...config, inscricao_municipal: e.target.value })} />
@@ -263,7 +617,6 @@ const Settings = () => {
                   <Label className="flex items-center gap-2"><MessageCircle size={14} /> WhatsApp Loja</Label>
                   <Input value={config.whatsapp_loja || ""} onChange={(e) => setConfig({ ...config, whatsapp_loja: formatPhoneBR(e.target.value) })} />
                 </div>
-
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2"><Mail size={14} /> E-mail</Label>
                   <Input value={config.email_loja || ""} onChange={(e) => setConfig({ ...config, email_loja: e.target.value })} />
@@ -281,7 +634,7 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* SEÇÃO 4: IMPRESSÃO */}
+          {/* SEÇÃO 6: IMPRESSÃO */}
           <Card className="border-none shadow-sm">
             <CardHeader className="border-b bg-slate-50">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -302,6 +655,18 @@ const Settings = () => {
       </div>
     </Layout>
   );
+};
+
+const parseBRNumber = (val: string) => {
+  if (!val) return 0;
+  return parseFloat(val.replace(/\./g, "").replace(",", ".")) || 0;
+};
+
+const formatQtyMask = (value: string) => {
+  let val = value.replace(/[^\d,]/g, "");
+  const parts = val.split(",");
+  if (parts.length > 2) val = parts[0] + "," + parts.slice(1).join("");
+  return val;
 };
 
 export default Settings;
