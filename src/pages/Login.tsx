@@ -6,6 +6,8 @@ import { ShoppingCart, Lock, User, Loader2, MessageCircle, Eye, EyeOff } from 'l
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { db } from '@/services/api';
 import { showError, showSuccess } from '@/utils/toast';
 
@@ -13,6 +15,7 @@ const Login = () => {
   const [usuario, setUsuario] = React.useState("");
   const [senha, setSenha] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
   const [whatsapp, setWhatsapp] = React.useState<string | null>(null);
   const navigate = useNavigate();
@@ -103,6 +106,18 @@ const Login = () => {
                 </button>
               </div>
             </div>
+
+            <div className="flex items-center space-x-2 py-1">
+              <Checkbox 
+                id="keep-logged-in" 
+                checked={keepLoggedIn} 
+                onCheckedChange={(checked) => setKeepLoggedIn(!!checked)} 
+              />
+              <Label htmlFor="keep-logged-in" className="text-xs font-bold text-slate-600 cursor-pointer">
+                Mantenha-me conectado neste dispositivo
+              </Label>
+            </div>
+
             <Button 
               type="submit" 
               className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold text-lg shadow-lg shadow-indigo-100"

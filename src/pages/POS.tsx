@@ -27,7 +27,8 @@ import {
   ArrowRightLeft,
   RefreshCw,
   Printer as PrintIcon,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Cake
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -176,6 +177,44 @@ const POS = () => {
   React.useEffect(() => {
     setSelectedCartIndex(null);
   }, [mode]);
+
+  const selectedClient = React.useMemo(() => {
+    return clients.find(c => c.cd_clientes === selectedEntityId);
+  }, [clients, selectedEntityId]);
+
+  const isTodayBirthday = (dateStr?: string | null) => {
+    if (!dateStr) return false;
+    const parts = dateStr.split('-');
+    if (parts.length < 3) return false;
+    const birthMonth = parseInt(parts[1], 10);
+    const birthDay = parseInt(parts[2], 10);
+    
+    const todayDate = new Date();
+    const currentMonth = todayDate.getMonth() + 1;
+    const currentDay = todayDate.getDate();
+    
+    return birthMonth === currentMonth && birthDay === currentDay;
+  };
+
+  const isClientBirthdayToday = React.useMemo(() => {
+    return isTodayBirthday(selectedClient?.data_nascimento);
+  }, [selectedClient]);
+
+  const isSpouseBirthdayToday = React.useMemo(() => {
+    return isTodayBirthday(selectedClient?.conjuge_nascimento);
+  }, [selectedClient]);
+
+  React.useEffect(() => {
+    if (!selectedEntityId || mode === 'COMPRA') return;
+    const client = clients.find(c => c.cd_clientes === selectedEntityId);
+    if (!client) return;
+
+    if (isTodayBirthday(client.data_nascimento)) {
+      showSuccess(`🎉 HOJE É ANIVERSÁRIO DO CLIENTE! Parabenize ${client.nome}! 🎂🎈`);
+    } else if (isTodayBirthday(client.conjuge_nascimento)) {
+      showSuccess(`🎉 HOJE É ANIVERSÁRIO DO CÔNJUGE DO CLIENTE! Parabenize o cônjuge de ${client.nome} (${client.conjuge_nome})! 🎂🎈`);
+    }
+  }, [selectedEntityId, clients, mode]);
 
   const setCart = (newCart: any[] | ((prev: any[]) => any[])) => {
     setCarts(prev => ({
@@ -881,7 +920,7 @@ const POS = () => {
         }))
       };
       await db.orcamentos.add(payload);
-      showSuccess("Orçamento salvo!");
+      showSuccess("Orçamento saved!");
       setCart([]);
       setSelectedCartIndex(null);
     } catch (err) { showError("Erro ao salvar."); }
@@ -1113,7 +1152,7 @@ const POS = () => {
         }))
       });
 
-      showSuccess("Contrato de locação criado com datas, cálculo, baixa de estoque e financeiro.");
+      showSuccess("Contrato de locação criado com baixa de estoque e financeiro.");
       setCart([]);
       setSelectedCartIndex(null);
       setSelectedSellerId("");
@@ -1671,197 +1710,181 @@ const POS = () => {
                 <p className="font-black text-indigo-700">R$ {cashSystemBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
-            {currentCashSession?.status === 'Aberto' ? (
-              <Button size="sm" className="w-full h-9 bg-slate-900 hover:bg-slate-800 rounded-xl font-black text-[10px] uppercase" onClick={(e) => { e.stopPropagation(); openCloseCashDialog(); }}>Fechar Caixa</Button>
-            ) : currentCashSession?.status === 'Fechado' ? (
-              <Button size="sm" variant="outline" className="w-full h-9 rounded-xl font-black text-[10px] uppercase" disabled>Caixa Fechado</Button>
-            ) : (
-              <Button size="sm" className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black text-[10px] uppercase" onClick={(e) => { e.stopPropagation(); openCashDialog(); }}>Abrir Caixa</Button>
-            )}
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-3">F2 - Ver Caixa Diário</p>
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Ações Principais</h3>
-              <Button className={cn("w-full h-16 text-white font-black text-lg gap-3 shadow-xl rounded-2xl transition-transform active:scale-95", theme.bg, theme.hover)} onClick={() => handleShortcut('F10')}>
-                <CheckCircle size={24} /> FINALIZAR
-                <span className="text-[10px] opacity-50 ml-auto">F10</span>
-              </Button>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl font-black text-xs uppercase" onClick={() => handleShortcut('F3')}>
-                  Limpar
-                  <span className="text-[10px] opacity-50 ml-auto">F3</span>
-                </Button>
-                <Button variant="outline" className="h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl font-black text-xs uppercase" onClick={() => handleShortcut('F4')}>
-                  Excluir Item
-                  <span className="text-[10px] opacity-50 ml-auto">F4</span>
-                </Button>
-              </div>
-              <Button variant="outline" className="w-full h-11 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl font-black text-xs uppercase" onClick={handleSaveQuote}>
-                <Save size={16} /> Salvar Orçamento
-                <span className="text-[10px] opacity-50 ml-auto">F9</span>
-              </Button>
-            </div>
-            <div className="space-y-3">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Consultas e Utilitários</h3>
-              <div className="grid grid-cols-1 gap-2">
-                <ShortcutItem keyName="F2" label="Caixa Loja" onClick={requestDailyCashAccess} icon={<Wallet size={14} />} color="emerald" />
-                <ShortcutItem keyName="F5" label="Histórico" onClick={() => setIsHistoryOpen(true)} icon={<History size={14} />} />
-                <ShortcutItem keyName="F6" label="Calculadora" onClick={() => setIsCalculatorOpen(true)} icon={<Calculator size={14} />} color="indigo" />
-                <ShortcutItem keyName="F7" label="Financeiro" onClick={requestPOSFinancialAccess} icon={<Wallet size={14} />} color="emerald" />
-                <ShortcutItem keyName="F8" label="Orçamentos" onClick={() => setIsQuotesOpen(true)} icon={<FileText size={14} />} color="amber" />
-              </div>
-            </div>
-            <div className="pt-4"><SyncStatus /></div>
-          </div>
-        </ScrollArea>
+        <div className="p-4 flex-1 overflow-y-auto space-y-2 bg-white">
+          <ShortcutItem keyName="F1" label="Pesquisar Produto" onClick={() => handleShortcut('F1')} icon={<Search size={16} />} />
+          <ShortcutItem keyName="F3" label="Limpar Carrinho" onClick={() => handleShortcut('F3')} icon={<Trash2 size={16} />} color="rose" />
+          <ShortcutItem keyName="F4" label="Excluir Item" onClick={() => handleShortcut('F4')} icon={<Minus size={16} />} color="rose" />
+          <ShortcutItem keyName="F5" label="Histórico de Vendas" onClick={() => handleShortcut('F5')} icon={<History size={16} />} color="amber" />
+          <ShortcutItem keyName="F6" label="Calculadora Técnica" onClick={() => handleShortcut('F6')} icon={<Calculator size={16} />} color="indigo" />
+          <ShortcutItem keyName="F7" label="Financeiro / Baixas" onClick={() => handleShortcut('F7')} icon={<Wallet size={16} />} color="emerald" />
+          <ShortcutItem keyName="F8" label="Orçamentos" onClick={() => handleShortcut('F8')} icon={<FileText size={16} />} color="amber" />
+          <ShortcutItem keyName="F10" label="Finalizar Operação" onClick={() => handleShortcut('F10')} icon={<CheckCircle size={16} />} color="emerald" />
+        </div>
 
-        <div className="p-4 border-t border-slate-100 bg-slate-50">
-          <Button variant="ghost" className="w-full h-10 gap-2 text-rose-600 hover:bg-rose-100 font-black text-xs uppercase rounded-xl" onClick={() => setIsAdminAuthOpen(true)}>
-            <LogOut size={16} /> Sair do PDV
+        <div className="p-4 border-t bg-slate-50 flex justify-between items-center">
+          <SyncStatus />
+          <Button variant="ghost" size="icon" className="text-slate-400 hover:text-rose-600" onClick={() => setIsAdminAuthOpen(true)} title="Acessar ERP">
+            <LogOut size={18} />
           </Button>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("h-20 text-white flex items-center justify-between px-4 lg:px-8 shrink-0 border-b shadow-lg z-10", theme.header, theme.border)}>
-          <div className="flex items-center gap-4 lg:gap-8">
-            <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-sm items-center gap-2">
-              <div className="flex">
-                <Button variant="ghost" size="sm" className={cn("h-9 px-3 lg:px-5 text-[10px] lg:text-[11px] font-black rounded-xl transition-all", mode === 'VENDA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('VENDA')}>VENDA</Button>
-                <Button variant="ghost" size="sm" className={cn("h-9 px-3 lg:px-5 text-[10px] lg:text-[11px] font-black rounded-xl transition-all", mode === 'COMPRA' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('COMPRA')}>COMPRA</Button>
-                <Button variant="ghost" size="sm" className={cn("h-9 px-3 lg:px-5 text-[10px] lg:text-[11px] font-black rounded-xl transition-all", mode === 'LOCACAO' ? "bg-white text-slate-900 shadow-lg" : "text-white hover:bg-white/10")} onClick={() => setMode('LOCACAO')}>LOCAÇÃO</Button>
-              </div>
-              {mode === 'VENDA' && (
-                <>
-                  <div className="w-px h-6 bg-white/20 mx-1 lg:mx-2" />
-                  <button
-                    type="button"
-                    className={cn("flex items-center gap-2 px-2 lg:px-4 py-1.5 rounded-xl cursor-pointer transition-all border-2", priceMode === 'VISTA' ? "bg-emerald-500 border-emerald-400 shadow-lg scale-105" : "bg-white/5 border-white/10 hover:bg-white/10")}
-                    onClick={() => handlePriceModeChange(priceMode === 'VISTA' ? 'PRAZO' : 'VISTA')}
-                  >
-                    <Checkbox checked={priceMode === 'VISTA'} className="h-4 w-4 border-white pointer-events-none data-[state=checked]:bg-white data-[state=checked]:text-emerald-600" />
-                    <span className="text-[10px] lg:text-[11px] font-black text-white uppercase cursor-pointer select-none hidden sm:block">Preço À Vista</span>
-                  </button>
-                </>
-              )}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 bg-slate-900 text-white flex items-center justify-between px-6 shrink-0 shadow-md">
+          <div className="flex items-center gap-4">
+            <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+              <Button variant={mode === 'VENDA' ? 'default' : 'ghost'} size="sm" className={cn("rounded-lg font-black text-xs h-8", mode === 'VENDA' && "bg-indigo-600")} onClick={() => setMode('VENDA')}>
+                VENDA (F10)
+              </Button>
+              <Button variant={mode === 'COMPRA' ? 'default' : 'ghost'} size="sm" className={cn("rounded-lg font-black text-xs h-8", mode === 'COMPRA' && "bg-emerald-600")} onClick={() => setMode('COMPRA')}>
+                COMPRA
+              </Button>
+              <Button variant={mode === 'LOCACAO' ? 'default' : 'ghost'} size="sm" className={cn("rounded-lg font-black text-xs h-8", mode === 'LOCACAO' && "bg-amber-600")} onClick={() => setMode('LOCACAO')}>
+                LOCAÇÃO
+              </Button>
             </div>
+
+            {mode === 'VENDA' && (
+              <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <Button variant={priceMode === 'PRAZO' ? 'default' : 'ghost'} size="sm" className={cn("rounded-lg font-black text-[10px] h-7 px-3", priceMode === 'PRAZO' && "bg-indigo-600")} onClick={() => handlePriceModeChange('PRAZO')}>
+                  A PRAZO
+                </Button>
+                <Button variant={priceMode === 'VISTA' ? 'default' : 'ghost'} size="sm" className={cn("rounded-lg font-black text-[10px] h-7 px-3", priceMode === 'VISTA' && "bg-emerald-600")} onClick={() => handlePriceModeChange('VISTA')}>
+                  À VISTA
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-6">
             <div className="space-y-1 hidden sm:block">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{mode === 'COMPRA' ? 'Fornecedor' : 'Cliente'}</p>
               <div className="flex items-center gap-2">
-                <select className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[150px] lg:min-w-[200px] cursor-pointer hover:text-primary transition-colors" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
+                <select className="bg-transparent border-none text-sm font-black focus:ring-0 p-0 h-auto min-w-[150px] lg:min-w-[200px] cursor-pointer hover:text-primary transition-colors text-white" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value ? Number(e.target.value) : "")}>
                   <option value="" className="text-slate-900">{mode === 'COMPRA' ? 'FORNECEDOR AVULSO' : 'CONSUMIDOR FINAL'}</option>
                   {clients
                     .filter(e => mode === 'COMPRA' ? e.tipo_entidade === 'F' : (e.tipo_entidade === 'C' || e.tipo_entidade === 'A'))
                     .map(e => <option key={e.cd_clientes} value={e.cd_clientes} className="text-slate-900">{e.nome}</option>)}
                 </select>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-white/40 hover:text-white" onClick={() => setIsAddEntityOpen(true)}><UserPlus size={16} /></Button>
+                
+                {isClientBirthdayToday && (
+                  <span className="animate-bounce bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg shrink-0">
+                    <Cake size={10} /> ANIVERSÁRIO HOJE! 🎉
+                  </span>
+                )}
+                {!isClientBirthdayToday && isSpouseBirthdayToday && (
+                  <span className="animate-bounce bg-pink-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg shrink-0">
+                    <Cake size={10} /> ANIV. CÔNJUGE HOJE! 🎉
+                  </span>
+                )}
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-[9px] lg:text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Total da Operação</p>
-            <p className="text-3xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">
-              <span className="text-xl lg:text-2xl opacity-50 mr-1">R$</span>
-              {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
         </header>
 
-        <div className="flex-1 bg-[#FFFFF0] overflow-hidden flex flex-col shadow-inner">
-          <div className="flex-1 overflow-auto">
-            <Table className="border-collapse">
-              <TableHeader className="sticky top-0 z-10">
-                <TableRow className="bg-slate-800 hover:bg-slate-800 border-none shadow-md">
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 w-24 px-6">CÓDIGO</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 px-6">DESCRIÇÃO DO PRODUTO</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-20">{mode === 'LOCACAO' ? 'COBRANÇA' : 'UN'}</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">{mode === 'LOCACAO' ? 'QTDE EQUIP.' : 'QTDE/METROS'}</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-center w-24">CX</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">VALOR UNIT.</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 border-r border-white/5 text-right w-36">SUB TOTAL</TableHead>
-                  <TableHead className="text-white font-black text-[11px] h-10 text-center w-16">#</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cart.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} className="h-[400px] text-center"><div className="flex flex-col items-center justify-center text-slate-300 gap-4"><ShoppingBag size={80} className="opacity-10" /><p className="text-xl font-black uppercase tracking-widest opacity-20">Carrinho Vazio</p></div></TableCell></TableRow>
-                ) : (
-                  cart.map((item, idx) => (
-                    <TableRow
-                      key={idx}
-                      onClick={() => setSelectedCartIndex(idx)}
-                      className={cn(
-                        "h-12 border-b border-slate-200 transition-colors group cursor-pointer",
-                        mode === 'LOCACAO' ? "bg-amber-50/70 hover:bg-amber-100/80" : "hover:bg-indigo-50/50",
-                        selectedCartIndex === idx && (mode === 'LOCACAO' ? "bg-amber-100 hover:bg-amber-100 ring-2 ring-inset ring-amber-400" : "bg-indigo-100 hover:bg-indigo-100 ring-2 ring-inset ring-indigo-400")
-                      )}
-                    >
-                      <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 px-6 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
-                      <TableCell className="py-1 text-sm font-black uppercase border-r border-slate-100 px-6 text-slate-800">
-                        <div>{item?.nome}</div>
-                        {mode === 'LOCACAO' && item.rentalStartDate && (
-                          <div className="text-[10px] font-bold text-amber-700 normal-case">
-                            Retirada: {new Date(`${item.rentalStartDate}T00:00:00`).toLocaleDateString('pt-BR')} • Prev. devolução: {new Date(`${item.rentalEndDate}T00:00:00`).toLocaleDateString('pt-BR')} • {item.rentalDays} dia(s) • {item.rentalCalculation}
-                          </div>
-                        )}
-                        {mode !== 'LOCACAO' && item.calculatorType && (
-                          <div className="text-[10px] font-bold text-indigo-700 normal-case">
-                            Calculadora: {item.calculationLabel || `calculado ${Number(item.calculatedQuantity || item.requestedQuantity || 0).toFixed(2).replace('.', ',')}`} • Venda: {Number(item.requestedQuantity || item.quantity || 0).toFixed(2).replace('.', ',')} {item.calculatorType === 'piso' ? 'm²' : 'un'}{item.boxSize > 0 ? ` • Arred.: ${item.boxesInput || Math.ceil(Number(item.quantity || 0) / item.boxSize)} caixa(s) = ${Number(item.quantity || 0).toFixed(2).replace('.', ',')} m²` : ''}
-                          </div>
-                        )}
-                        {mode === 'COMPRA' && item.purchaseSalePrice !== undefined && (
-                          <div className="text-[10px] font-bold text-blue-700 normal-case">
-                            Venda definida: R$ {Number(item.purchaseSalePrice || 0).toFixed(2).replace('.', ',')} • Margem: {item.purchaseMarginInput || Number(item.margin || 0).toFixed(2).replace('.', ',')}%
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-0 text-xs text-center border-r border-slate-100 font-black w-20 text-slate-600">
-                        {mode === 'LOCACAO' ? item.rentalCalculation : item?.selectedUnit}
-                      </TableCell>
-                      <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
-                        <input
-                          className="w-full bg-transparent text-center text-sm font-black focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
-                          value={item.quantityInput ?? item.quantity.toString().replace('.', ',')}
-                          onChange={(e) => updateCartItem(idx, 'quantity', e.target.value)}
-                          onBlur={() => normalizeCartItemInput(idx, 'quantity')}
-                        />
-                      </TableCell>
-                      <TableCell className="py-0 border-r border-slate-100 w-24 px-4">
-                        {item.boxSize > 0 ? (
-                          <input
-                            className="w-full bg-transparent text-center text-sm font-black text-indigo-600 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
-                            value={item.boxesInput ?? (item.quantity / item.boxSize).toFixed(2).replace('.', ',')}
-                            onChange={(e) => updateCartItem(idx, 'boxes', e.target.value)}
-                            onBlur={() => normalizeCartItemInput(idx, 'boxes')}
-                          />
-                        ) : <span className="block text-center text-slate-300">-</span>}
-                      </TableCell>
-                      <TableCell className="py-0 border-r border-slate-100 w-36 px-4">
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs font-bold text-slate-500">R$</span>
-                          <input
-                            className="w-full bg-transparent text-right text-sm font-bold text-slate-700 focus:bg-white outline-none border-b-2 border-transparent focus:border-primary px-1"
-                            value={item.finalPriceInput ?? item.finalPrice.toFixed(2).replace('.', ',')}
-                            readOnly={mode === 'LOCACAO'}
-                            onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
-                            onBlur={() => normalizeCartItemInput(idx, 'finalPrice')}
-                          />
+        <div className="flex-1 flex flex-col overflow-hidden p-4 lg:p-8">
+          <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-auto">
+              <Table>
+                <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                  <TableRow>
+                    <TableHead className="w-24">CÓDIGO</TableHead>
+                    <TableHead>DESCRIÇÃO DO PRODUTO</TableHead>
+                    <TableHead className="text-center w-20">{mode === 'LOCACAO' ? 'COBRANÇA' : 'UN'}</TableHead>
+                    <TableHead className="text-center w-24">{mode === 'LOCACAO' ? 'QTDE EQUIP.' : 'QTDE/METROS'}</TableHead>
+                    <TableHead className="text-center w-24">CX</TableHead>
+                    <TableHead className="text-right w-36">VALOR UNIT.</TableHead>
+                    <TableHead className="text-right w-36">SUB TOTAL</TableHead>
+                    <TableHead className="text-center w-16">#</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cart.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-[300px] text-center">
+                        <div className="flex flex-col items-center justify-center text-slate-300 gap-4">
+                          <ShoppingBag size={64} className="opacity-10" />
+                          <p className="text-lg font-black uppercase tracking-widest opacity-20">Carrinho Vazio</p>
                         </div>
                       </TableCell>
-                      <TableCell className="py-0 text-base text-right font-black border-r border-slate-100 w-36 px-6 text-slate-900">R$ {(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
-                      <TableCell className="py-0 text-center w-16"><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-600 rounded-full opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}><Trash2 size={16} /></Button></TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    cart.map((item, idx) => (
+                      <TableRow
+                        key={idx}
+                        onClick={() => setSelectedCartIndex(idx)}
+                        className={cn(
+                          "h-12 border-b border-slate-200 transition-colors group cursor-pointer",
+                          mode === 'LOCACAO' ? "bg-amber-50/70 hover:bg-amber-100/80" : "hover:bg-indigo-50/50",
+                          selectedCartIndex === idx && (mode === 'LOCACAO' ? "bg-amber-100 hover:bg-amber-100 ring-2 ring-inset ring-amber-400" : "bg-indigo-100 hover:bg-indigo-100 ring-2 ring-inset ring-indigo-400")
+                        )}
+                      >
+                        <TableCell className="py-0 text-xs font-mono font-bold border-r border-slate-100 w-24 text-slate-500">{item?.id_manual?.padStart(5, '0')}</TableCell>
+                        <TableCell className="py-1 text-sm font-black uppercase border-r border-slate-100 text-slate-800">
+                          <div>{item?.nome}</div>
+                          {mode === 'LOCACAO' && item.rentalStartDate && (
+                            <div className="text-[10px] font-bold text-amber-700 normal-case">
+                              Retirada: {new Date(`${item.rentalStartDate}T00:00:00`).toLocaleDateString('pt-BR')} • Prev. devolução: {new Date(`${item.rentalEndDate}T00:00:00`).toLocaleDateString('pt-BR')} • {item.rentalDays} dia(s) • {item.rentalCalculation}
+                            </div>
+                          )}
+                          {item.calculationLabel && (
+                            <div className="text-[10px] font-bold text-indigo-600 normal-case">
+                              Calculadora: {item.calculationLabel}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center border-r border-slate-100">{item.selectedUnit}</TableCell>
+                        <TableCell className="text-center border-r border-slate-100">
+                          <Input
+                            value={item.quantityInput}
+                            onChange={(e) => updateCartItem(idx, 'quantity', e.target.value)}
+                            onBlur={() => normalizeCartItemInput(idx, 'quantity')}
+                            className="h-8 text-center font-bold text-xs w-20 mx-auto"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center border-r border-slate-100">
+                          {item.boxSize > 0 ? (
+                            <Input
+                              value={item.boxesInput}
+                              onChange={(e) => updateCartItem(idx, 'boxes', e.target.value)}
+                              onBlur={() => normalizeCartItemInput(idx, 'boxes')}
+                              className="h-8 text-center font-bold text-xs w-16 mx-auto text-indigo-600"
+                            />
+                          ) : <span className="text-slate-300">-</span>}
+                        </TableCell>
+                        <TableCell className="text-right border-r border-slate-100">
+                          <div className="flex items-center gap-1 justify-end">
+                            <span className="text-xs font-bold text-slate-400">R$</span>
+                            <Input
+                              value={item.finalPriceInput}
+                              readOnly={mode === 'LOCACAO'}
+                              onChange={(e) => updateCartItem(idx, 'finalPrice', e.target.value)}
+                              onBlur={() => normalizeCartItemInput(idx, 'finalPrice')}
+                              className="h-8 text-right font-bold text-xs w-24"
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-black text-slate-900 border-r border-slate-100">R$ {(item.finalPrice * item.quantity).toFixed(2)}</TableCell>
+                        <TableCell className="text-center">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-700 rounded-full" onClick={(e) => { e.stopPropagation(); removeItem(idx); }}>
+                            <Trash2 size={16} />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </div>
 
-        <footer className={cn("h-auto border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10", mode === 'LOCACAO' ? "lg:h-32" : "lg:h-24")}>
+        <footer className={cn("border-t p-4 shrink-0 bg-slate-900 border-slate-800 shadow-2xl z-10", mode === 'LOCACAO' ? "h-auto lg:h-32" : "h-auto lg:h-24")}>
           <form onSubmit={handleCodeSubmit} className="flex flex-wrap lg:flex-nowrap items-end gap-4 h-full max-w-7xl mx-auto">
             <div className="flex-1 min-w-[200px] space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} className="text-amber-500" /> Entrada de Produto (F1)</label>
@@ -1963,7 +1986,7 @@ const POS = () => {
             </div>
           </form>
         </footer>
-      </main>
+      </div>
 
       <Dialog open={isOpenCashOpen} onOpenChange={setIsOpenCashOpen}>
         <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
@@ -1979,14 +2002,14 @@ const POS = () => {
               </p>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Valor real no caixa</Label>
-              <Input value={openingRealValue} onChange={(e) => setOpeningRealValue(e.target.value)} className="h-14 text-2xl font-black rounded-2xl" autoFocus />
+              <Label>Valor real encontrado no caixa</Label>
+              <Input value={openingRealValue} onChange={(e) => setOpeningRealValue(e.target.value)} className="h-12 text-xl font-black" autoFocus />
             </div>
             <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
               Diferença: <strong>R$ {(parseBRNumber(openingRealValue) - expectedOpeningBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Observação</Label>
+              <Label>Observação</Label>
               <Input value={cashNotes} onChange={(e) => setCashNotes(e.target.value)} className="rounded-xl" placeholder="Ex: conferido pelo operador" />
             </div>
             <DialogFooter className="gap-3">

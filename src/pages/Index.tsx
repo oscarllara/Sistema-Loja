@@ -4,7 +4,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ShoppingCart, Wallet, BarChart3, Loader2, ArrowUpRight } from "lucide-react";
+import { Package, ShoppingCart, Wallet, BarChart3, Loader2, ArrowUpRight, Cake, Gift, User } from "lucide-react";
 import { db } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -47,7 +47,12 @@ const Index = () => {
     queryFn: () => db.financeiro.getAll(),
   });
 
-  const isLoading = loadingProducts || loadingSales || loadingFinancial;
+  const { data: clients = [], isLoading: loadingClients } = useQuery({
+    queryKey: ["dashboard-clientes"],
+    queryFn: () => db.clientes.getAll(),
+  });
+
+  const isLoading = loadingProducts || loadingSales || loadingFinancial || loadingClients;
 
   const totalStockValue = products.reduce((acc, item) => acc + Number(item.compra || 0) * Number(item.estoque || 0), 0);
   const totalSales = sales.reduce((acc, item) => acc + Number(item.total || 0), 0);
@@ -192,6 +197,49 @@ const Index = () => {
     });
   }, [sales, financial]);
 
+  const currentMonthBirthdays = React.useMemo(() => {
+    const currentMonth = new Date().getMonth() + 1;
+    const todayDay = new Date().getDate();
+
+    const list: any[] = [];
+    clients.forEach(c => {
+      if (c.data_nascimento) {
+        const parts = c.data_nascimento.split('-');
+        if (parts.length >= 3) {
+          const birthMonth = parseInt(parts[1], 10);
+          const birthDay = parseInt(parts[2], 10);
+          if (birthMonth === currentMonth) {
+            list.push({
+              id: c.cd_clientes,
+              nome: c.nome,
+              tipo: 'Cliente',
+              dia: birthDay,
+              isToday: birthDay === todayDay
+            });
+          }
+        }
+      }
+      if (c.conjuge_nascimento && c.conjuge_nome) {
+        const parts = c.conjuge_nascimento.split('-');
+        if (parts.length >= 3) {
+          const birthMonth = parseInt(parts[1], 10);
+          const birthDay = parseInt(parts[2], 10);
+          if (birthMonth === currentMonth) {
+            list.push({
+              id: c.cd_clientes,
+              nome: `${c.conjuge_nome} (Cônjuge de ${c.nome})`,
+              tipo: 'Cônjuge',
+              dia: birthDay,
+              isToday: birthDay === todayDay
+            });
+          }
+        }
+      }
+    });
+
+    return list.sort((a, b) => a.dia - b.dia);
+  }, [clients]);
+
   if (isLoading) {
     return (
       <Layout>
@@ -238,8 +286,8 @@ const Index = () => {
           })}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Card className="border-none shadow-sm">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <Card className="border-none shadow-sm xl:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg font-bold">Gráfico de Vendas</CardTitle>
             </CardHeader>
@@ -256,6 +304,59 @@ const Index = () => {
             </CardContent>
           </Card>
 
+          {/* CARD DE ANIVERSARIANTES DO MÊS */}
+          <Card className="border-none shadow-sm flex flex-col">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-lg font-bold flex items-center gap-2 text-rose-600">
+                <Cake size={20} />
+                Aniversariantes do Mês
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 overflow-y-auto max-h-[320px]">
+              {currentMonthBirthdays.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-center px-4">
+                  <Gift size={32} className="opacity-20 mb-2" />
+                  <p className="text-xs font-bold">Nenhum aniversariante este mês.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {currentMonthBirthdays.map((b, idx) => (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "p-4 flex items-center justify-between gap-3 transition-colors",
+                        b.isToday ? "bg-rose-50/80" : "hover:bg-slate-50/50"
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className={cn("text-xs font-black uppercase truncate", b.isToday ? "text-rose-700" : "text-slate-800")}>
+                            {b.nome}
+                          </p>
+                          {b.isToday && (
+                            <span className="animate-bounce bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0">
+                              HOJE! 🎉
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{b.tipo}</p>
+                      </div>
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border font-black text-sm",
+                        b.isToday ? "bg-rose-600 text-white border-rose-500 shadow-md shadow-rose-100" : "bg-slate-50 text-slate-700 border-slate-200"
+                      )}>
+                        <span className="text-[8px] font-bold uppercase leading-none mb-0.5">Dia</span>
+                        <span className="leading-none">{b.dia}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-bold">Contas a Pagar e a Receber</CardTitle>
