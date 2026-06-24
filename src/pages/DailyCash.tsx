@@ -449,11 +449,19 @@ const DailyCash = () => {
     { filter: 'PIX' as const, title: 'PIX', description: 'Transferências instantâneas', icon: QrCode, color: 'cyan', ...getPaymentTotals('PIX') },
   ];
 
-  const resumoMeios = movDia.reduce((acc, curr) => {
-    const meio = curr.meio_pagamento || 'Outros';
-    acc[meio] = (acc[meio] || 0) + Number(curr.valor || 0);
-    return acc;
-  }, {} as Record<string, number>);
+  const resumoMeios = React.useMemo(() => {
+    const itensDoDia = lancamentos.filter(l => {
+      const createdDate = toLocalDateStr(l.created_at || l.data_pagamento || l.data_vencimento);
+      const matchesAccount = selectedAccountId === "all" || l.cd_conta === Number(selectedAccountId) || (!l.cd_conta && selectedAccountId === "all");
+      return createdDate === selectedDate && matchesAccount;
+    });
+
+    return itensDoDia.reduce((acc, curr) => {
+      const meio = curr.meio_pagamento || 'Outros';
+      acc[meio] = (acc[meio] || 0) + Number(curr.valor || 0);
+      return acc;
+    }, {} as Record<string, number>);
+  }, [lancamentos, selectedDate, selectedAccountId]);
 
   const printData = {
     date: showAllTime ? "HISTÓRICO COMPLETO" : selectedDate,
