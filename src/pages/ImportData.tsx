@@ -11,7 +11,6 @@ import { db } from '@/services/api';
 import { formatCpfCnpj, formatPhoneBR } from '@/utils/formatters';
 
 const ImportData = () => {
-
   const [isFinished, setIsFinished] = React.useState(false);
   const [logs, setLogs] = React.useState<string[]>([]);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -95,13 +94,13 @@ const ImportData = () => {
 
   const importProdutos = async (data: any[]) => {
     const first = data[0];
-    const kNome = findKey(first, ['NOME', 'DESCRICAO', 'PRODUTO']);
-    const kCodOriginal = findKey(first, ['CD_PRODUTO', 'ID_IMPORTADO', 'CODIGO', 'REF', 'ID']);
-    const kPrecoVenda = findKey(first, ['PRECO_VENDA', 'VENDA', 'PRECO', 'VLR_VENDA']);
-    const kPrecoCusto = findKey(first, ['PRECO_CUSTO', 'CUSTO', 'COMPRA', 'VLR_CUSTO']);
-    const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QUANTIDADE', 'ESTOQUE_ST']);
+    const kNome = findKey(first, ['NOME', 'DESCRICAO', 'PRODUTO', 'DESC', 'NOME_PRODUTO', 'DESCRICAO_PRODUTO']);
+    const kCodOriginal = findKey(first, ['CD_PRODUTO', 'ID_IMPORTADO', 'CODIGO', 'REF', 'ID', 'COD_PRODUTO', 'COD_PROD']);
+    const kPrecoVenda = findKey(first, ['PRECO_VENDA', 'VENDA', 'PRECO', 'VLR_VENDA', 'VALOR_VENDA', 'PRECO_DE_VENDA', 'SAIDA', 'PRECO_SAIDA']);
+    const kPrecoCusto = findKey(first, ['PRECO_CUSTO', 'CUSTO', 'COMPRA', 'VLR_CUSTO', 'VALOR_CUSTO', 'VALOR_COMPRA', 'CUSTO_UNITARIO']);
+    const kEstoque = findKey(first, ['ESTOQUE', 'SALDO', 'QUANTIDADE', 'ESTOQUE_ST', 'QTD', 'QTDE', 'ATUAL', 'ESTOQUE_ATUAL', 'DISPONIVEL']);
     const kUn = findKey(first, ['UNIDADE', 'UN', 'MEDIDA']);
-    const kBarras = findKey(first, ['BARRAS', 'EAN', 'GTIN', 'COD_BARRAS']);
+    const kBarras = findKey(first, ['BARRAS', 'EAN', 'GTIN', 'COD_BARRAS', 'COD_BARRA']);
 
     if (!kNome) throw new Error("Coluna de Descrição não identificada.");
 
@@ -133,9 +132,9 @@ const ImportData = () => {
 
   const importClientes = async (data: any[]) => {
     const first = data[0];
-    const kNome = findKey(first, ['NOME', 'RAZAO', 'CLIENTE']);
-    const kDoc = findKey(first, ['CPF', 'CNPJ', 'DOC']);
-    const kTel = findKey(first, ['TEL', 'CEL', 'FONE', 'CONTATO']);
+    const kNome = findKey(first, ['NOME', 'RAZAO', 'CLIENTE', 'NOME_COMPLETO', 'PARCEIRO']);
+    const kDoc = findKey(first, ['CPF', 'CNPJ', 'DOC', 'DOCUMENTO']);
+    const kTel = findKey(first, ['TEL', 'CEL', 'FONE', 'CONTATO', 'TELEFONE', 'WHATSAPP']);
 
     if (!kNome) throw new Error("Coluna de Nome não identificada.");
 
@@ -145,7 +144,7 @@ const ImportData = () => {
       cel: kTel ? formatPhoneBR((item[kTel] || "").toString()) : "",
       tipo_entidade: 'C',
       is_funcionario: false,
-      data: new Date().toISOString()
+      created_at: new Date().toISOString()
     })).filter(c => c.nome && c.nome.length > 1);
 
     addLog(`Enviando ${mapped.length} clientes para o banco...`);
