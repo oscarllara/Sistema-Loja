@@ -10,28 +10,17 @@ import {
   Plus,
   CheckCircle2,
   Clock,
-  Home,
   Search,
-  Briefcase,
   Layers,
-  RotateCcw,
   CheckSquare,
   PlusCircle,
-  Car,
-  FileText,
   Loader2,
-  Info,
   Edit,
   Trash2,
-  Barcode,
-  AlertCircle,
   CreditCard,
-  TrendingUp,
-  Percent,
-  Calendar,
   RefreshCw
 } from 'lucide-react';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -70,7 +59,6 @@ const Financial = () => {
   const [patrimonio, setPatrimonio] = React.useState<Patrimonio[]>([]);
   const [employees, setEmployees] = React.useState<Cliente[]>([]);
   const [activeTab, setActiveTab] = React.useState("receivable");
-  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<number | "all">("all");
   const [isPayCommissionOpen, setIsPayCommissionOpen] = React.useState(false);
   const [payCommissionEmployeeId, setPayCommissionEmployeeId] = React.useState<number | "">("");
   const [payCommissionAccountId, setPayCommissionAccountId] = React.useState<number | "">("");
@@ -408,17 +396,6 @@ const Financial = () => {
     });
     return stats;
   }, [patrimonio]);
-
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 gap-4">
-          <Loader2 className="animate-spin" size={40} />
-          <p className="font-bold">Carregando dados financeiros...</p>
-        </div>
-      </Layout>
-    );
-  }
 
   return (
     <Layout>
