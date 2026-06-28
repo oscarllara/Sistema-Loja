@@ -1,3 +1,4 @@
+' por '>' no texto de ajuda do rodapé.">
 "use client";
 
 import React from 'react';
