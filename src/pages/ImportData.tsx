@@ -133,8 +133,8 @@ const ImportData = () => {
 
         const mappedItem = {
           nome,
-          id_importado,
-          cod_barras,
+          id_importado: id_importado || null,
+          cod_barras: cod_barras || null,
           venda: parseNum(item[kPrecoVenda]),
           compra: parseNum(item[kPrecoCusto]),
           estoque: parseNum(item[kEstoque]),
@@ -181,8 +181,8 @@ const ImportData = () => {
 
         const mappedItem = {
           nome,
-          cpf_cnpj,
-          cel,
+          cpf_cnpj: cpf_cnpj || null,
+          cel: cel || null,
           tipo_entidade: 'C' as const,
           is_funcionario: false,
           created_at: new Date().toISOString()
@@ -256,10 +256,10 @@ const ImportData = () => {
           valor,
           data_vencimento: formattedDate,
           status: 'Pendente' as const,
-          num_documento: kDoc ? (item[kDoc] || "").toString().trim() : "",
+          num_documento: kDoc && item[kDoc] ? (item[kDoc] || "").toString().trim() : null,
           meio_pagamento: isCheque ? 'Cheque' as const : (kDoc && item[kDoc] ? 'Boleto' as const : 'Dinheiro' as const),
-          cheque_num: chequeNum,
-          banco_nome: kBanco ? (item[kBanco] || "").toString().trim().toUpperCase() : "",
+          cheque_num: chequeNum || null,
+          banco_nome: kBanco && item[kBanco] ? (item[kBanco] || "").toString().trim().toUpperCase() : null,
           categoria: type === 'receber' ? 'Cliente' : 'Fornecedor',
           data_pagamento: null,
           cd_conta: null
@@ -337,7 +337,6 @@ const ImportData = () => {
     // Process resolved conflicts
     resolvedConflicts.forEach(conflict => {
       if (conflict.action === 'duplicate') {
-        // For products, we will let the add function generate a new manual ID
         if (type === 'produtos') {
           const duplicatedProduct = { ...conflict.newData };
           duplicatedProduct.nome = `${duplicatedProduct.nome} (DUPLICADO)`;
@@ -372,7 +371,6 @@ const ImportData = () => {
           });
         }
       }
-      // If action is 'skip', we do nothing (it won't be added or updated)
     });
 
     addLog(`Registros novos/duplicados a inserir: ${toInsert.length}`);
@@ -396,8 +394,6 @@ const ImportData = () => {
     if (toInsert.length > 0) {
       addLog(`Inserindo ${toInsert.length} registros novos/duplicados...`);
       if (type === 'produtos') {
-        // For products, we must generate sequential manual IDs, so we insert them one by one or in chunks
-        // Let's use db.produtos.add to ensure sequential manual IDs are generated correctly
         for (let i = 0; i < toInsert.length; i++) {
           if (i % 50 === 0 && i > 0) {
             addLog(`Inserindo produto ${i} de ${toInsert.length}...`);

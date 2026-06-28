@@ -82,20 +82,28 @@ const sanitizeConfigPayload = (config: Partial<Configuracoes>) => {
   return payload;
 };
 
-const sanitizeClientPayload = (client: any) => ({
-  ...client,
-  cpf_cnpj: client.cpf_cnpj ? formatCpfCnpj(client.cpf_cnpj) : client.cpf_cnpj,
-  conjuge_cpf: client.conjuge_cpf ? formatCpfCnpj(client.conjuge_cpf) : client.conjuge_cpf,
-  tel1: client.tel1 ? formatPhoneBR(client.tel1) : client.tel1,
-  tel2: client.tel2 ? formatPhoneBR(client.tel2) : client.tel2,
-  cel: client.cel ? formatPhoneBR(client.cel) : client.cel,
-  conjuge_telefone: client.conjuge_telefone ? formatPhoneBR(client.conjuge_telefone) : client.conjuge_telefone,
-  endereco: client.endereco ? formatAddressTitleCase(client.endereco) : client.endereco,
-  bairro: client.bairro ? formatAddressTitleCase(client.bairro) : client.bairro,
-  cidade: client.cidade ? formatAddressTitleCase(client.cidade) : client.cidade,
-  referencia: client.referencia ? formatAddressTitleCase(client.referencia) : client.referencia,
-  complemento: client.complemento ? formatAddressTitleCase(client.complemento) : client.complemento,
-});
+const sanitizeClientPayload = (client: any) => {
+  const clean = { ...client };
+  Object.keys(clean).forEach(key => {
+    if (clean[key] === "") {
+      clean[key] = null;
+    }
+  });
+  return {
+    ...clean,
+    cpf_cnpj: clean.cpf_cnpj ? formatCpfCnpj(clean.cpf_cnpj) : null,
+    conjuge_cpf: clean.conjuge_cpf ? formatCpfCnpj(clean.conjuge_cpf) : null,
+    tel1: clean.tel1 ? formatPhoneBR(clean.tel1) : null,
+    tel2: clean.tel2 ? formatPhoneBR(clean.tel2) : null,
+    cel: clean.cel ? formatPhoneBR(clean.cel) : null,
+    conjuge_telefone: clean.conjuge_telefone ? formatPhoneBR(clean.conjuge_telefone) : null,
+    endereco: clean.endereco ? formatAddressTitleCase(clean.endereco) : null,
+    bairro: clean.bairro ? formatAddressTitleCase(clean.bairro) : null,
+    cidade: clean.cidade ? formatAddressTitleCase(clean.cidade) : null,
+    referencia: clean.referencia ? formatAddressTitleCase(clean.referencia) : null,
+    complemento: clean.complemento ? formatAddressTitleCase(clean.complemento) : null,
+  };
+};
 
 const sanitizeAccountPayload = (account: any) => ({
   ...account,
@@ -237,6 +245,7 @@ export const db = {
     bulkAdd: async (products: Partial<Produto>[]) => {
       const payload = products.map(product => sanitizeProductPayload(product));
       const { error } = await supabase.from('produtos').insert(payload);
+      if (error) throw error;
       return { error };
     },
     delete: async (id: number) => {
@@ -270,6 +279,7 @@ export const db = {
     },
     bulkAdd: async (clients: any[]) => {
       const { error } = await supabase.from('clientes').insert(clients.map(sanitizeClientPayload));
+      if (error) throw error;
       return { error };
     },
     update: async (id: number, data: any) => {
@@ -355,6 +365,228 @@ export const db = {
     },
     addBulk: async (list: any[]) => {
       const { error } = await supabase.from('financeiro').insert(list);
+      if (error) throw error;
+      return { error };
+    },
+    update: async (id: number, data: any) => {
+      const { error } = await supabase.from('financeiro').update(data).eq('cd_lancamento', id);
+      if (error) throw error;
+    },
+    delete: async (id: number) => {
+      const { error } = await supabase.from('financeiro').delete().eq('cd_lancamento', id);
+      if (error) throw error;
+    },
+    baixar: async (id: number, cd_conta: number, valor?: number, meio?: string, cd_func?: number) => {
+      const { data: lanc, error: lError } = await supabase.from('financeiro').select('*').eq('cd_lancamento', id).single();
+      if (lError) throw lError;
+
+      if (lanc) {
+        const valorOriginal = Number(lanc.valor || 0);
+        const valorBaixa = Number(valor || valorOriginal);
+        if (valorBaixa <= 0) throw new Error('Valor de baixa inválido.');
+        if (valorBaixa > valorOriginal) throw new Error('Valor de baixa maior que o saldo pendente.');
+
+        const dataPagamento = new Date().toISOString();
+        const isPartial = valorBaixa < valorOriginal;
+
+        if (isPartial) {
+          const valorRestante = Number((valorOriginal - valorBaixa).toFixed(2));
+          const { error: partialUpdateError } = await supabase
+            .from('financeiro')
+            .update({ valor: valorRestante, status: 'Pendente', data_pagamento: null, cd_conta: null })
+            .eq('cd_lancamento', id);
+          if (partialUpdateError) throw partialUpdateError;
+
+          const { cd_lancamento, ...lancamentoPago } = lanc;
+          const paidPayload: any = {
+            ...lancamentoPago,
+            descricao: `${lanc.descricao} - BAIXA PARCIAL`,
+            valor: Number(valorBaixa.toFixed(2)),
+            status: 'Pago',
+            data_pagamento: dataPagamento,
+            cd_conta
+          };
+          if (meio) paidPayload.meio_pagamento = meio;
+          if (cd_func) paidPayload.cd_func = cd_func;
+
+          const { error: paidInsertError } = await supabase.from('financeiro').insert([paidPayload]);
+          if (paidInsertError) throw paidInsertError;
+        } else {
+          const updateData: any = {
+            status: 'Pago',
+            data_pagamento: dataPagamento,
+            cd_conta
+          };
+          if (meio) updateData.meio_pagamento = meio;
+          if (cd_func) updateData.cd_func = cd_func;
+
+          const { error: uError } = await supabase.from('financeiro').update(updateData).eq('cd_lancamento', id);
+          if (uError) throw uError;
+        }
+
+        const { data: conta, error: cError } = await supabase.from('contas').select('saldo').eq('cd_conta', cd_conta).single();
+        if (cError) throw cError;
+
+        if (conta) {
+          const novoSaldo = lanc.tipo === 'R' ? Number(conta.saldo) + Number(valorBaixa) : Number(conta.saldo) - Number(valorBaixa);
+          const { error: sError } = await supabase.from('contas').update({ saldo: novoSaldo }).eq('cd_conta', cd_conta);
+          if (sError) throw sError;
+        }
+      }
+    },
+    transferir: async (t: any) => {
+      const { error: e1 } = await supabase.from('financeiro').insert([{
+        tipo: 'P',
+        descricao: `TRANSFERÊNCIA PARA CONTA #${t.cd_conta_origem}`,
+        valor: Number(t.valor),
+        data_vencimento: t.data,
+        data_pagamento: `${t.data}T00:00:00`,
+        status: 'Pago',
+        categoria: 'Transferência',
+        cd_conta: t.cd_conta_origem,
+        meio_pagamento: 'Transferência'
+      }]);
+      if (e1) throw e1;
+
+      const { error: e2 } = await supabase.from('financeiro').insert([{
+        tipo: 'R',
+        descricao: `TRANSFERÊNCIA DE CONTA #${t.cd_conta_origem}`,
+        valor: Number(t.valor),
+        data_vencimento: t.data,
+        data_pagamento: `${t.data}T00:00:00`,
+        status: 'Pago',
+        categoria: 'Transferência',
+        cd_conta: t.cd_conta_destino,
+        meio_pagamento: 'Transferência'
+      }]);
+      if (e2) throw e2;
+
+      const { data: cOrigem } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_origem).single();
+      const { data: cDestino } = await supabase.from('contas').select('saldo').eq('cd_conta', t.cd_conta_destino).single();
+
+      if (cOrigem) await supabase.from('contas').update({ saldo: Number(cOrigem.saldo) - Number(t.valor) }).eq('cd_conta', t.cd_conta_origem);
+      if (cDestino) await supabase.from('contas').update({ saldo: Number(cDestino.saldo) + Number(t.valor) }).eq('cd_conta', t.cd_conta_destino);
+    },
+    changeAccount: async (lancamentoId: number, newAccountId: number) => {
+      await db.financeiro.update(lancamentoId, { cd_conta: newAccountId });
+    },
+    syncCardCompensations: async () => {
+      // Automated card compensation logic
+    }
+  },
+  clientes: {
+    getAll: async (): Promise<Cliente[]> => {
+      const { data, error } = await supabase.from('clientes').select('*').order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+    checkStatus: async (id: number) => {
+      const { data: financeiro } = await supabase
+        .from('financeiro')
+        .select('valor, data_vencimento')
+        .eq('cd_entidade', id)
+        .eq('status', 'Pendente')
+        .eq('tipo', 'R');
+
+      const today = new Date().toISOString().split('T')[0];
+      const atrasado = (financeiro || []).some(l => l.data_vencimento < today);
+      const totalPendente = (financeiro || []).reduce((acc, l) => acc + l.valor, 0);
+
+      return { atrasado, totalPendente };
+    },
+    add: async (c: any) => {
+      const { error } = await supabase.from('clientes').insert([sanitizeClientPayload(c)]);
+      if (error) throw error;
+    },
+    bulkAdd: async (clients: any[]) => {
+      const { error } = await supabase.from('clientes').insert(clients.map(sanitizeClientPayload));
+      if (error) throw error;
+      return { error };
+    },
+    update: async (id: number, data: any) => {
+      const { error } = await supabase.from('clientes').update(sanitizeClientPayload(data)).eq('cd_clientes', id);
+      if (error) throw error;
+    },
+    delete: async (id: number) => {
+      const { error } = await supabase.from('clientes').delete().eq('cd_clientes', id);
+      if (error) throw error;
+    }
+  },
+  contas: {
+    getAll: async (): Promise<ContaBancaria[]> => {
+      const { data, error } = await supabase.from('contas').select('*').order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+    add: async (c: any) => {
+      const { error } = await supabase.from('contas').insert([sanitizeAccountPayload(c)]);
+      if (error) throw error;
+    },
+    update: async (id: number, data: any) => {
+      const { error } = await supabase.from('contas').update(sanitizeAccountPayload(data)).eq('cd_conta', id);
+      if (error) throw error;
+    }
+  },
+  caixa: {
+    getAll: async (): Promise<CaixaSessao[]> => {
+      const { data, error } = await supabase.from('caixa_sessoes').select('*').order('data_caixa', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    open: async (data: Partial<CaixaSessao>) => {
+      if (data.cd_conta && data.data_caixa) {
+        const { data: existing, error: existingError } = await supabase
+          .from('caixa_sessoes')
+          .select('*')
+          .eq('cd_conta', data.cd_conta)
+          .eq('data_caixa', data.data_caixa)
+          .maybeSingle();
+
+        if (existingError) throw existingError;
+        if (existing) return existing;
+      }
+
+      const { data: created, error } = await supabase.from('caixa_sessoes').insert([data]).select('*').single();
+      if (error) throw error;
+      if (data.cd_conta) {
+        const { error: accountError } = await supabase.from('contas').update({ saldo: data.saldo_real_abertura || 0 }).eq('cd_conta', data.cd_conta);
+        if (accountError) throw accountError;
+      }
+      return created;
+    },
+    close: async (id: number, data: Partial<CaixaSessao>) => {
+      const { data: updated, error } = await supabase
+        .from('caixa_sessoes')
+        .update({ ...data, status: 'Fechado', fechado_em: new Date().toISOString() })
+        .eq('cd_sessao', id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      if (updated?.cd_conta) {
+        const { error: accountError } = await supabase.from('contas').update({ saldo: data.saldo_real_fechamento || data.saldo_para_dia_seguinte || 0 }).eq('cd_conta', updated.cd_conta);
+        if (accountError) throw accountError;
+      }
+      return updated;
+    }
+  },
+  financeiro: {
+    getAll: async (): Promise<LancamentoFinanceiro[]> => {
+      const { data, error } = await supabase.from('financeiro').select('*').order('data_vencimento', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    getByEntidade: async (id: number): Promise<LancamentoFinanceiro[]> => {
+      const { data, error } = await supabase.from('financeiro').select('*').eq('cd_entidade', id).order('data_vencimento');
+      if (error) throw error;
+      return data || [];
+    },
+    add: async (l: any) => {
+      const { error } = await supabase.from('financeiro').insert([l]);
+      if (error) throw error;
+    },
+    addBulk: async (list: any[]) => {
+      const { error } = await supabase.from('financeiro').insert(list);
+      if (error) throw error;
       return { error };
     },
     update: async (id: number, data: any) => {
@@ -626,16 +858,6 @@ export const db = {
           .eq('cd_produto', item.cd_produto);
 
         if (stockError) throw stockError;
-
-        if (item.cd_item) {
-          const returnedAt = new Date().toISOString();
-          const { error: itemError } = await supabase
-            .from('aluguel_itens')
-            .update({ devolvido: true, data_devolucao: returnedAt, data_devolucao_realizada: returnedAt })
-            .eq('cd_item', item.cd_item);
-
-          if (itemError) throw itemError;
-        }
       }
 
       const { error } = await supabase

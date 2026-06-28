@@ -19,7 +19,7 @@ import {
   Printer, 
   Save, 
   Percent, 
-  Image as ImageIcon, 
+  ImageIcon, 
   Building2,
   ShieldCheck,
   Phone,
@@ -33,17 +33,25 @@ import {
   QrCode,
   Banknote,
   Plus,
-  Trash2
+  Trash2,
+  Database,
+  Download,
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { db } from '@/services/api';
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess, showError, showLoading, dismissToast } from '@/utils/toast';
 import { Configuracoes, ContaBancaria } from '@/types/database';
 import { formatAddressTitleCase, formatCnpj, formatPhoneBR } from '@/utils/formatters';
+import JSZip from 'jszip';
+import { supabase } from '@/integrations/supabase/client';
 
 const Settings = () => {
   const [config, setConfig] = React.useState<Configuracoes | null>(null);
   const [contas, setContas] = React.useState<ContaBancaria[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isBackingUp, setIsBackingUp] = React.useState(false);
+  const [isRestoring, setIsRestoring] = React.useState(false);
 
   // Card Config form states
   const [newCardBrand, setNewCardBrand] = React.useState("");
@@ -127,6 +135,115 @@ const Settings = () => {
     }
   };
 
+  // BACKUP SYSTEM (ZIP EXPORT)
+  const handleExportBackup = async () => {
+    if (isBackingUp) return;
+    setIsBackingUp(true);
+    const loadingId = showLoading("Gerando backup compactado do banco de dados...");
+
+    try {
+      // Fetch all tables
+      const tables = [
+        'clientes', 'produtos', 'vendas', 'financeiro', 'contas', 
+        'patrimonio', 'alugueis', 'aluguel_itens', 'caixa_sessoes', 
+        'veiculos', 'veiculo_eventos', 'gastos_pessoais', 'configuracoes'
+      ];
+
+      const backupData: Record<string, any[]> = {};
+
+      for (const table of tables) {
+        const { data, error } = await supabase.from(table).select('*');
+        if (error) throw error;
+        backupData[table] = data || [];
+      }
+
+      // Create ZIP
+      const zip = new JSZip();
+      zip.file("database_backup.json", JSON.stringify(backupData, null, 2));
+      
+      const content = await zip.generateAsync({ type: "blob" });
+      
+      // Trigger download
+      const url = window.URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `keyofinnov_backup_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      dismissToast(loadingId);
+      showSuccess("Backup exportado com sucesso! Salve o arquivo .zip em local seguro.");
+    } catch (err: any) {
+      dismissToast(loadingId);
+      showError("Erro ao gerar backup: " + err.message);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  // RESTORE SYSTEM (ZIP IMPORT)
+  const handleImportBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || isRestoring) return;
+
+    const confirmed = confirm("ATENÇÃO: Restaurar um backup irá substituir os dados atuais do sistema. Deseja continuar?");
+    if (!confirmed) {
+      event.target.value = "";
+      return;
+    }
+
+    setIsRestoring(true);
+    const loadingId = showLoading("Lendo e restaurando backup compactado...");
+
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const jsonFile = zip.file("database_backup.json");
+      if (!jsonFile) throw new Error("Arquivo de backup inválido dentro do ZIP.");
+
+      const jsonText = await jsonFile.async("text");
+      const backupData = JSON.parse(jsonText);
+
+      // Validate tables
+      const requiredTables = ['clientes', 'produtos', 'vendas', 'financeiro', 'contas', 'configuracoes'];
+      for (const table of requiredTables) {
+        if (!backupData[table]) throw new Error(`Tabela ${table} ausente no backup.`);
+      }
+
+      // Restore tables (delete existing and insert backup)
+      for (const table of Object.keys(backupData)) {
+        // Delete existing
+        const { error: deleteError } = await supabase.from(table).delete().neq('created_at', '1970-01-01T00:00:00Z'); // Delete all rows
+        if (deleteError) {
+          // Fallback delete if created_at doesn't exist
+          await supabase.from(table).delete().not('id', 'is', null);
+        }
+
+        // Insert backup data in chunks of 100
+        const rows = backupData[table];
+        if (rows.length > 0) {
+          const chunkSize = 100;
+          for (let i = 0; i < rows.length; i += chunkSize) {
+            const chunk = rows.slice(i, i + chunkSize);
+            const { error: insertError } = await supabase.from(table).insert(chunk);
+            if (insertError) throw insertError;
+          }
+        }
+      }
+
+      dismissToast(loadingId);
+      showSuccess("Banco de dados restaurado com sucesso! O sistema será recarregado.");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      dismissToast(loadingId);
+      showError("Erro ao restaurar backup: " + err.message);
+    } finally {
+      setIsRestoring(false);
+      event.target.value = "";
+    }
+  };
+
   if (isLoading || !config) {
     return <div className="p-8 text-center font-bold">Carregando configurações...</div>;
   }
@@ -145,6 +262,51 @@ const Settings = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
+          {/* SEÇÃO: BACKUP E RESTAURAÇÃO */}
+          <Card className="border-none shadow-sm md:col-span-2">
+            <CardHeader className="border-b bg-slate-950 text-white rounded-t-xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Database size={18} className="text-indigo-400" /> Backup e Restauração do Banco de Dados (.zip)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="space-y-1 flex-1">
+                <p className="text-sm font-bold text-slate-800">Salve uma cópia de segurança completa no seu computador</p>
+                <p className="text-xs text-slate-500">
+                  Gere um arquivo compactado contendo todas as tabelas do sistema (clientes, produtos, vendas, financeiro, etc.). Você pode restaurar este arquivo a qualquer momento para recuperar seus dados.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 shrink-0">
+                <Button 
+                  onClick={handleExportBackup} 
+                  disabled={isBackingUp || isRestoring}
+                  className="bg-indigo-600 hover:bg-indigo-700 gap-2 h-11 rounded-xl font-bold"
+                >
+                  {isBackingUp ? <RefreshCw className="animate-spin" size={18} /> : <Download size={18} />}
+                  Exportar Backup (.zip)
+                </Button>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".zip"
+                    disabled={isBackingUp || isRestoring}
+                    onChange={handleImportBackup}
+                    className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <Button 
+                    variant="outline" 
+                    disabled={isBackingUp || isRestoring}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-50 gap-2 h-11 rounded-xl font-bold"
+                  >
+                    {isRestoring ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
+                    Restaurar Backup (.zip)
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* SEÇÃO 1: PROVEDOR DO SISTEMA */}
           <Card className="border-none shadow-sm">
             <CardHeader className="border-b bg-slate-900 text-white rounded-t-xl">

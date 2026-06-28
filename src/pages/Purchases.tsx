@@ -66,70 +66,85 @@ const Purchases = () => {
     setEditingCompra(null);
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const loadingId = showLoading("Lendo arquivo XML...");
-    const reader = new FileReader();
+    const loadingId = showLoading("Lendo arquivo XML e cruzando com o estoque...");
+    try {
+      const allProducts = await db.produtos.getAll();
+      const reader = new FileReader();
 
-    reader.onload = (e) => {
-      try {
-        const xmlText = e.target?.result as string;
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+      reader.onload = (e) => {
+        try {
+          const xmlText = e.target?.result as string;
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-        // Extrair dados básicos da nota
-        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
-        const xNomeFornecedor = xmlDoc.getElementsByTagName("xNome")[0]?.textContent || "FORNECEDOR DESCONHECIDO";
-        const vNF = parseFloat(xmlDoc.getElementsByTagName("vNF")[0]?.textContent || "0");
+          // Extrair dados básicos da nota
+          const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
+          const xNomeFornecedor = xmlDoc.getElementsByTagName("xNome")[0]?.textContent || "FORNECEDOR DESCONHECIDO";
+          const vNF = parseFloat(xmlDoc.getElementsByTagName("vNF")[0]?.textContent || "0");
 
-        // Extrair itens (det)
-        const itensNodes = xmlDoc.getElementsByTagName("det");
-        const itens: any[] = [];
+          // Extrair itens (det)
+          const itensNodes = xmlDoc.getElementsByTagName("det");
+          const itens: any[] = [];
 
-        for (let i = 0; i < itensNodes.length; i++) {
-          const prod = itensNodes[i].getElementsByTagName("prod")[0];
-          const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
-          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
-          const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
-          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
-          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
-          const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
+          for (let i = 0; i < itensNodes.length; i++) {
+            const prod = itensNodes[i].getElementsByTagName("prod")[0];
+            const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
+            const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "";
+            const uCom = prod.getElementsByTagName("uCom")[0]?.textContent || "UN";
+            const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
+            const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
+            const vProd = parseFloat(prod.getElementsByTagName("vProd")[0]?.textContent || "0");
+            const cEAN = prod.getElementsByTagName("cEAN")[0]?.textContent || "";
 
-          itens.push({
-            codigo_fornecedor: cProd,
-            nome_fornecedor: xProd,
-            un: uCom,
-            qtde: qCom,
-            valor_unit: vUnCom,
-            subtotal: vProd,
-            margem: 40, // Sugestão padrão
-            valor_venda: vUnCom * 1.4,
-          });
+            // Cruzamento inteligente com o estoque
+            const matchedProduct = allProducts.find(p => 
+              (cProd && p.id_importado?.trim() === cProd.trim()) ||
+              (cEAN && cEAN !== "SEM GTIN" && p.cod_barras?.trim() === cEAN.trim()) ||
+              (p.nome.trim().toUpperCase() === xProd.trim().toUpperCase())
+            );
+
+            itens.push({
+              cd_produto: matchedProduct ? matchedProduct.cd_produto : undefined,
+              codigo_fornecedor: cProd,
+              nome_fornecedor: matchedProduct ? matchedProduct.nome : xProd,
+              un: matchedProduct ? matchedProduct.un : uCom,
+              qtde: qCom,
+              valor_unit: vUnCom,
+              subtotal: vProd,
+              margem: matchedProduct && matchedProduct.compra > 0 ? ((matchedProduct.venda / matchedProduct.compra) - 1) * 100 : 40,
+              valor_venda: matchedProduct ? matchedProduct.venda : vUnCom * 1.4,
+            });
+          }
+
+          const compraData = {
+            cd_compra: Date.now(),
+            nota_fiscal: nNF,
+            cd_fornecedores: 0, // Será selecionado no form
+            nome_fornecedor: xNomeFornecedor,
+            total: vNF,
+            status: 'Rascunho' as const,
+            itens: itens
+          };
+
+          dismissToast(loadingId);
+          setEditingCompra(compraData);
+          setIsModalOpen(true);
+          showSuccess("XML importado! Itens correspondentes foram vinculados automaticamente.");
+        } catch (err) {
+          dismissToast(loadingId);
+          showError("Erro ao processar o XML. Verifique se é um arquivo de NF-e válido.");
         }
+      };
 
-        const compraData = {
-          cd_compra: Date.now(),
-          nota_fiscal: nNF,
-          cd_fornecedores: 0, // Será selecionado no form
-          nome_fornecedor: xNomeFornecedor,
-          total: vNF,
-          status: 'Rascunho' as const,
-          itens: itens
-        };
-
-        dismissToast(loadingId);
-        setEditingCompra(compraData);
-        setIsModalOpen(true);
-        showSuccess("XML importado! Agora vincule os produtos ao seu estoque.");
-      } catch (err) {
-        dismissToast(loadingId);
-        showError("Erro ao processar o XML. Verifique se é um arquivo de NF-e válido.");
-      }
-    };
-
-    reader.readAsText(file);
+      reader.readAsText(file);
+    } catch (err) {
+      dismissToast(loadingId);
+      showError("Erro ao carregar produtos para cruzamento.");
+    }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -139,7 +154,7 @@ const Purchases = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("Deseja excluir este registro de compra?")) {
+    if (confirm("Deseja realmente excluir este registro de compra?")) {
       await db.compras.delete(id);
       loadData();
     }
@@ -233,7 +248,7 @@ const Purchases = () => {
               </TableHeader>
               <TableBody>
                 {compras.map((compra) => (
-                  <TableRow key={compra.cd_compra} className="hover:bg-slate-50/50 transition-colors">
+                  <TableRow key={compra.cd_compra} className="hover:bg-slate-50/50 transition-colors group">
                     <TableCell className="text-xs font-medium">
                       {new Date(compra.data).toLocaleDateString()}
                     </TableCell>

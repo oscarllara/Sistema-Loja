@@ -1,4 +1,3 @@
-' with '>' in the warning message.">
 "use client";
 
 import React from 'react';
@@ -86,7 +85,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [bankNumber, setBankNumber] = React.useState("");
   const [agency, setAgency] = React.useState("");
   const [accountNumber, setAccountNumber] = React.useState("");
-  const [checkNumber, setCheckNumber] = React.useState("");
   const [isBlinking, setIsBlinking] = React.useState(false);
 
   const [entities, setEntities] = React.useState<Cliente[]>([]);
@@ -94,7 +92,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
   const [isLoading, setIsLoading] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
 
-  // New Card State
   const [selectedCardBrand, setSelectedCardBrand] = React.useState("");
 
   const totalPaid = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
@@ -134,7 +131,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       setBankNumber("");
       setAgency("");
       setAccountNumber("");
-      setCheckNumber("");
       setSelectedCardBrand("");
       setIsBlinking(false);
       setIsConfirming(false);
@@ -203,7 +199,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
     setBankNumber("");
     setAgency("");
     setAccountNumber("");
-    setCheckNumber("");
     generateInstallments(amount, 1, isPurchase ? true : isInterestFree);
     setIsInstallmentMode(true);
   };
@@ -261,8 +256,8 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       showError("Informe o número do boleto em todas as parcelas.");
       return;
     }
-    if (installmentMethod === 'Cheque' && (!bankNumber.trim() || !agency.trim() || !accountNumber.trim() || !checkNumber.trim())) {
-      showError("Informe banco, agência, conta e número do cheque.");
+    if (installmentMethod === 'Cheque' && (!bankNumber.trim() || !agency.trim() || !accountNumber.trim() || tempInstallments.some(inst => !inst.checkNumber?.trim()))) {
+      showError("Informe banco, agência, conta e número do cheque para todas as parcelas.");
       return;
     }
 
@@ -275,7 +270,7 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
       banco_num: installmentMethod === 'Cheque' ? bankNumber.trim() : undefined,
       agencia: installmentMethod === 'Cheque' ? agency.trim() : undefined,
       conta_num: installmentMethod === 'Cheque' ? accountNumber.trim() : undefined,
-      cheque_num: installmentMethod === 'Cheque' ? checkNumber.trim() : undefined,
+      cheque_num: installmentMethod === 'Cheque' ? tempInstallments.map(inst => inst.checkNumber?.trim()).filter(Boolean).join(', ') : undefined,
     }]);
     setIsInstallmentMode(false);
     setInputValue("0,00");
@@ -393,19 +388,12 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   </div>
                 )}
 
-                {isPurchase && installmentMethod === 'Boleto' && (
-                  <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-[10px] font-bold text-blue-700 shrink-0">
-                    Informe o número do boleto em cada parcela abaixo. Cada vencimento pode ter um documento diferente.
-                  </div>
-                )}
-
                 {isPurchase && installmentMethod === 'Cheque' && (
                   <div className="grid grid-cols-2 gap-2 shrink-0">
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Banco</Label><Input value={bankNumber} onChange={(e) => setBankNumber(e.target.value)} className="h-9 text-xs" placeholder="Nº banco" /></div>
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Nome banco</Label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-xs" placeholder="Opcional" /></div>
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Agência</Label><Input value={agency} onChange={(e) => setAgency(e.target.value)} className="h-9 text-xs" /></div>
                     <div className="space-y-1"><Label className="text-[9px] uppercase font-bold text-slate-500">Conta</Label><Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="h-9 text-xs" /></div>
-                    <div className="space-y-1 col-span-2"><Label className="text-[9px] uppercase font-bold text-slate-500">Número do cheque</Label><Input value={checkNumber} onChange={(e) => setCheckNumber(e.target.value)} className="h-9 text-xs font-bold" /></div>
                   </div>
                 )}
 
@@ -425,6 +413,12 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                           <div className="space-y-1 col-span-2">
                             <Label className="text-[9px] uppercase font-bold text-slate-500">Número do boleto da {idx + 1}ª parcela</Label>
                             <Input value={inst.documentNumber || ''} onChange={(e) => { const n = [...tempInstallments]; n[idx].documentNumber = e.target.value; setTempInstallments(n); }} className="h-8 text-xs font-bold" placeholder={`Boleto parcela ${idx + 1}`} />
+                          </div>
+                        )}
+                        {isPurchase && installmentMethod === 'Cheque' && (
+                          <div className="space-y-1 col-span-2">
+                            <Label className="text-[9px] uppercase font-bold text-slate-500">Número do cheque da {idx + 1}ª parcela</Label>
+                            <Input value={inst.checkNumber || ''} onChange={(e) => { const n = [...tempInstallments]; n[idx].checkNumber = e.target.value; setTempInstallments(n); }} className="h-8 text-xs font-bold" placeholder={`Cheque parcela ${idx + 1}`} />
                           </div>
                         )}
                       </div>
@@ -472,7 +466,6 @@ const CheckoutModal = ({ isOpen, onClose, total, onConfirm, clientName, clientId
                   </div>
                 )}
 
-                {/* Card Brand Selector if Cartão is selected */}
                 {!isPurchase && cardBrands.length > 0 && (
                   <div className="space-y-2 shrink-0 border border-slate-100 bg-slate-50 p-3 rounded-2xl">
                     <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Bandeira / Regra do Cartão (Obrigatório)</Label>
